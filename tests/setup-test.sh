@@ -61,6 +61,32 @@ grep -q '^runner=background$' "$ipalpha_tmp/IpAlpha/.ipalpha/settings" || ipalph
 grep -q '^runner="${ipalpha_runner:-background}"$' "$ipalpha_tmp/IpAlpha/run" || ipalpha_fail "./run must default to background"
 grep -q 'IPALPHA_RUNNER=mprocs' "$ipalpha_tmp/IpAlpha/.ipalpha/lib/tools.sh" || ipalpha_fail "lib/tools.sh must keep mprocs opt-in hint"
 
+echo "== port-busy check ignores our own containers"
+# Fake a docker CLI that pretends an ipalpha container is holding port 27017.
+ipalpha_fakebin="$(mktemp -d)"
+cat >"$ipalpha_fakebin/docker" <<SH
+#!/usr/bin/env bash
+case "\$1" in
+  info) exit 0 ;;
+  ps)
+    # Only the -aq form is consumed by lib/ports.sh.
+    if [[ " \$* " == *" -aq "* ]]; then
+      echo "fakecontainerid"
+    fi
+    ;;
+  port)
+    # docker port <id> outputs lines like "27017/tcp -> 0.0.0.0:27017"
+    echo "27017/tcp -> 0.0.0.0:27017"
+    ;;
+esac
+SH
+chmod +x "$ipalpha_fakebin/docker"
+# shellcheck disable=SC1091
+PATH="$ipalpha_fakebin:$PATH" source "$ipalpha_repo_root/lib/ports.sh"
+PATH="$ipalpha_fakebin:$PATH" ipalpha_owns_port 27017   || ipalpha_fail "ipalpha_owns_port must recognise our own container on 27017"
+PATH="$ipalpha_fakebin:$PATH" ipalpha_owns_port 5432   && ipalpha_fail "ipalpha_owns_port must not claim a port our container doesn\'t hold"
+rm -rf "$ipalpha_fakebin"
+
 [[ -f "$ipalpha_tmp/IpAlpha/.ipalpha/compose.yaml" ]] || ipalpha_fail "compose.yaml missing"
 [[ -f "$ipalpha_tmp/IpAlpha/.ipalpha/ports.env" ]] || ipalpha_fail "ports.env missing"
 [[ -f "$ipalpha_tmp/IpAlpha/.ipalpha/mprocs.yaml" ]] || ipalpha_fail "mprocs.yaml missing"

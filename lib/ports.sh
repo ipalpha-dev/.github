@@ -1,15 +1,63 @@
 #!/usr/bin/env bash
 
-ipalpha_port_busy() {
+# Returns 0 if anything is listening on the host port, 1 otherwise.
+ipalpha_tcp_listening() {
   local port="$1"
   if command -v lsof >/dev/null 2>&1; then
     lsof -iTCP:"$port" -sTCP:LISTEN -P -n >/dev/null 2>&1
   elif command -v nc >/dev/null 2>&1; then
     nc -z 127.0.0.1 "$port" >/dev/null 2>&1
   else
-    (exec 3<>"/dev/tcp/127.0.0.1/$port") 2>/dev/null && { exec 3>&- 3<&-; return 0; }
+    if (exec 3<>"/dev/tcp/127.0.0.1/$port") 2>/dev/null; then
+      exec 3>&- 3<&-
+      return 0
+    fi
     return 1
   fi
+}
+
+# Returns 0 if the port is held by one of our own ipalpha containers
+# (Docker compose project "ipalpha", or Apple container named ipalpha-*).
+# The port-busy check consults this so ./pull while the infra is already
+# up doesn't keep remapping to ever-higher host ports.
+ipalpha_owns_port() {
+  local port="$1" cid entry hp name
+  # Docker compose project name comes from the dir holding compose.yaml (.ipalpha/).
+  if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+    while IFS= read -r cid; do
+      [[ -z "$cid" ]] && continue
+      while IFS= read -r entry; do
+        [[ -z "$entry" ]] && continue
+        # docker port output: "27017/tcp -> 0.0.0.0:27017"
+        hp="${entry##*:}"
+        [[ "$hp" == "$port" ]] && return 0
+      done < <(docker port "$cid" 2>/dev/null)
+    done < <(docker ps -aq --filter "label=com.docker.compose.project=ipalpha" 2>/dev/null)
+  fi
+  # Apple container: well-known infra names defined in lib/generate.sh.
+  if command -v container >/dev/null 2>&1; then
+    while IFS= read -r name; do
+      [[ -z "$name" ]] && continue
+      case "$name" in
+        ipalpha-mongo|ipalpha-redis|ipalpha-rabbitmq) ;;
+        *) continue ;;
+      esac
+      while IFS= read -r entry; do
+        [[ -z "$entry" ]] && continue
+        hp="${entry##*:}"
+        [[ "$hp" == "$port" ]] && return 0
+      done < <(container inspect "$name"                 --format "{{range \$k, \$v := .NetworkSettings.Ports}}{{range \$v}}HostPort={{.HostPort}};{{end}}{{end}}"                 2>/dev/null | tr ';' "\n" | grep -oE "HostPort=[0-9]+" | sed "s/.*=//")
+    done < <(container ls --format "{{.Names}}" 2>/dev/null)
+  fi
+  return 1
+}
+
+ipalpha_port_busy() {
+  local port="$1"
+  ipalpha_tcp_listening "$port" || return 1
+  # Port has a listener. If it's ours, treat as free so we reuse the same port.
+  ipalpha_owns_port "$port" && return 1
+  return 0
 }
 
 ipalpha_find_free_port() {
