@@ -115,7 +115,7 @@ ipalpha_out="$(
 
 echo "== publish smoke (no AI, dry-run aborts without changes)"
 repo_dir="$ipalpha_tmp/IpAlpha/core/projects-api"
-git init -q -b main "$repo_dir"
+git init -q -b master "$repo_dir"
 git -C "$repo_dir" -c user.name=test -c user.email=test@example.invalid commit -q --allow-empty -m "root"
 printf '{\n  "name": "projects-api",\n  "version": "0.0.0",\n  "scripts": { "start:dev": "node -e \\"console.log(1)\\"" }\n}\n' >"$repo_dir/package.json"
 echo "dirty" >"$repo_dir/notes.txt"

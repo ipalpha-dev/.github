@@ -46,9 +46,9 @@ for key in cleanup update_tooling_ok update_tooling_fail choose_lang target_fold
 done
 
 echo "== README setup lines"
-grep -qF 'bash <(curl -fsSL https://raw.githubusercontent.com/ipalpha-dev/.github/main/bootstrap.sh)' README.md \
+grep -qF 'bash <(curl -fsSL https://raw.githubusercontent.com/ipalpha-dev/.github/master/bootstrap.sh)' README.md \
   || ipalpha_fail "README missing copy-paste setup line"
-grep -qF 'bash <(curl -fsSL https://raw.githubusercontent.com/ipalpha-dev/.github/main/bootstrap.sh)' profile/README.md \
+grep -qF 'bash <(curl -fsSL https://raw.githubusercontent.com/ipalpha-dev/.github/master/bootstrap.sh)' profile/README.md \
   || ipalpha_fail "org profile missing copy-paste setup line"
 bash -n bootstrap.sh || ipalpha_fail "bootstrap.sh syntax"
 

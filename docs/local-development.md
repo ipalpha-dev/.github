@@ -3,7 +3,7 @@
 Primary path for a new machine:
 
 ```sh
-bash <(curl -fsSL https://raw.githubusercontent.com/ipalpha-dev/.github/main/bootstrap.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/ipalpha-dev/.github/master/bootstrap.sh)
 cd IpAlpha
 ./run
 ```

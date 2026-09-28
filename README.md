@@ -8,7 +8,7 @@ temporária e a apaga no fim, como no Cross.
 ## Setup (copie e cole no terminal)
 
 ```sh
-bash <(curl -fsSL https://raw.githubusercontent.com/ipalpha-dev/.github/main/bootstrap.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/ipalpha-dev/.github/master/bootstrap.sh)
 ```
 
 Pré-requisito: [chave SSH no GitHub](https://docs.github.com/pt/authentication/connecting-to-github-with-ssh)
