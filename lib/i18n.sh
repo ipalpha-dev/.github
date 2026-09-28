@@ -118,7 +118,7 @@ ipalpha_msg() {
 
 Sobe o ambiente local do IPAlpha:
   1. Infra no contêiner (MongoDB, Redis, RabbitMQ + UI de management)
-  2. Build do shared-js
+  2. Instala dependências npm que faltam (shared-js vem do npm)
   3. Painel de processos com projects-api, person-api, organization-api, notification-api, auth-api (nesta ordem)
 
 Runner (settings runner= ou IPALPHA_RUNNER=):
@@ -131,7 +131,7 @@ Portas vêm de .ipalpha/settings / .ipalpha/ports.env. Pare com .ipalpha/bin/inf
 
 Start the local IPAlpha stack:
   1. Infra in containers (MongoDB, Redis, RabbitMQ + management UI)
-  2. Build shared-js
+  2. Install missing npm dependencies (shared-js comes from npm)
   3. Process panel with projects-api, person-api, organization-api, notification-api, auth-api (in that order)
 
 Runner (settings runner= or IPALPHA_RUNNER=):

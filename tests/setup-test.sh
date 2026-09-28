@@ -62,7 +62,7 @@ grep -q '^ai_model=cpamc/muse-spark-1.3-contributor' "$ipalpha_tmp/IpAlpha/.ipal
 [[ -f "$ipalpha_tmp/IpAlpha/.ipalpha/mprocs.yaml" ]] || ipalpha_fail "mprocs.yaml missing"
 [[ -d "$ipalpha_tmp/IpAlpha/.ipalpha/lib" ]] || ipalpha_fail ".ipalpha/lib missing"
 [[ -d "$ipalpha_tmp/IpAlpha/.ipalpha/env-fallback" ]] || ipalpha_fail ".ipalpha/env-fallback missing"
-for bin in infra-up infra-down wait-for-http node-dev build-shared-js fallback-run; do
+for bin in infra-up infra-down wait-for-http node-dev install-deps fallback-run; do
   [[ -x "$ipalpha_tmp/IpAlpha/.ipalpha/bin/$bin" ]] || ipalpha_fail "bin/$bin missing"
   bash -n "$ipalpha_tmp/IpAlpha/.ipalpha/bin/$bin" || ipalpha_fail "bin/$bin syntax error"
 done

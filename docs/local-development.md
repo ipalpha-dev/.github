@@ -61,7 +61,7 @@ follow `ghcr.io/<org>/<ms>`.
    MongoDB, Redis, RabbitMQ (+ management UI on 15672). Apple `container` runs
    the services directly (network `ipalpha`, named volumes `ipalpha-*-data`);
    Docker uses `docker compose --wait`.
-2. Builds `shared-js` (`npm install` + `npm run build`).
+2. Installs missing npm dependencies per service (`@ipalpha/shared-js` comes from npm; the `core/shared-js` clone is only for changing the library).
 3. Starts the APIs in order — projects-api, person-api, organization-api,
    notification-api, auth-api. Everything except projects-api waits for
    projects-api's HTTP port; auth-api also waits for notification-api.

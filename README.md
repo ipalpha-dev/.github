@@ -37,7 +37,7 @@ IpAlpha/
 
 | Comando | Faz |
 | --- | --- |
-| `./run` | Infra (MongoDB, Redis, RabbitMQ) → build do shared-js → os 5 serviços em ordem |
+| `./run` | Infra (MongoDB, Redis, RabbitMQ) → instala dependências npm que faltam → os 5 serviços em ordem |
 | `./pull` | Atualiza todos os repositórios, clona os novos, adiciona chaves novas nos `.env` e atualiza `.ipalpha/` a partir deste repositório |
 | `./publish` | Repositórios alterados → IA escolhe versão + mensagem → commit/push → imagem `ghcr.io/ipalpha-dev/<ms>` (ou npm, para o shared-js) → atualiza `deployment/` |
 | `./set-keys` | Pergunta as chaves (SMS Barato, Comtele, superusuário) e grava nos `.env` locais |

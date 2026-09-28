@@ -215,7 +215,7 @@ SCRIPT
   chmod +x "$dest"
 }
 
-ipalpha_write_bin_build_shared_js() {
+ipalpha_write_bin_install_deps() {
   local dest="$1"
   cat >"$dest" <<'SCRIPT'
 #!/usr/bin/env bash
@@ -223,16 +223,15 @@ set -euo pipefail
 
 ipalpha_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ipalpha_root="$(cd "$ipalpha_dir/.." && pwd)"
-repo_dir="$ipalpha_root/core/shared-js"
 
-if [[ ! -f "$repo_dir/package.json" ]]; then
-  echo "build-shared-js: no package.json — skipping"
-  exit 0
-fi
-
-cd "$repo_dir"
-npm install --no-audit --no-fund --silent
-npm run build --if-present
+for repo in projects-api person-api organization-api notification-api auth-api; do
+  dir="$ipalpha_root/core/$repo"
+  [[ -f "$dir/package.json" ]] || continue
+  if [[ ! -d "$dir/node_modules" || "$dir/package-lock.json" -nt "$dir/node_modules" ]]; then
+    echo "install-deps: $repo"
+    (cd "$dir" && npm install --no-audit --no-fund --silent)
+  fi
+done
 SCRIPT
   chmod +x "$dest"
 }
@@ -256,7 +255,7 @@ projects_port="$(setting 'projects-api_port')"
 notification_port="$(setting 'notification-api_port')"
 
 "$ipalpha_dir/bin/infra-up"
-"$ipalpha_dir/bin/build-shared-js"
+"$ipalpha_dir/bin/install-deps"
 
 pids=()
 cleanup() {
@@ -341,7 +340,7 @@ if [[ "$runtime" == "docker" ]]; then
 fi
 
 "$ipalpha_dir/bin/infra-up"
-"$ipalpha_dir/bin/build-shared-js"
+"$ipalpha_dir/bin/install-deps"
 
 runner="${ipalpha_runner:-auto}"
 runner="${IPALPHA_RUNNER:-$runner}"
@@ -462,7 +461,8 @@ ipalpha_materialize_workspace() {
   ipalpha_write_bin_infra_down "$dir/bin/infra-down"
   ipalpha_write_bin_wait_for_http "$dir/bin/wait-for-http"
   ipalpha_write_bin_node_dev "$dir/bin/node-dev"
-  ipalpha_write_bin_build_shared_js "$dir/bin/build-shared-js"
+  ipalpha_write_bin_install_deps "$dir/bin/install-deps"
+  rm -f "$dir/bin/build-shared-js"
   ipalpha_write_bin_fallback_run "$dir/bin/fallback-run"
 
   ipalpha_write_mprocs_yaml "$target_root" "$dir/mprocs.yaml"
