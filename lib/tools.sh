@@ -124,24 +124,12 @@ ipalpha_ensure_runtime() {
   done
 }
 
+# The setup never installs or asks about mprocs. The process panel was the wrong
+# default for solo dev — the embedded simple runner is fine for everything we ship.
+# To use mprocs anyway, install it yourself and run `IPALPHA_RUNNER=mprocs ./run`
+# (the generated ./run still honours the override).
 ipalpha_prompt_mprocs() {
-  local choice
-  if command -v mprocs >/dev/null 2>&1; then
-    ipalpha_runner="auto"
-    return 0
-  fi
   ipalpha_runner="background"
-  [[ "${IPALPHA_SKIP_TOOLS:-}" == "1" ]] && return 0
-  echo
-  echo "  $(ipalpha_msg choose_runner)"
-  echo "    [1] $(ipalpha_msg tool_opt_auto) (brew install mprocs)"
-  echo "    [2] $(ipalpha_msg tool_opt_manual) ($(ipalpha_msg tool_hint_mprocs))"
-  read -r choice </dev/tty 2>/dev/null || choice=2
-  if [[ "$choice" == "1" ]] && ipalpha_brew_install mprocs && command -v mprocs >/dev/null 2>&1; then
-    ipalpha_runner="auto"
-  else
-    ipalpha_runner="background"
-  fi
 }
 
 ipalpha_ensure_tools() {

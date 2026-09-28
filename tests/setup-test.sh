@@ -56,6 +56,10 @@ grep -q '^lang=en-US' "$ipalpha_tmp/IpAlpha/.ipalpha/settings" || ipalpha_fail "
 grep -q '^org=ipalpha' "$ipalpha_tmp/IpAlpha/.ipalpha/settings" || ipalpha_fail "settings org wrong"
 grep -q '^ai_cli=pi' "$ipalpha_tmp/IpAlpha/.ipalpha/settings" || ipalpha_fail "settings ai_cli wrong"
 grep -q '^ai_model=cpamc/muse-spark-1.3-contributor' "$ipalpha_tmp/IpAlpha/.ipalpha/settings" || ipalpha_fail "settings ai_model wrong"
+grep -q '^runner=background$' "$ipalpha_tmp/IpAlpha/.ipalpha/settings" || ipalpha_fail "settings runner must default to background"
+# Generated ./run must default to the embedded runner; mprocs is opt-in only.
+grep -q '^runner="${ipalpha_runner:-background}"$' "$ipalpha_tmp/IpAlpha/run" || ipalpha_fail "./run must default to background"
+grep -q 'IPALPHA_RUNNER=mprocs' "$ipalpha_tmp/IpAlpha/.ipalpha/lib/tools.sh" || ipalpha_fail "lib/tools.sh must keep mprocs opt-in hint"
 
 [[ -f "$ipalpha_tmp/IpAlpha/.ipalpha/compose.yaml" ]] || ipalpha_fail "compose.yaml missing"
 [[ -f "$ipalpha_tmp/IpAlpha/.ipalpha/ports.env" ]] || ipalpha_fail "ports.env missing"

@@ -30,14 +30,14 @@ IpAlpha/
 ├── core/           # shared-js, auth-api, person-api, organization-api, projects-api, notification-api
 ├── deployment/     # manifestos k8s (namespace ipalpha-core, imagens ghcr.io/ipalpha-dev/<ms>)
 ├── run  publish  pull  set-keys
-└── .ipalpha/       # settings, compose, portas, mprocs, scripts auxiliares
+└── .ipalpha/       # settings, compose, portas, mprocs (opt-in), scripts auxiliares
 ```
 
 ## Dia a dia
 
 | Comando | Faz |
 | --- | --- |
-| `./run` | Infra (MongoDB, Redis, RabbitMQ) → instala dependências npm que faltam → os 5 serviços em ordem |
+| `./run` | Infra (MongoDB, Redis, RabbitMQ) → instala dependências npm que faltam → os 5 serviços em background (runner embutido; use `IPALPHA_RUNNER=mprocs ./run` se preferir o painel) |
 | `./pull` | Atualiza todos os repositórios, clona os novos, adiciona chaves novas nos `.env` e atualiza `.ipalpha/` a partir deste repositório |
 | `./publish` | Repositórios alterados → IA escolhe versão + mensagem → commit/push → imagem `ghcr.io/ipalpha-dev/<ms>` (ou npm, para o shared-js) → atualiza `deployment/` |
 | `./set-keys` | Pergunta as chaves (SMS Barato, Comtele, superusuário) e grava nos `.env` locais |

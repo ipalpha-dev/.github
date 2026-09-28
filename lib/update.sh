@@ -72,6 +72,7 @@ ipalpha_update() {
   ipalpha_update_refresh_libs "$root"
   ipalpha_write_ports_env "$root/.ipalpha/ports.env"
   ipalpha_write_mprocs_yaml "$root" "$root/.ipalpha/mprocs.yaml"
+  ipalpha_write_root_run "$root"
 
   echo "$(ipalpha_msg update_done)"
 }

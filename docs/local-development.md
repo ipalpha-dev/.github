@@ -24,8 +24,9 @@ Long-form reference for tools, ports, degraded integrations, and troubleshooting
    folder where you pasted the command).
 2. Checks/installs tools: git, Node.js LTS ≥ 20 + npm, `gh`, `kubectl`, and a
    container runtime — **Apple `container` preferred, Docker fallback**
-   (`runtime=` in `.ipalpha/settings`). mprocs is offered for the process panel;
-   without it `./run` uses a simple background runner with log files.
+   (`runtime=` in `.ipalpha/settings`). The process panel uses an embedded
+   background runner; logs land under `$TMPDIR/ipalpha-run-logs`. To use
+   `mprocs` instead, install it manually and run with `IPALPHA_RUNNER=mprocs`.
 3. Clones the org repos into the layout: `core/shared-js`,
    `core/{auth-api,person-api,organization-api,projects-api,notification-api}`,
    `deployment`. Existing folders are kept.
@@ -36,8 +37,8 @@ Long-form reference for tools, ports, degraded integrations, and troubleshooting
 5. Resolves ports: if an infra or API port is busy, picks a free one, rewrites
    the `.env` files, and records everything in `.ipalpha/settings`.
 6. Runs `npm install` in every repo that has a `package.json`.
-7. Writes `.ipalpha/` (settings, compose, ports, mprocs config, `lib/`, helper
-   scripts) and the `./run`, `./publish`, `./pull` wrappers at the workspace root.
+7. Writes `.ipalpha/` (settings, compose, ports, mprocs config for opt-in, `lib/`,
+   helper scripts) and the `./run`, `./publish`, `./pull` wrappers at the workspace root.
 
 The `.github` clone is **temporary**: setup deletes it when done (`--keep-setup`
 keeps it). `./pull` re-downloads `.github` into a temp folder to refresh
@@ -65,14 +66,12 @@ follow `ghcr.io/<org>/<ms>`.
 3. Starts the APIs in order — projects-api, person-api, organization-api,
    notification-api, auth-api. Everything except projects-api waits for
    projects-api's HTTP port; auth-api also waits for notification-api.
-   mprocs shows the panel; without it, processes run in the background with
-   logs under `$TMPDIR/ipalpha-run-logs`.
+   Processes run in the background with logs under `$TMPDIR/ipalpha-run-logs`.
 
-Stop: quit the panel (or Ctrl+C on the background runner), then
-`.ipalpha/bin/infra-down`.
+Stop: Ctrl+C, then `.ipalpha/bin/infra-down`.
 
 Runner override: `runner=` in `.ipalpha/settings` or `IPALPHA_RUNNER=` —
-`auto` (default), `mprocs`, `background`.
+`background` (default, embedded), `mprocs` (opt-in; needs `mprocs` installed).
 
 ## Day-to-day: `./publish`
 
@@ -108,7 +107,8 @@ Dev-only release (no prod rollout):
 3. Creates `.env` for new repos, adds missing keys to existing ones
    (local values are never overwritten).
 4. Rewrites ports from `.ipalpha/settings` and refreshes `.ipalpha/`
-   (lib, compose, mprocs config).
+   (lib, compose, mprocs config) and the `./run` wrapper (so new defaults
+   reach existing workspaces).
 
 ## Ports (defaults)
 

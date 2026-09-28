@@ -61,8 +61,7 @@ if [[ "$ipalpha_skip_tools" != true ]]; then
 else
   ipalpha_detect_runtime
   ipalpha_runtime="${ipalpha_runtime:-docker}"
-  ipalpha_runner="${ipalpha_runner:-auto}"
-  command -v mprocs >/dev/null 2>&1 || ipalpha_runner="background"
+  ipalpha_runner="${ipalpha_runner:-background}"
 fi
 
 ipalpha_ai_cli="${IPALPHA_AI_CLI:-}"

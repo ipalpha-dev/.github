@@ -50,8 +50,6 @@ ipalpha_msg() {
     en-US:tool_hint_container) echo "Apple container — macOS 26+: brew install container  (fallback: Docker Desktop)" ;;
     pt-BR:tool_hint_docker) echo "Docker Desktop (ou Docker Engine + Compose v2) — https://www.docker.com/products/docker-desktop/" ;;
     en-US:tool_hint_docker) echo "Docker Desktop (or Docker Engine + Compose v2) — https://www.docker.com/products/docker-desktop/" ;;
-    pt-BR:tool_hint_mprocs) echo "mprocs (opcional): brew install mprocs  — ou use o runner simples embutido" ;;
-    en-US:tool_hint_mprocs) echo "mprocs (optional): brew install mprocs  — or use the built-in simple runner" ;;
     pt-BR:need_runtime) echo "Nenhum runtime de contêiner (container ou docker). Instale um dos dois." ;;
     en-US:need_runtime) echo "No container runtime (container or docker). Install one of them." ;;
     pt-BR:runtime_selected) echo "Runtime de contêiner" ;;
@@ -90,8 +88,6 @@ ipalpha_msg() {
     en-US:done_run_now) echo "Run:" ;;
     pt-BR:need_gh) echo "gh é necessário para clonar os repos da org. Instale: https://cli.github.com e rode: gh auth login" ;;
     en-US:need_gh) echo "gh is required to clone the org repos. Install: https://cli.github.com then: gh auth login" ;;
-    pt-BR:choose_runner) echo "Painel de processos: instalar mprocs ou usar o runner simples embutido?" ;;
-    en-US:choose_runner) echo "Process panel: install mprocs or use the built-in simple runner?" ;;
     pt-BR:choose_ai) echo "CLI de IA para ./publish (mensagens de commit + semver):" ;;
     en-US:choose_ai) echo "AI CLI for ./publish (commit messages + semver):" ;;
     pt-BR:ai_selected) echo "IA do publish" ;;
@@ -119,12 +115,11 @@ ipalpha_msg() {
 Sobe o ambiente local do IPAlpha:
   1. Infra no contêiner (MongoDB, Redis, RabbitMQ + UI de management)
   2. Instala dependências npm que faltam (shared-js vem do npm)
-  3. Painel de processos com projects-api, person-api, organization-api, notification-api, auth-api (nesta ordem)
+  3. Sobe os MSs em background (projects-api, person-api, organization-api, notification-api, auth-api, nesta ordem)
 
 Runner (settings runner= ou IPALPHA_RUNNER=):
-  auto        mprocs se instalado, senão runner simples em background
-  mprocs      prefere mprocs (fallback se faltar)
-  background  sem UI — logs em \$TMPDIR/ipalpha-run-logs
+  background  padrão — runner embutido, logs em \$TMPDIR/ipalpha-run-logs
+  mprocs      opt-in — usa mprocs se estiver instalado (instale por conta própria)
 
 Portas vêm de .ipalpha/settings / .ipalpha/ports.env. Pare com .ipalpha/bin/infra-down." ;;
     en-US:help_run) echo "Usage: ./run
@@ -132,12 +127,11 @@ Portas vêm de .ipalpha/settings / .ipalpha/ports.env. Pare com .ipalpha/bin/inf
 Start the local IPAlpha stack:
   1. Infra in containers (MongoDB, Redis, RabbitMQ + management UI)
   2. Install missing npm dependencies (shared-js comes from npm)
-  3. Process panel with projects-api, person-api, organization-api, notification-api, auth-api (in that order)
+  3. Bring up the MSs in the background (projects-api, person-api, organization-api, notification-api, auth-api, in that order)
 
 Runner (settings runner= or IPALPHA_RUNNER=):
-  auto        mprocs if installed, else simple background runner
-  mprocs      prefer mprocs (fallback if missing)
-  background  no UI — logs under \$TMPDIR/ipalpha-run-logs
+  background  default — embedded runner, logs under \$TMPDIR/ipalpha-run-logs
+  mprocs      opt-in — use mprocs if installed (install it yourself)
 
 Ports come from .ipalpha/settings / .ipalpha/ports.env. Stop infra with .ipalpha/bin/infra-down." ;;
     pt-BR:help_pull) echo "Uso: ./pull

@@ -342,14 +342,16 @@ fi
 "$ipalpha_dir/bin/infra-up"
 "$ipalpha_dir/bin/install-deps"
 
-runner="${ipalpha_runner:-auto}"
+runner="${ipalpha_runner:-background}"
 runner="${IPALPHA_RUNNER:-$runner}"
 case "$runner" in
-  auto|mprocs|background) ;;
-  *) runner="auto" ;;
+  mprocs|background) ;;
+  *) runner="background" ;;
 esac
 
-if [[ "$runner" != "background" ]] && command -v mprocs >/dev/null 2>&1; then
+# mprocs is opt-in only: install it yourself and run with IPALPHA_RUNNER=mprocs.
+# Default is the embedded background runner (logs under $TMPDIR/ipalpha-run-logs).
+if [[ "$runner" == "mprocs" ]] && command -v mprocs >/dev/null 2>&1; then
   exec mprocs --config "$ipalpha_dir/mprocs.yaml"
 fi
 
