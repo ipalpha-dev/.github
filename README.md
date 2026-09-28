@@ -1,0 +1,50 @@
+# IPAlpha — ferramentas para desenvolvedores
+
+Este repositório é o `.github` da organização **ipalpha-dev**: guarda a página da
+organização (`profile/`) e as ferramentas de desenvolvimento (`setup`, `lib/`,
+`templates/`). Não é clonado no seu ambiente — o setup roda a partir de uma cópia
+temporária e a apaga no fim, como no Cross.
+
+## Setup (copie e cole no terminal)
+
+```sh
+bash <(curl -fsSL https://raw.githubusercontent.com/ipalpha-dev/.github/main/bootstrap.sh)
+```
+
+Pré-requisito: [chave SSH no GitHub](https://docs.github.com/pt/authentication/connecting-to-github-with-ssh)
+(`ssh -T git@github.com`) e ser membro da organização `ipalpha-dev`.
+
+O setup pergunta o idioma e a pasta (padrão `./IpAlpha`), instala as ferramentas,
+clona os repositórios, cria os `.env`, e gera os comandos abaixo na pasta escolhida.
+
+Sem clonar à mão? O comando acima já faz isso. Alternativa com clone manual:
+
+```sh
+git clone git@github.com:ipalpha-dev/.github.git /tmp/ipalpha-setup && /tmp/ipalpha-setup/setup
+```
+
+Layout gerado:
+
+```text
+IpAlpha/
+├── core/           # shared-js, auth-api, person-api, organization-api, projects-api, notification-api
+├── deployment/     # manifestos k8s (namespace ipalpha-core, imagens ghcr.io/ipalpha-dev/<ms>)
+├── run  publish  pull  set-keys
+└── .ipalpha/       # settings, compose, portas, mprocs, scripts auxiliares
+```
+
+## Dia a dia
+
+| Comando | Faz |
+| --- | --- |
+| `./run` | Infra (MongoDB, Redis, RabbitMQ) → build do shared-js → os 5 serviços em ordem |
+| `./pull` | Atualiza todos os repositórios, clona os novos, adiciona chaves novas nos `.env` e atualiza `.ipalpha/` a partir deste repositório |
+| `./publish` | Repositórios alterados → IA escolhe versão + mensagem → commit/push → imagem `ghcr.io/ipalpha-dev/<ms>` (ou npm, para o shared-js) → atualiza `deployment/` |
+| `./set-keys` | Pergunta as chaves (SMS Barato, Comtele, superusuário) e grava nos `.env` locais |
+
+`./run --help`, `./publish --help`, `./pull --help` mostram o uso completo.
+
+## Manter estas ferramentas
+
+Edite aqui, rode `tests/validate.sh`, faça push. Os desenvolvedores recebem as
+mudanças no próximo `./pull`. Referência completa: [docs/local-development.md](docs/local-development.md).

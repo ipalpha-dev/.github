@@ -1,0 +1,382 @@
+#!/usr/bin/env bash
+
+ipalpha_publish_cache_dir=""
+
+ipalpha_publish_help() {
+  ipalpha_msg help_publish
+}
+
+ipalpha_publish_repo_dirty() {
+  local dir="$1"
+  [[ -d "$dir/.git" ]] || return 1
+  [[ -n "$(git -C "$dir" status --porcelain 2>/dev/null)" ]]
+}
+
+ipalpha_publish_dirty_repos() {
+  local root="$1" repo dir
+  for repo in "${ipalpha_ms_repos[@]}"; do
+    dir="$(ipalpha_repo_path "$root" "$repo")"
+    ipalpha_publish_repo_dirty "$dir" && echo "$repo"
+  done
+}
+
+ipalpha_publish_parse_decision() {
+  node -e '
+    let s = "";
+    process.stdin.on("data", d => (s += d));
+    process.stdin.on("end", () => {
+      s = s.split("\n").filter(l => !l.trim().startsWith("```")).join("\n").trim();
+      const a = s.indexOf("{"), b = s.lastIndexOf("}");
+      if (a < 0 || b <= a) process.exit(1);
+      try {
+        const d = JSON.parse(s.slice(a, b + 1));
+        const bump = ["none", "patch", "minor", "major"].includes(d.bump) ? d.bump : "patch";
+        const clean = v => String(v || "").replace(/\s+/g, " ").trim();
+        const msg = [clean(d.reason), bump, clean(d.message)].join("\n");
+        process.stdout.write(msg);
+      } catch (e) {
+        process.exit(1);
+      }
+    });
+  '
+}
+
+ipalpha_ai_decide() {
+  local engine="$1" model="$2" system="$3" body="$4"
+  local full out
+  full="$system
+
+$body
+
+Respond with JSON only: {\"reason\",\"bump\",\"message\"}."
+  case "$engine" in
+    pi)
+      if [[ -n "$model" ]]; then
+        out="$(cd "${TMPDIR:-/tmp}" && pi -p "$full" --model "$model" 2>/dev/null)" || \
+          out="$(cd "${TMPDIR:-/tmp}" && pi "$full" 2>/dev/null)" || out=""
+      else
+        out="$(cd "${TMPDIR:-/tmp}" && pi -p "$full" 2>/dev/null)" || \
+          out="$(cd "${TMPDIR:-/tmp}" && pi "$full" 2>/dev/null)" || out=""
+      fi
+      ;;
+    claude)
+      out="$(cd "${TMPDIR:-/tmp}" && claude -p "$full" ${model:+--model "$model"} 2>/dev/null)" || out=""
+      ;;
+    grok)
+      out="$(cd "${TMPDIR:-/tmp}" && grok -p "$full" ${model:+--model "$model"} 2>/dev/null)" || \
+        out="$(cd "${TMPDIR:-/tmp}" && grok "$full" 2>/dev/null)" || out=""
+      ;;
+    codex)
+      out="$(cd "${TMPDIR:-/tmp}" && codex exec --skip-git-repo-check "$full" 2>/dev/null)" || out=""
+      ;;
+    *)
+      out=""
+      ;;
+  esac
+  [[ -z "$out" ]] && return 1
+  ipalpha_publish_parse_decision <<<"$out"
+}
+
+ipalpha_publish_scope_clamp() {
+  local dir="$1" bump="$2"
+  local files docs_only=1
+  files="$(git -C "$dir" status --porcelain 2>/dev/null | sed -E 's/^...//; s/.* -> //' | tr -d '"')"
+  [[ -z "$files" ]] && { echo "$bump"; return; }
+  while IFS= read -r f; do
+    [[ -z "$f" ]] && continue
+    case "$f" in
+      *.md|*.MD|docs/*|*.txt|LICENSE*) ;;
+      *) docs_only=0; break ;;
+    esac
+  done <<<"$files"
+  if [[ "$docs_only" == "1" ]]; then
+    echo "none"
+  else
+    echo "$bump"
+  fi
+}
+
+ipalpha_publish_current_version() {
+  local dir="$1"
+  if [[ -f "$dir/package.json" ]]; then
+    node -p 'try { require(process.argv[1] + "/package.json").version || "0.0.0" } catch (e) { "0.0.0" }' "$dir"
+  else
+    git -C "$dir" describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || echo "0.0.0"
+  fi
+}
+
+ipalpha_publish_bump_version() {
+  local version="$1" bump="$2"
+  case "$bump" in
+    major) node -p 'const v=process.argv[1].split(".").map(Number); `${v[0]+1}.0.0`' "$version" ;;
+    minor) node -p 'const v=process.argv[1].split(".").map(Number); `${v[0]}.${v[1]+1}.0`' "$version" ;;
+    patch) node -p 'const v=process.argv[1].split(".").map(Number); `${v[0]}.${v[1]}.${(v[2]||0)+1}`' "$version" ;;
+    *) echo "$version" ;;
+  esac
+}
+
+ipalpha_publish_set_version() {
+  local dir="$1" version="$2"
+  [[ -f "$dir/package.json" ]] || return 0
+  node -e '
+    const fs = require("fs");
+    const p = process.argv[1] + "/package.json";
+    const pkg = JSON.parse(fs.readFileSync(p, "utf8"));
+    pkg.version = process.argv[2];
+    fs.writeFileSync(p, JSON.stringify(pkg, null, 2) + "\n");
+  ' "$dir" "$version"
+}
+
+ipalpha_publish_ask_ai() {
+  local root="$1" repo="$2" engine="$3" model="$4"
+  local dir ctx key cache_file decision
+  dir="$(ipalpha_repo_path "$root" "$repo")"
+  ctx="Repository: $repo (current version $(ipalpha_publish_current_version "$dir"))
+
+git status:
+$(git -C "$dir" status --porcelain 2>/dev/null)
+
+git diff --stat:
+$(git -C "$dir" diff --stat HEAD 2>/dev/null | tail -n 20)
+
+recent commits:
+$(git -C "$dir" log --oneline -8 2>/dev/null)"
+  key="$(printf '%s' "$ctx" | ipalpha_shasum)"
+  ipalpha_publish_cache_dir="${ipalpha_publish_cache_dir:-$root/.ipalpha/.publish-cache}"
+  cache_file="$ipalpha_publish_cache_dir/$repo-$key.json"
+  if [[ -f "$cache_file" ]]; then
+    cat "$cache_file"
+    return 0
+  fi
+  decision="$(ipalpha_ai_decide "$engine" "$model" \
+    "You are a release assistant for a TypeScript/NestJS monorepo. Given a repository's git status, diff stat and recent commits, pick the semantic version bump and write a one-line commit message (English, conventional-commit style, imperative mood)." \
+    "$ctx")" || decision=""
+  if [[ -z "$decision" ]]; then
+    echo "$(ipalpha_msg publish_ai_down)" >&2
+    decision="$(printf 'LLM unavailable, defaulted to patch\npatch\nUpdate %s' "$repo")"
+  fi
+  mkdir -p "$ipalpha_publish_cache_dir"
+  printf '%s' "$decision" >"$cache_file"
+  echo "$decision"
+}
+
+ipalpha_publish_select_repos() {
+  local repos=("$@")
+  local -a selected=()
+  local i choice n
+  for i in "${!repos[@]}"; do
+    selected[$i]=1
+  done
+  if [[ ${#repos[@]} -eq 1 ]]; then
+    printf '%s\n' "${repos[0]}"
+    return 0
+  fi
+  while true; do
+    echo "$(ipalpha_msg publish_select)"
+    for i in "${!repos[@]}"; do
+      if [[ "${selected[$i]}" == "1" ]]; then
+        echo "  [x] $((i + 1)). ${repos[$i]}"
+      else
+        echo "  [ ] $((i + 1)). ${repos[$i]}"
+      fi
+    done
+    echo "  (a=all · q=quit · Enter=confirm)"
+    read -r choice || choice="q"
+    [[ -z "$choice" ]] && break
+    case "$choice" in
+      q|Q) return 1 ;;
+      a|A) for i in "${!repos[@]}"; do selected[$i]=1; done ;;
+      *)
+        for n in $choice; do
+          if [[ "$n" =~ ^[0-9]+$ ]] && (( n >= 1 && n <= ${#repos[@]} )); then
+            i=$((n - 1))
+            if [[ "${selected[$i]}" == "1" ]]; then selected[$i]=0; else selected[$i]=1; fi
+          fi
+        done
+        ;;
+    esac
+  done
+  for i in "${!repos[@]}"; do
+    [[ "${selected[$i]}" == "1" ]] && printf '%s\n' "${repos[$i]}"
+  done
+}
+
+ipalpha_publish_build_image() {
+  local repo="$1" version="$2" dir="$3"
+  local image="${ipalpha_registry}/${repo}:${version}"
+  if ! ipalpha_is_image_repo "$repo"; then
+    echo "  $repo: $(ipalpha_msg publish_no_dockerfile)"
+    return 0
+  fi
+  if [[ ! -f "$dir/Dockerfile" ]]; then
+    echo "  $repo: $(ipalpha_msg publish_no_dockerfile)"
+    return 0
+  fi
+  if command -v docker >/dev/null 2>&1; then
+    docker build -t "$image" "$dir" || return 1
+    docker push "$image" || { echo "  docker push failed — run: docker login ${ipalpha_registry%%/*}" >&2; return 1; }
+  elif command -v container >/dev/null 2>&1; then
+    container build --tag "$image" "$dir" || return 1
+    container image push "$image" || return 1
+  else
+    echo "  no container runtime to build $image" >&2
+    return 1
+  fi
+}
+
+ipalpha_publish_npm() {
+  local dir="$1"
+  if ! npm whoami >/dev/null 2>&1; then
+    echo "  shared-js: not logged in to npm — run: npm login" >&2
+    return 1
+  fi
+  (cd "$dir" && npm publish) || { echo "  shared-js: npm publish failed" >&2; return 1; }
+}
+
+ipalpha_publish_bump_deployment() {
+  local root="$1" repo="$2" version="$3"
+  local dep="$root/deployment" pattern file
+  [[ -d "$dep/.git" ]] || { echo "  $(ipalpha_msg publish_deployment_missing)"; return 0; }
+  pattern="${ipalpha_registry}/${repo}:"
+  while IFS= read -r file; do
+    [[ -n "$file" ]] || continue
+    ipalpha_sed_inplace "$file" -E "s|${pattern}[^[:space:]\"']*|${pattern}${version}|g"
+  done < <(grep -rl -F "$pattern" "$dep" --include='*.yaml' --include='*.yml' 2>/dev/null)
+  if [[ -z "$(git -C "$dep" status --porcelain 2>/dev/null)" ]]; then
+    return 0
+  fi
+  git -C "$dep" add -A
+  git -C "$dep" commit -q -m "bump ${repo} to ${version}" || return 0
+  git -C "$dep" push >/dev/null 2>&1 || echo "  deployment push failed" >&2
+}
+
+ipalpha_publish_repo() {
+  local root="$1" repo="$2" version="$3" message="$4" bump="$5"
+  local dir
+  dir="$(ipalpha_repo_path "$root" "$repo")"
+  if [[ "$bump" != "none" ]]; then
+    ipalpha_publish_set_version "$dir" "$version"
+  fi
+  git -C "$dir" add -A
+  git -C "$dir" commit -q -m "$message" || true
+  if [[ "$bump" != "none" ]]; then
+    git -C "$dir" tag "v${version}" >/dev/null 2>&1 || true
+  fi
+  git -C "$dir" push >/dev/null 2>&1 || echo "  $repo: push failed" >&2
+  if [[ "$bump" != "none" ]]; then
+    git -C "$dir" push origin "v${version}" >/dev/null 2>&1 || true
+  fi
+  if [[ "$bump" == "none" ]]; then
+    return 0
+  fi
+  if [[ "$repo" == "shared-js" ]]; then
+    ipalpha_publish_npm "$dir" || return 1
+    return 0
+  fi
+  ipalpha_publish_build_image "$repo" "$version" "$dir" || return 1
+  ipalpha_publish_bump_deployment "$root" "$repo" "$version"
+}
+
+ipalpha_publish() {
+  local root="$1"; shift
+  local dry_run=false folder="" engine="${ipalpha_ai_cli:-pi}" model="${ipalpha_ai_model:-}"
+  local arg
+  while [[ $# -gt 0 ]]; do
+    arg="$1"
+    case "$arg" in
+      -d|--dry-run) dry_run=true ;;
+      -f|--folder) shift; folder="${1:-}" ;;
+      -f*) folder="${arg#-f}" ;;
+      --folder=*) folder="${arg#*=}" ;;
+      --engine) shift; engine="${1:-}" ;;
+      --engine=*) engine="${arg#*=}" ;;
+      clean)
+        rm -rf "$root/.ipalpha/.publish-cache"
+        echo "$(ipalpha_msg publish_cache_clean)"
+        return 0
+        ;;
+      -h|--help|help)
+        ipalpha_publish_help
+        return 0
+        ;;
+      *) ;;
+    esac
+    shift
+  done
+
+  if [[ -n "$folder" ]]; then
+    if ! ipalpha_is_ms_repo "$folder"; then
+      echo "$(ipalpha_msg publish_folder_unknown) $folder" >&2
+      return 1
+    fi
+    if ! ipalpha_publish_repo_dirty "$(ipalpha_repo_path "$root" "$folder")"; then
+      echo "$folder: $(ipalpha_msg publish_no_dirty)"
+      return 0
+    fi
+  fi
+
+  local -a dirty=()
+  while IFS= read -r repo; do
+    [[ -n "$repo" ]] && dirty+=("$repo")
+  done < <(ipalpha_publish_dirty_repos "$root")
+
+  if [[ ${#dirty[@]} -eq 0 ]]; then
+    echo "$(ipalpha_msg publish_no_dirty)"
+    return 0
+  fi
+
+  if [[ -n "$folder" ]]; then
+    local -a selected=("$folder")
+  else
+    local -a selected=()
+    while IFS= read -r repo; do
+      [[ -n "$repo" ]] && selected+=("$repo")
+    done < <(ipalpha_publish_select_repos "${dirty[@]}") || { echo "$(ipalpha_msg publish_aborted)"; return 0; }
+  fi
+  if [[ ${#selected[@]} -eq 0 ]]; then
+    echo "$(ipalpha_msg publish_aborted)"
+    return 0
+  fi
+
+  local -a plan_bump=() plan_version=() plan_message=()
+  local i=0 decision reason bump message version
+  for repo in "${selected[@]}"; do
+    decision="$(ipalpha_publish_ask_ai "$root" "$repo" "$engine" "$model")"
+    reason="$(sed -n 1p <<<"$decision")"
+    bump="$(sed -n 2p <<<"$decision")"
+    message="$(sed -n 3p <<<"$decision")"
+    bump="$(ipalpha_publish_scope_clamp "$(ipalpha_repo_path "$root" "$repo")" "$bump")"
+    version="$(ipalpha_publish_current_version "$(ipalpha_repo_path "$root" "$repo")")"
+    version="$(ipalpha_publish_bump_version "$version" "$bump")"
+    [[ -z "$message" ]] && message="Update $repo"
+    plan_bump[$i]="$bump"
+    plan_version[$i]="$version"
+    plan_message[$i]="$message"
+    i=$((i + 1))
+  done
+
+  echo
+  echo "$(ipalpha_msg publish_plan):"
+  i=0
+  for repo in "${selected[@]}"; do
+    echo "  $repo: ${plan_bump[$i]} → v${plan_version[$i]} — ${plan_message[$i]}"
+    i=$((i + 1))
+  done
+
+  if [[ "$dry_run" == true ]]; then
+    echo
+    printf '%s ' "$(ipalpha_msg publish_apply)"
+    read -r answer || answer=""
+    case "$answer" in
+      y|Y|s|S) ;;
+      *) echo "$(ipalpha_msg publish_aborted)"; return 0 ;;
+    esac
+  fi
+
+  i=0
+  for repo in "${selected[@]}"; do
+    ipalpha_publish_repo "$root" "$repo" "${plan_version[$i]}" "${plan_message[$i]}" "${plan_bump[$i]}"
+    i=$((i + 1))
+  done
+  echo "$(ipalpha_msg publish_done)"
+}

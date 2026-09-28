@@ -1,0 +1,72 @@
+name: ipalpha
+
+services:
+  mongo:
+    image: mongo:8
+    container_name: ipalpha-mongo
+    ports:
+      - "${MONGO_HOST_PORT:-27017}:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          mongosh --quiet
+          --username "$${MONGO_INITDB_ROOT_USERNAME}"
+          --password "$${MONGO_INITDB_ROOT_PASSWORD}"
+          --authenticationDatabase admin
+          --eval 'db.adminCommand({ ping: 1 })' >/dev/null 2>&1
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    container_name: ipalpha-redis
+    ports:
+      - "${REDIS_HOST_PORT:-6379}:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+
+  rabbitmq:
+    image: rabbitmq:4-management
+    container_name: ipalpha-rabbitmq
+    hostname: ipalpha-rabbitmq
+    ports:
+      - "${RABBITMQ_HOST_PORT:-5672}:5672"
+      - "${RABBITMQ_MGMT_HOST_PORT:-15672}:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+networks:
+  default:
+    name: ipalpha
+
+volumes:
+  mongo-data:
+    name: ipalpha-mongo-data
+  redis-data:
+    name: ipalpha-redis-data
+  rabbitmq-data:
+    name: ipalpha-rabbitmq-data

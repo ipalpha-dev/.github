@@ -7,9 +7,19 @@
 Plataforma central da **Igreja Presbiteriana em Alphaville** (Alphaville, SP): pequenos serviços
 que os ministérios usam para cuidar das pessoas, sem duplicar cadastros.
 
+## Começar a desenvolver (copie e cole no terminal)
+
+```sh
+bash <(curl -fsSL https://raw.githubusercontent.com/ipalpha-dev/.github/main/bootstrap.sh)
+```
+
+Precisa de [chave SSH no GitHub](https://docs.github.com/pt/authentication/connecting-to-github-with-ssh) e ser membro da organização.
+Depois: `cd IpAlpha && ./run`.
+
+## Repositórios
+
 | Repositório | Para quê |
 |---|---|
-| `develop` | Ferramentas: `setup`, `run`, `pull`, `publish` |
 | `shared-js` | Biblioteca comum (`@ipalpha/shared-js`) |
 | `auth-api` | Login (código por SMS, passkeys) e tokens |
 | `person-api` | Cadastro de pessoas, registro de acesso (LGPD) |
@@ -17,3 +27,4 @@ que os ministérios usam para cuidar das pessoas, sem duplicar cadastros.
 | `projects-api` | Projetos e aplicativos conectados |
 | `notification-api` | Envio de SMS e modelos de mensagem |
 | `deployment` | Manifestos Kubernetes |
+| `.github` | Esta página + as ferramentas de desenvolvimento |

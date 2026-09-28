@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+set -euo pipefail
+root="${IPALPHA_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
+core="$root/core"
+
+set_key() {
+  local file="$1" key="$2" value="$3"
+  [ -f "$file" ] || { echo "missing $file" >&2; return 1; }
+  python3 - "$file" "$key" "$value" <<'PY'
+import sys, pathlib, shlex
+path, key, value = sys.argv[1], sys.argv[2], sys.argv[3]
+value = shlex.quote(value)
+p = pathlib.Path(path)
+lines = p.read_text().splitlines()
+out, found = [], False
+for line in lines:
+    if line.split('=', 1)[0] == key:
+        out.append(f'{key}={value}'); found = True
+    else:
+        out.append(line)
+if not found:
+    out.append(f'{key}={value}')
+p.write_text('\n'.join(out) + '\n')
+p.chmod(0o600)
+PY
+}
+
+ask() {
+  local label="$1" secret="${2:-}" value
+  if [ -n "$secret" ]; then read -r -s -p "$label: " value; echo >&2; else read -r -p "$label: " value; fi
+  printf '%s' "$value"
+}
+
+echo "IPAlpha local keys. Leave blank to keep the current value."
+barato=$(ask "SMS Barato key (chave)" secret)
+comtele_url=$(ask "Comtele API URL (blank = https://sms.comtele.com.br/api/v2)")
+comtele_token=$(ask "Comtele token (auth-key)" secret)
+su_name=$(ask "Superuser name")
+su_phone=$(ask "Superuser phone in E.164 (e.g. +5511999998888)")
+su_email=$(ask "Superuser email (optional)")
+
+n="$core/notification-api/.env"
+a="$core/auth-api/.env"
+[ -n "$barato" ] && set_key "$n" SMSBARATO_KEY "$barato"
+[ -n "$comtele_url" ] && set_key "$n" COMTELE_API_URL "$comtele_url"
+[ -n "$comtele_token" ] && set_key "$n" COMTELE_TOKEN "$comtele_token"
+[ -n "$su_name" ] && set_key "$a" SUPERUSER_NAME "$su_name"
+[ -n "$su_phone" ] && set_key "$a" SUPERUSER_PHONE "$su_phone"
+[ -n "$su_email" ] && set_key "$a" SUPERUSER_EMAIL "$su_email"
+echo "Saved. Restart notification-api and auth-api to apply."
