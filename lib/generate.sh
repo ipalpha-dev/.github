@@ -329,6 +329,37 @@ SCRIPT
   chmod +x "$dest"
 }
 
+ipalpha_write_bin_vite_dev() {
+  local dest="$1"
+  cat >"$dest" <<'SCRIPT'
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo="${1:?usage: vite-dev <repo> <web-port> <api-port>}"
+web_port="${2:?web port}"
+api_port="${3:?api port}"
+
+ipalpha_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ipalpha_root="$(cd "$ipalpha_dir/.." && pwd)"
+frontend="$ipalpha_root/core/$repo/frontend"
+
+if [[ ! -f "$frontend/package.json" ]]; then
+  echo "vite-dev: $repo has no frontend — nothing to run"
+  exit 0
+fi
+
+cd "$frontend"
+if [[ ! -d node_modules || package-lock.json -nt node_modules ]]; then
+  npm install --no-audit --no-fund --silent
+  touch node_modules
+fi
+
+export IPALPHA_FRONTEND_ROOT="$frontend" IPALPHA_WEB_PORT="$web_port" IPALPHA_API_PORT="$api_port"
+exec ./node_modules/.bin/vite --config "$ipalpha_dir/vite.dev.mjs"
+SCRIPT
+  chmod +x "$dest"
+}
+
 ipalpha_write_bin_install_deps() {
   local dest="$1"
   cat >"$dest" <<'SCRIPT'
@@ -392,6 +423,14 @@ start notification-api
 start auth-api
 start organization-api "$auth_port" "$projects_port"
 
+for repo in projects-api person-api organization-api notification-api auth-api; do
+  api_port="$(setting "${repo}_port")"
+  [[ -f "$ipalpha_dir/../core/$repo/frontend/package.json" ]] || continue
+  (exec "$ipalpha_dir/bin/vite-dev" "$repo" "$((api_port + 2000))" "$api_port") >"$log_dir/$repo-web.log" 2>&1 &
+  pids+=("$!")
+  echo "started $repo frontend → http://localhost:$((api_port + 2000))/frontend/"
+done
+
 echo
 echo "all services starting — logs in $log_dir"
 echo "  tail -f $log_dir/*.log"
@@ -420,7 +459,15 @@ ipalpha_write_projects_json() {
       port="$(ipalpha_settings_ms_port "$repo")"
       [[ "$first" == true ]] || echo "    ,"
       first=false
-      echo "    {\"name\": \"$repo\", \"kind\": \"service\", \"path\": \"core/$repo\", \"display\": \"$display\", \"port\": \"$port\", \"autostart\": true, \"frontend\": \"http://localhost:$port/frontend\"}"
+      echo "    {\"name\": \"$repo\", \"kind\": \"service\", \"path\": \"core/$repo\", \"display\": \"$display\", \"port\": \"$port\", \"autostart\": true, \"frontend\": \"http://localhost:$((port + 2000))/frontend/\"}"
+    done
+    for repo in "${ipalpha_ms_order[@]}"; do
+      [[ -f "$root/core/$repo/frontend/package.json" ]] || continue
+      display="${repo%-api}"
+      display="$(tr '[:lower:]' '[:upper:]' <<<"${display:0:1}")${display:1}"
+      port="$(ipalpha_settings_ms_port "$repo")"
+      echo "    ,"
+      echo "    {\"name\": \"$repo-web\", \"kind\": \"app\", \"path\": \"core/$repo/frontend\", \"display\": \"$display\", \"port\": \"$((port + 2000))\", \"autostart\": true, \"cmd\": \"$root/.ipalpha/bin/vite-dev $repo $((port + 2000)) $port\", \"frontend\": \"http://localhost:$((port + 2000))/frontend/\"}"
     done
     echo "  ]"
     echo "}"
@@ -618,6 +665,8 @@ ipalpha_materialize_workspace() {
   ipalpha_write_bin_infra_down "$dir/bin/infra-down"
   ipalpha_write_bin_wait_for_http "$dir/bin/wait-for-http"
   ipalpha_write_bin_node_dev "$dir/bin/node-dev"
+  ipalpha_write_bin_vite_dev "$dir/bin/vite-dev"
+  cp "$setup_root/templates/vite.dev.mjs" "$dir/vite.dev.mjs"
   ipalpha_write_bin_install_deps "$dir/bin/install-deps"
   rm -f "$dir/bin/build-shared-js"
   ipalpha_write_bin_fallback_run "$dir/bin/fallback-run"

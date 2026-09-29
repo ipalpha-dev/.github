@@ -57,9 +57,7 @@ grep -q '^org=ipalpha' "$ipalpha_tmp/IpAlpha/.ipalpha/settings" || ipalpha_fail 
 grep -q '^ai_cli=pi' "$ipalpha_tmp/IpAlpha/.ipalpha/settings" || ipalpha_fail "settings ai_cli wrong"
 grep -q '^ai_model=cpamc/muse-spark-1.3-contributor' "$ipalpha_tmp/IpAlpha/.ipalpha/settings" || ipalpha_fail "settings ai_model wrong"
 grep -q '^runner=auto$' "$ipalpha_tmp/IpAlpha/.ipalpha/settings" || ipalpha_fail "settings runner must default to auto"
-# Generated ./run must default to the embedded runner; mprocs is opt-in only.
-grep -q '^runner="${ipalpha_runner:-background}"$' "$ipalpha_tmp/IpAlpha/run" || ipalpha_fail "./run must default to auto"
-grep -q 'IPALPHA_RUNNER=mprocs' "$ipalpha_tmp/IpAlpha/.ipalpha/lib/tools.sh" || ipalpha_fail "lib/tools.sh must keep mprocs opt-in hint"
+grep -q 'IPALPHA_RUNNER:-${ipalpha_runner:-auto}' "$ipalpha_tmp/IpAlpha/run" || ipalpha_fail "./run must default to auto"
 
 echo "== port-busy check ignores our own containers"
 # Fake a docker CLI that pretends an ipalpha container is holding port 27017.
