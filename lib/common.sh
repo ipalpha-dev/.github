@@ -5,6 +5,8 @@ ipalpha_registry="ghcr.io/${ipalpha_org}"
 
 ipalpha_ms_repos=(shared-js projects-api person-api organization-api notification-api auth-api)
 ipalpha_ms_order=(projects-api person-api organization-api notification-api auth-api)
+# Standalone web apps under core/: cloned, deps installed, image published, no .env, run with Vite.
+ipalpha_web_repos=(auth-webapp)
 ipalpha_root_repos=(deployment)
 ipalpha_tooling_repo=".github"
 
@@ -24,6 +26,21 @@ ipalpha_default_ms_port() {
   esac
 }
 
+# Vite port for a standalone web app; its /api is proxied to this backend.
+ipalpha_default_web_port() {
+  case "$1" in
+    auth-webapp) echo 5100 ;;
+    *) echo 5199 ;;
+  esac
+}
+
+ipalpha_web_api_backend() {
+  case "$1" in
+    auth-webapp) echo auth-api ;;
+    *) echo "" ;;
+  esac
+}
+
 ipalpha_settings_name=".ipalpha/settings"
 
 ipalpha_settings_file() {
@@ -40,7 +57,15 @@ ipalpha_repo_path() {
 
 ipalpha_is_ms_repo() {
   local repo="$1"
-  case " ${ipalpha_ms_repos[*]} " in
+  case " ${ipalpha_ms_repos[*]} ${ipalpha_web_repos[*]} " in
+    *" $repo "*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+ipalpha_is_web_repo() {
+  local repo="$1"
+  case " ${ipalpha_web_repos[*]} " in
     *" $repo "*) return 0 ;;
     *) return 1 ;;
   esac
@@ -55,7 +80,7 @@ ipalpha_is_image_repo() {
 
 ipalpha_all_repos() {
   local repo
-  for repo in "${ipalpha_root_repos[@]}" "${ipalpha_ms_repos[@]}"; do
+  for repo in "${ipalpha_root_repos[@]}" "${ipalpha_ms_repos[@]}" "${ipalpha_web_repos[@]}"; do
     echo "$repo"
   done
 }

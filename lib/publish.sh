@@ -14,7 +14,7 @@ ipalpha_publish_repo_dirty() {
 
 ipalpha_publish_dirty_repos() {
   local root="$1" repo dir
-  for repo in "${ipalpha_ms_repos[@]}"; do
+  for repo in "${ipalpha_ms_repos[@]}" "${ipalpha_web_repos[@]}"; do
     dir="$(ipalpha_repo_path "$root" "$repo")"
     ipalpha_publish_repo_dirty "$dir" && echo "$repo"
   done

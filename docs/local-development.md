@@ -51,6 +51,7 @@ keeps it). `./pull` re-downloads `.github` into a temp folder to refresh
 | `.github` | org profile page + this tooling (not cloned into the workspace) |
 | `shared-js` | npm library `@ipalpha/shared-js` on npmjs.com (helpers only) |
 | `auth-api`, `person-api`, `organization-api`, `projects-api`, `notification-api` | NestJS + TypeScript backend, each with a React+Vite frontend served under `/frontend` |
+| `auth-webapp` | standalone Vite app: the sign-in popup (account chooser + consent). No `.env`; runs on its own port with `/api` proxied to auth-api; published as an nginx image |
 | `deployment` | k8s manifests under `core/<ms>/`, namespace `ipalpha-core` |
 
 The org name lives in one place (`ipalpha_org` in `lib/common.sh`); image names
@@ -119,6 +120,7 @@ Dev-only release (no prod rollout):
 | organization-api | 3003 |
 | notification-api | 3004 |
 | auth-api | 3005 |
+| auth-webapp (Vite) | 5100 |
 | MongoDB | 27017 |
 | Redis | 6379 |
 | RabbitMQ | 5672 |

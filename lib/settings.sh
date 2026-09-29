@@ -21,8 +21,22 @@ ipalpha_write_settings() {
       var="ipalpha_port_${repo//-/_}"
       echo "${repo}_port=${!var:-$(ipalpha_default_ms_port "$repo")}"
     done
+    for repo in "${ipalpha_web_repos[@]}"; do
+      var="ipalpha_port_${repo//-/_}"
+      echo "${repo}_port=${!var:-$(ipalpha_default_web_port "$repo")}"
+    done
   } >"$dest"
   chmod 600 "$dest"
+}
+
+ipalpha_settings_web_port() {
+  local repo="$1" var
+  var="ipalpha_port_${repo//-/_}"
+  if [[ -n "${!var:-}" ]]; then
+    echo "${!var}"
+  else
+    echo "$(ipalpha_default_web_port "$repo")"
+  fi
 }
 
 ipalpha_settings_ms_port() {

@@ -5,6 +5,7 @@ ipalpha_repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ipalpha_tmp="$(mktemp -d)"
 trap 'rm -rf "$ipalpha_tmp"' EXIT
 
+export IPALPHA_TEST_NO_PORT_PROBE=1
 export IPALPHA_CLONE_COMMAND="$ipalpha_repo_root/tests/fake-clone"
 export IPALPHA_LANG=en-US
 export IPALPHA_SKIP_TOOLS=1
@@ -26,10 +27,16 @@ echo "== setup (skip tools)"
 ipalpha_out="$("$ipalpha_repo_root/setup" --skip-tools --keep-setup 2>&1)" \
   || ipalpha_fail "setup failed: $ipalpha_out"
 
-for repo in shared-js projects-api person-api organization-api notification-api auth-api; do
+for repo in shared-js projects-api person-api organization-api notification-api auth-api auth-webapp; do
   [[ -d "$ipalpha_tmp/IpAlpha/core/$repo/.git" ]] \
     || ipalpha_fail "ms repo not cloned: $repo"
 done
+[[ ! -f "$ipalpha_tmp/IpAlpha/core/auth-webapp/.env" ]] || ipalpha_fail "auth-webapp must not get an env"
+grep -q '^auth-webapp_port=5100$' "$ipalpha_tmp/IpAlpha/.ipalpha/settings" || ipalpha_fail "settings missing auth-webapp_port"
+[[ -x "$ipalpha_tmp/IpAlpha/.ipalpha/bin/web-dev" ]] || ipalpha_fail "web-dev missing"
+# fake clone has no package.json -> web app is skipped from the runners until cloned for real
+grep -q '"name": "auth-webapp"' "$ipalpha_tmp/IpAlpha/.ipalpha/projects.json" && ipalpha_fail "projects.json listed auth-webapp without package.json"
+echo '{"name":"auth-webapp"}' >"$ipalpha_tmp/IpAlpha/core/auth-webapp/package.json"
 [[ -d "$ipalpha_tmp/IpAlpha/deployment/.git" ]] || ipalpha_fail "deployment not cloned"
 [[ ! -e "$ipalpha_tmp/IpAlpha/develop" ]] || ipalpha_fail "develop must not be cloned"
 [[ ! -e "$ipalpha_tmp/IpAlpha/.github" ]] || ipalpha_fail ".github must not be cloned into the workspace"
@@ -90,7 +97,7 @@ rm -rf "$ipalpha_fakebin"
 [[ -f "$ipalpha_tmp/IpAlpha/.ipalpha/mprocs.yaml" ]] || ipalpha_fail "mprocs.yaml missing"
 [[ -d "$ipalpha_tmp/IpAlpha/.ipalpha/lib" ]] || ipalpha_fail ".ipalpha/lib missing"
 [[ -d "$ipalpha_tmp/IpAlpha/.ipalpha/env-fallback" ]] || ipalpha_fail ".ipalpha/env-fallback missing"
-for bin in infra-up infra-down wait-for-http node-dev install-deps fallback-run; do
+for bin in infra-up infra-down wait-for-http node-dev web-dev install-deps fallback-run; do
   [[ -x "$ipalpha_tmp/IpAlpha/.ipalpha/bin/$bin" ]] || ipalpha_fail "bin/$bin missing"
   bash -n "$ipalpha_tmp/IpAlpha/.ipalpha/bin/$bin" || ipalpha_fail "bin/$bin syntax error"
 done
@@ -128,6 +135,9 @@ grep -q 'LOCAL_CUSTOMIZATION=1' "$ipalpha_tmp/IpAlpha/core/projects-api/.env" \
   || ipalpha_fail "second run overwrote local env"
 grep -q '^NEW_KEY=42$' "$ipalpha_tmp/IpAlpha/core/person-api/.env" \
   || ipalpha_fail "second run did not merge new keys"
+grep -q '"name": "auth-webapp", "kind": "app"' "$ipalpha_tmp/IpAlpha/.ipalpha/projects.json" || ipalpha_fail "projects.json missing auth-webapp app"
+grep -q 'Web · auth-webapp' "$ipalpha_tmp/IpAlpha/.ipalpha/mprocs.yaml" || ipalpha_fail "mprocs missing auth-webapp"
+grep -q 'web-dev auth-webapp' "$ipalpha_tmp/IpAlpha/.ipalpha/projects.json" || ipalpha_fail "projects.json auth-webapp cmd wrong"
 
 echo "== pull re-clones missing repo"
 rm -rf "$ipalpha_tmp/IpAlpha/core/person-api"

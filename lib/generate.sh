@@ -278,7 +278,56 @@ ipalpha_write_mprocs_yaml() {
         *) echo "    shell: \"$root/.ipalpha/bin/node-dev $repo $projects_port\"" ;;
       esac
     done
+    for repo in "${ipalpha_web_repos[@]}"; do
+      [[ -f "$root/core/$repo/package.json" ]] || continue
+      echo "  \"Web · $repo\":"
+      echo "    cwd: \"$root/core/$repo\""
+      echo "    shell: \"$root/.ipalpha/bin/web-dev $repo\""
+    done
   } >"$dest"
+}
+
+# Standalone web app (core/<repo>, own vite.config): Vite on its port, /api proxied to its backend MS.
+ipalpha_write_bin_web_dev() {
+  local dest="$1"
+  cat >"$dest" <<'SCRIPT'
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo="${1:?usage: web-dev <repo>}"
+
+ipalpha_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ipalpha_root="$(cd "$ipalpha_dir/.." && pwd)"
+app="$ipalpha_root/core/$repo"
+
+# shellcheck disable=SC1091
+source "$ipalpha_dir/lib/common.sh"
+
+if [[ ! -f "$app/package.json" ]]; then
+  echo "web-dev: $repo is not cloned yet — nothing to run"
+  exit 0
+fi
+
+setting() {
+  sed -n "s/^$1=//p" "$ipalpha_dir/settings" 2>/dev/null | head -n1
+}
+
+backend="$(ipalpha_web_api_backend "$repo")"
+api_port="$(setting "${backend}_port")"
+api_port="${api_port:-$(ipalpha_default_ms_port "$backend")}"
+web_port="$(setting "${repo}_port")"
+web_port="${web_port:-$(ipalpha_default_web_port "$repo")}"
+
+cd "$app"
+if [[ ! -d node_modules || package-lock.json -nt node_modules ]]; then
+  npm install --no-audit --no-fund --silent
+  touch node_modules
+fi
+
+export AUTH_API_URL="http://127.0.0.1:$api_port"
+exec ./node_modules/.bin/vite --port "$web_port" --strictPort
+SCRIPT
+  chmod +x "$dest"
 }
 
 ipalpha_write_bin_node_dev() {
@@ -439,6 +488,16 @@ for repo in projects-api person-api organization-api notification-api auth-api; 
   echo "started $repo frontend → http://localhost:$((api_port + 2000))/frontend/"
 done
 
+# shellcheck disable=SC1091
+source "$ipalpha_dir/lib/common.sh"
+for repo in "${ipalpha_web_repos[@]}"; do
+  [[ -f "$ipalpha_dir/../core/$repo/package.json" ]] || continue
+  web_port="$(setting "${repo}_port")"
+  (exec "$ipalpha_dir/bin/web-dev" "$repo") >"$log_dir/$repo.log" 2>&1 &
+  pids+=("$!")
+  echo "started $repo → http://localhost:${web_port:-$(ipalpha_default_web_port "$repo")}/frontend/"
+done
+
 echo
 echo "all services starting — logs in $log_dir"
 echo "  tail -f $log_dir/*.log"
@@ -476,6 +535,14 @@ ipalpha_write_projects_json() {
       port="$(ipalpha_settings_ms_port "$repo")"
       echo "    ,"
       echo "    {\"name\": \"$repo-web\", \"kind\": \"attached\", \"parent\": \"$repo\", \"path\": \"core/$repo/frontend\", \"display\": \"Frontend\", \"port\": \"$((port + 2000))\", \"autostart\": true, \"cmd\": \"$root/.ipalpha/bin/vite-dev $repo $((port + 2000)) $port\", \"frontend\": \"http://localhost:$((port + 2000))/frontend/\"}"
+    done
+    for repo in "${ipalpha_web_repos[@]}"; do
+      [[ -f "$root/core/$repo/package.json" ]] || continue
+      display="${repo%-webapp}"
+      display="$(tr '[:lower:]' '[:upper:]' <<<"${display:0:1}")${display:1} Web"
+      port="$(ipalpha_settings_web_port "$repo")"
+      echo "    ,"
+      echo "    {\"name\": \"$repo\", \"kind\": \"app\", \"path\": \"core/$repo\", \"display\": \"$display\", \"port\": \"$port\", \"autostart\": true, \"cmd\": \"$root/.ipalpha/bin/web-dev $repo\", \"frontend\": \"http://localhost:$port/frontend/\"}"
     done
     echo "  ]"
     echo "}"
@@ -674,6 +741,7 @@ ipalpha_materialize_workspace() {
   ipalpha_write_bin_wait_for_http "$dir/bin/wait-for-http"
   ipalpha_write_bin_node_dev "$dir/bin/node-dev"
   ipalpha_write_bin_vite_dev "$dir/bin/vite-dev"
+  ipalpha_write_bin_web_dev "$dir/bin/web-dev"
   cp "$setup_root/templates/vite.dev.mjs" "$dir/vite.dev.mjs"
   ipalpha_write_bin_install_deps "$dir/bin/install-deps"
   rm -f "$dir/bin/build-shared-js"

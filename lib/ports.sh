@@ -2,6 +2,7 @@
 
 # Returns 0 if anything is listening on the host port, 1 otherwise.
 ipalpha_tcp_listening() {
+  [[ "${IPALPHA_TEST_NO_PORT_PROBE:-}" == "1" ]] && return 1
   local port="$1"
   if command -v lsof >/dev/null 2>&1; then
     lsof -iTCP:"$port" -sTCP:LISTEN -P -n >/dev/null 2>&1
@@ -94,6 +95,10 @@ ipalpha_resolve_ports() {
   for repo in "${ipalpha_ms_order[@]}"; do
     var="ipalpha_port_${repo//-/_}"
     ipalpha_resolve_port "$var" "$(ipalpha_default_ms_port "$repo")"
+  done
+  for repo in "${ipalpha_web_repos[@]}"; do
+    var="ipalpha_port_${repo//-/_}"
+    ipalpha_resolve_port "$var" "$(ipalpha_default_web_port "$repo")"
   done
 }
 
