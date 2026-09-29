@@ -369,12 +369,9 @@ if [[ -f frontend/package.json && -n "${PORT:-}" ]]; then
   export IPALPHA_FRONTEND_URL="http://localhost:$((PORT + 2000))/frontend/"
 fi
 
-if [[ -z "${IPALPHA_PANEL:-}" ]]; then
-  for port in "$@"; do
-    "$ipalpha_dir/bin/wait-for-http" "http://127.0.0.1:$port" 60 || \
-      echo "node-dev: dependency on port $port not up — starting anyway" >&2
-  done
-fi
+# Dependency ports may still be passed for context, but nothing waits: every MS boots at
+# once and answers GET /ready with 503 until its infra is good.
+[[ $# -gt 0 ]] && echo "node-dev: $repo uses ports $* — starting without waiting (see /ready)"
 
 script="$(node -p "const s=require('./package.json').scripts||{}; s['start:dev']?'start:dev':(s['dev']?'dev':'start')")"
 exec npm run --silent "$script"

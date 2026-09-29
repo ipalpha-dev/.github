@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"strings"
@@ -62,6 +63,10 @@ type proc struct {
 	lines  []string
 	cmdP   *exec.Cmd
 	cancel chan struct{}
+	// readiness: services expose GET /ready (200 = may receive traffic). Polled while running.
+	readyKnown bool
+	ready      bool
+	readyAt    time.Time
 }
 
 type logMsg struct {
@@ -118,58 +123,65 @@ func (p *proc) cancelled() bool {
 		return p.state == stateStopped
 	}
 }
+
+// startAfterDeps no longer waits: every service boots at once and reports readiness through
+// its own GET /ready (see readinessLoop). Dependencies are only echoed for context.
 func (p *proc) startAfterDeps(ch chan<- teaMsg, depPorts map[string]string) {
 	p.mu.Lock()
 	if p.state == stateRunning || p.state == stateStarting || p.state == stateWaiting {
 		p.mu.Unlock()
 		return
 	}
-	p.state = stateWaiting
+	p.state = stateStarting
 	p.exit = 0
 	p.cancel = make(chan struct{})
-	cancel := p.cancel
 	p.mu.Unlock()
 
-	if len(p.softDeps) > 0 {
-		p.appendLine(tr("cycle_note") + ": " + strings.Join(p.softDeps, ", ") + " — " + tr("start_no_wait"))
+	if len(p.deps) > 0 || len(p.softDeps) > 0 {
+		all := append(append([]string{}, p.deps...), p.softDeps...)
+		p.appendLine(tr("uses") + ": " + strings.Join(all, ", ") + " — " + tr("start_no_wait"))
 	}
-	if len(p.deps) > 0 {
-		p.appendLine(tr("wait_deps") + ": " + strings.Join(p.deps, ", "))
-		for _, d := range p.deps {
-			if p.cancelled() {
-				p.appendLine(tr("start_cancel"))
-				return
-			}
-			port := depPorts[d]
-			if port == "" {
-				p.appendLine("  → " + d + " (" + tr("no_port") + ")")
-				continue
-			}
-			p.appendLine("  → " + d + " :" + port)
-			if !waitForPortCancel(port, 45*time.Second, cancel) {
-				if p.cancelled() {
-					p.appendLine(tr("start_cancel"))
-					return
-				}
-				p.appendLine("  " + tr("timed_out") + " " + d + " (" + tr("starting_any") + ")")
-			} else {
-				p.appendLine("  " + d + " " + tr("is_up"))
-			}
-		}
-	}
-
-	if p.cancelled() {
-		p.appendLine(tr("start_cancel"))
-		return
-	}
-	p.mu.Lock()
-	if p.state == stateStopped {
-		p.mu.Unlock()
-		return
-	}
-	p.state = stateStarting
-	p.mu.Unlock()
+	_ = depPorts
 	_ = p.startNow(ch)
+}
+
+// readinessLoop polls GET /ready while the process runs. Only services with a port take part;
+// web apps and infra are "ready" as soon as they run.
+func (p *proc) readinessLoop() {
+	if p.port == "" || p.kind == "infrastructure" || p.kind == "app" || p.kind == "attached" {
+		return
+	}
+	url := "http://127.0.0.1:" + p.port + "/ready"
+	client := &http.Client{Timeout: 1500 * time.Millisecond}
+	for {
+		st, _, _ := p.snapshot()
+		if st != stateRunning {
+			p.mu.Lock()
+			p.readyKnown = false
+			p.ready = false
+			p.mu.Unlock()
+			return
+		}
+		ok := false
+		if resp, err := client.Get(url); err == nil {
+			ok = resp.StatusCode == 200
+			resp.Body.Close()
+		}
+		p.mu.Lock()
+		if !p.readyKnown || p.ready != ok {
+			p.readyAt = time.Now()
+		}
+		p.readyKnown = true
+		p.ready = ok
+		p.mu.Unlock()
+		time.Sleep(1500 * time.Millisecond)
+	}
+}
+
+func (p *proc) isReady() (known bool, ready bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.readyKnown, p.ready
 }
 
 func (p *proc) startNow(ch chan<- teaMsg) error {
@@ -216,8 +228,11 @@ func (p *proc) startNow(ch chan<- teaMsg) error {
 	p.mu.Lock()
 	p.cmdP = c
 	p.state = stateRunning
+	p.readyKnown = false
+	p.ready = false
 	p.mu.Unlock()
 
+	go p.readinessLoop()
 	go p.pump(stdout, ch)
 	go p.pump(stderr, ch)
 	go func() {
@@ -341,6 +356,9 @@ func (p *proc) statusLabel() string {
 	st, code, _ := p.snapshot()
 	switch st {
 	case stateRunning:
+		if known, ready := p.isReady(); known && !ready {
+			return "◐"
+		}
 		return "●"
 	case stateStarting, stateWaiting:
 		return "◐"
@@ -358,6 +376,9 @@ func (p *proc) statusText() string {
 	st, code, _ := p.snapshot()
 	switch st {
 	case stateRunning:
+		if known, ready := p.isReady(); known && !ready {
+			return tr("not_ready")
+		}
 		return tr("running")
 	case stateStarting:
 		return tr("starting")

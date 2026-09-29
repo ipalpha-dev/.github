@@ -66,7 +66,11 @@ func (m model) View() string {
 		var dotS string
 		switch st {
 		case stateRunning:
-			dotS = runStyle.Render("●")
+			if known, ready := p.isReady(); known && !ready {
+				dotS = waitStyle.Render("◐")
+			} else {
+				dotS = runStyle.Render("●")
+			}
 		case stateStarting, stateWaiting:
 			dotS = waitStyle.Render("◐")
 		case stateExited:
@@ -130,11 +134,8 @@ func (m model) View() string {
 		if p.port != "" {
 			header += "  ·  :" + p.port
 		}
-		if len(p.deps) > 0 {
-			header += "  ·  " + tr("deps") + ": " + strings.Join(p.deps, ", ")
-		}
-		if len(p.softDeps) > 0 {
-			header += "  ·  " + tr("cycle") + ": " + strings.Join(p.softDeps, ", ")
+		if all := append(append([]string{}, p.deps...), p.softDeps...); len(all) > 0 {
+			header += "  ·  " + tr("uses") + ": " + strings.Join(all, ", ")
 		}
 		if m.follow {
 			header += "  ·  " + tr("follow")

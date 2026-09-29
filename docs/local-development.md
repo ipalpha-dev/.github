@@ -66,9 +66,11 @@ follow `ghcr.io/<org>/<ms>`.
    the services directly (network `ipalpha`, named volumes `ipalpha-*-data`);
    Docker uses `docker compose --wait`.
 2. Installs missing npm dependencies per service (`@ipalpha/shared-js` comes from npm; the `core/shared-js` clone is only for changing the library).
-3. Starts the APIs in order — projects-api, person-api, organization-api,
-   notification-api, auth-api. Everything except projects-api waits for
-   projects-api's HTTP port; auth-api also waits for notification-api.
+3. Starts every API and web app at once — nothing waits for a peer. Each core MS
+   exposes `GET /live` (process up) and `GET /ready` (200 only when Mongo, Redis,
+   RabbitMQ and the projects cache are all good; 503 `{ready:false, checks}` otherwise).
+   The panel polls `/ready` and shows ● ready / ◐ up-but-not-ready per row; k8s uses the
+   same two paths as liveness/readiness probes.
    Processes run in the background with logs under `$TMPDIR/ipalpha-run-logs`.
 
 Stop: Ctrl+C, then `.ipalpha/bin/infra-down`.
