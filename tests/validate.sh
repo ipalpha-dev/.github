@@ -22,10 +22,10 @@ else
 fi
 
 echo "== go tests"
-if [[ -d templates/publish ]] && command -v go >/dev/null 2>&1; then
-  (cd templates/publish && go test ./...) || ipalpha_fail "go tests failed"
+if [[ -d templates/procs ]] && command -v go >/dev/null 2>&1; then
+  (cd templates/procs && go test ./...) || ipalpha_fail "go tests failed"
 else
-  echo "SKIP: no Go code (publish is bash)"
+  echo "SKIP: go not installed"
 fi
 
 echo "== docker compose config"

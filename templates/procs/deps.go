@@ -30,17 +30,22 @@ func discoverEnvDeps(root string, specs []projectSpec) map[string][]string {
 	metas := make([]meta, 0, len(specs))
 	portOwner := map[string]string{}
 	nameSet := map[string]bool{}
+	// Web apps (kind "app", "attached") only consume backends; nothing waits for them.
+	consumerOnly := map[string]bool{}
 
 	for _, s := range specs {
 		if s.Name == "" {
 			continue
 		}
 		nameSet[s.Name] = true
+		if s.Kind == "app" || s.Kind == "attached" {
+			consumerOnly[s.Name] = true
+		}
 		m := meta{name: s.Name, path: s.Path, port: strings.TrimSpace(s.Port)}
 		if m.port == "" {
 			m.port = readPortFromEnvFiles(filepath.Join(root, s.Path))
 		}
-		if m.port != "" {
+		if m.port != "" && !consumerOnly[s.Name] {
 			portOwner[m.port] = s.Name
 		}
 		metas = append(metas, m)
@@ -56,7 +61,7 @@ func discoverEnvDeps(root string, specs []projectSpec) map[string][]string {
 		if from == "" || to == "" || from == to {
 			return
 		}
-		if !nameSet[to] {
+		if !nameSet[to] || consumerOnly[to] {
 			return
 		}
 		for _, d := range deps[from] {
@@ -76,7 +81,7 @@ func discoverEnvDeps(root string, specs []projectSpec) map[string][]string {
 		if envText == "" {
 			continue
 		}
-		for _, port := range extractLocalPorts(envText) {
+		for _, port := range extractLocalPorts(stripAllowListLines(envText)) {
 			if infraPorts[port] || port == m.port {
 				continue
 			}
@@ -97,6 +102,10 @@ func discoverEnvDeps(root string, specs []projectSpec) map[string][]string {
 			key := strings.ToUpper(mline[1])
 			val := strings.Trim(mline[2], `"' `)
 			if val == "" {
+				continue
+			}
+			// Allow-lists of callers (CORS origins, redirect URIs) are not upstreams.
+			if strings.Contains(key, "ORIGIN") || strings.Contains(key, "REDIRECT") {
 				continue
 			}
 			if !strings.Contains(key, "URL") && !strings.Contains(key, "API") &&
@@ -146,6 +155,24 @@ func readPortFromEnvFiles(dir string) string {
 		}
 	}
 	return ""
+}
+
+// stripAllowListLines drops *_ORIGINS / *REDIRECT* lines: they list who may call us, not what we call.
+func stripAllowListLines(envText string) string {
+	var b strings.Builder
+	sc := bufio.NewScanner(strings.NewReader(envText))
+	for sc.Scan() {
+		line := sc.Text()
+		if m := reEnvLine.FindStringSubmatch(strings.TrimSpace(line)); m != nil {
+			key := strings.ToUpper(m[1])
+			if strings.Contains(key, "ORIGIN") || strings.Contains(key, "REDIRECT") {
+				continue
+			}
+		}
+		b.WriteString(line)
+		b.WriteByte('\n')
+	}
+	return b.String()
 }
 
 func readEnvFiles(dir string) string {
