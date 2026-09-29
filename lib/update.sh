@@ -45,14 +45,26 @@ ipalpha_update() {
   local repo dir
 
   echo "$(ipalpha_msg update_pulling)"
+  local out pids=() repos=()
+  out="$(mktemp -d "${TMPDIR:-/tmp}/ipalpha-pull.XXXXXX")"
   for repo in $(ipalpha_all_repos); do
     dir="$(ipalpha_repo_path "$root" "$repo")"
-    if [[ -d "$dir" ]]; then
-      ipalpha_update_repo "$dir" "$repo"
-    else
-      ipalpha_clone_repo "$repo" "$dir" || echo "  $repo: $(ipalpha_msg update_clone_fail)"
-    fi
+    (
+      if [[ -d "$dir" ]]; then
+        ipalpha_update_repo "$dir" "$repo"
+      else
+        ipalpha_clone_repo "$repo" "$dir" || echo "  $repo: $(ipalpha_msg update_clone_fail)"
+      fi
+    ) >"$out/$repo" 2>&1 &
+    pids+=("$!")
+    repos+=("$repo")
   done
+  local i
+  for i in "${!pids[@]}"; do
+    wait "${pids[$i]}" || true
+    cat "$out/${repos[$i]}"
+  done
+  rm -rf "$out"
 
   local fallback_dir="$root/.ipalpha/env-fallback"
   for repo in "${ipalpha_ms_repos[@]}"; do
