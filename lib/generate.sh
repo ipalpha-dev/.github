@@ -316,6 +316,10 @@ if [[ -f .env ]]; then
   done <.env
 fi
 
+if [[ -f frontend/package.json && -n "${PORT:-}" ]]; then
+  export IPALPHA_FRONTEND_URL="http://localhost:$((PORT + 2000))/frontend/"
+fi
+
 if [[ -z "${IPALPHA_PANEL:-}" ]]; then
   for port in "$@"; do
     "$ipalpha_dir/bin/wait-for-http" "http://127.0.0.1:$port" 60 || \
