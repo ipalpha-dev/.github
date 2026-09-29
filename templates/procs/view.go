@@ -144,6 +144,10 @@ func (m model) View() string {
 		}
 	}
 
+	_, _, _, vpW, _ := m.layout()
+	if r := []rune(header); len(r) > vpW {
+		header = string(r[:vpW-1]) + "…"
+	}
 	left := listBorder.Width(listW).Height(listH).Render(list.String())
 	rightBody := muted.Render(header) + "\n" + m.vp.View()
 	rb := logBorder

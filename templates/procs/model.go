@@ -3,6 +3,8 @@ package main
 import (
 	"encoding/base64"
 	"fmt"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"os"
 	"os/exec"
 	"regexp"
@@ -40,6 +42,12 @@ type model struct {
 	events       chan teaMsg
 	status       string
 	lastLogKey   string
+	wrapped      []string
+	owner        []int
+	selecting    bool
+	hasSel       bool
+	selA         int
+	selB         int
 }
 
 func newModel(ipalphaDir, root string, procs []*proc) model {
@@ -169,6 +177,35 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.vp, cmd = m.vp.Update(msg)
 			return m, cmd
 		}
+		line, inLog := m.logLineAt(msg.X, msg.Y)
+		switch {
+		case msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft:
+			if !inLog {
+				if m.hasSel {
+					m.hasSel = false
+					m.refreshLog(true)
+				}
+				return m, nil
+			}
+			m.selecting, m.hasSel = true, true
+			m.follow = false
+			m.focusLog = true
+			m.selA, m.selB = line, line
+			m.refreshLog(true)
+		case msg.Action == tea.MouseActionMotion && m.selecting:
+			if msg.Y < m.logTop() && m.vp.YOffset > 0 {
+				m.vp.LineUp(1)
+			} else if msg.Y >= m.logTop()+m.vp.Height {
+				m.vp.LineDown(1)
+			}
+			m.selB = m.clampLine(m.vp.YOffset + msg.Y - m.logTop())
+			m.refreshLog(true)
+		case msg.Action == tea.MouseActionRelease && m.selecting:
+			m.selecting = false
+			m.status = m.copySelection()
+			m.refreshLog(true)
+		}
+		return m, nil
 
 	case stopStepMsg:
 		if !m.quitting {
@@ -222,6 +259,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.selected > 0 {
 				m.selected--
 				m.follow = true
+				m.hasSel = false
 				m.lastLogKey = ""
 				m.refreshLog(true)
 			}
@@ -238,6 +276,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.selected < len(m.procs)-1 {
 				m.selected++
 				m.follow = true
+				m.hasSel = false
 				m.lastLogKey = ""
 				m.refreshLog(true)
 			}
@@ -330,6 +369,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 			return m, nil
+		case "esc":
+			m.hasSel = false
+			m.refreshLog(true)
+			return m, nil
 		case "f":
 			m.follow = !m.follow
 			if m.follow {
@@ -377,10 +420,20 @@ func (m *model) refreshLog(force bool) {
 	}
 	m.lastLogKey = key
 
-	content := strings.Join(lines, "\n")
-	if content == "" {
-		content = tr("no_output")
+	if len(lines) == 0 {
+		lines = []string{tr("no_output")}
 	}
+	m.wrapped, m.owner = wrapLines(lines, m.vp.Width)
+	shown := m.wrapped
+	if m.hasSel {
+		lo, hi := m.selRange()
+		shown = make([]string, len(m.wrapped))
+		copy(shown, m.wrapped)
+		for i := lo; i <= hi && i < len(shown); i++ {
+			shown[i] = selLine.Render(stripANSI(shown[i]))
+		}
+	}
+	content := strings.Join(shown, "\n")
 	y := m.vp.YOffset
 	m.vp.SetContent(content)
 	if m.follow {
@@ -444,4 +497,77 @@ func copyToClipboard(text string) error {
 func commandExists(name string) bool {
 	_, err := exec.LookPath(name)
 	return err == nil
+}
+
+var selLine = lipgloss.NewStyle().Reverse(true)
+
+func wrapLines(lines []string, width int) ([]string, []int) {
+	if width < 1 {
+		width = 1
+	}
+	var out []string
+	var owner []int
+	for i, l := range lines {
+		for _, part := range strings.Split(ansi.Hardwrap(l, width, true), "\n") {
+			out = append(out, part)
+			owner = append(owner, i)
+		}
+	}
+	return out, owner
+}
+
+func (m *model) logTop() int {
+	return 3
+}
+
+func (m *model) clampLine(i int) int {
+	if i < 0 {
+		return 0
+	}
+	if i >= len(m.wrapped) {
+		return len(m.wrapped) - 1
+	}
+	return i
+}
+
+func (m *model) logLineAt(x, y int) (int, bool) {
+	listW, _, _, _, _ := m.layout()
+	row := y - m.logTop()
+	if x < listW+2 || row < 0 || row >= m.vp.Height {
+		return 0, false
+	}
+	i := m.vp.YOffset + row
+	if i >= len(m.wrapped) {
+		return 0, false
+	}
+	return i, true
+}
+
+func (m *model) selRange() (int, int) {
+	if m.selA <= m.selB {
+		return m.selA, m.selB
+	}
+	return m.selB, m.selA
+}
+
+func (m *model) copySelection() string {
+	p := m.selectedProc()
+	if p == nil || !m.hasSel {
+		return ""
+	}
+	_, _, lines := p.snapshot()
+	lo, hi := m.selRange()
+	var picked []string
+	last := -1
+	for i := lo; i <= hi && i < len(m.owner); i++ {
+		o := m.owner[i]
+		if o != last && o < len(lines) {
+			picked = append(picked, lines[o])
+			last = o
+		}
+	}
+	if err := copyToClipboard(stripANSI(strings.Join(picked, "\n"))); err != nil {
+		return tr("copy_fail")
+	}
+	return fmt.Sprintf("%s: %d %s", tr("copied"), len(picked), tr("lines"))
 }
