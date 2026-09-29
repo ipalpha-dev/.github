@@ -200,8 +200,8 @@ Flags:
   --engine NAME     AI CLI for this run only
   clean             wipe the decision cache
   -h, --help        this help" ;;
-    pt-BR:publish_no_dirty) echo "Nenhum repo sujo em core/ — nada a publicar." ;;
-    en-US:publish_no_dirty) echo "No dirty repos under core/ — nothing to publish." ;;
+    pt-BR:publish_no_dirty) echo "Nada a publicar em core/ (sem mudanças locais nem commits desde a última tag v*)." ;;
+    en-US:publish_no_dirty) echo "Nothing to publish under core/ (no local changes and no commits since the last v* tag)." ;;
     pt-BR:publish_select) echo "Repos sujos — toggle pelo número, Enter confirma" ;;
     en-US:publish_select) echo "Dirty repos — toggle by number, Enter confirms" ;;
     pt-BR:publish_plan) echo "Plano de publicação" ;;

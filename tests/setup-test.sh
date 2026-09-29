@@ -161,6 +161,17 @@ ipalpha_out="$(
 grep -qi 'aborted' <<<"$ipalpha_out" || ipalpha_fail "dry-run did not abort: $ipalpha_out"
 [[ -n "$(git -C "$repo_dir" status --porcelain)" ]] || ipalpha_fail "dry-run changed the repo"
 
+echo "== publish sees committed-but-untagged work as publishable"
+git -C "$repo_dir" -c user.name=test -c user.email=test@example.invalid add -A
+git -C "$repo_dir" -c user.name=test -c user.email=test@example.invalid commit -q -m "notes"
+git -C "$repo_dir" tag v0.0.0
+ipalpha_out="$(cd "$ipalpha_tmp/IpAlpha" && ./publish -d -f projects-api </dev/null 2>&1)" || true
+grep -qi 'Nothing to publish' <<<"$ipalpha_out" || ipalpha_fail "tagged clean repo should have nothing to publish: $ipalpha_out"
+echo "// more" >>"$repo_dir/index.js"; git -C "$repo_dir" add -A
+git -C "$repo_dir" -c user.name=test -c user.email=test@example.invalid commit -qam "more notes"
+ipalpha_out="$(cd "$ipalpha_tmp/IpAlpha" && ./publish -d -f projects-api </dev/null 2>&1)" || ipalpha_fail "publish dry-run (untagged commit) failed: $ipalpha_out"
+grep -qi 'aborted' <<<"$ipalpha_out" || ipalpha_fail "untagged commit was not offered for publish: $ipalpha_out"
+
 ipalpha_out="$(
   cd "$ipalpha_tmp/IpAlpha" && ./publish -f projects-api </dev/null 2>&1
 )" || ipalpha_fail "publish failed: $ipalpha_out"

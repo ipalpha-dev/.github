@@ -6,10 +6,13 @@ ipalpha_publish_help() {
   ipalpha_msg help_publish
 }
 
+# "Dirty" = uncommitted changes OR commits since the last release tag (v<version>).
 ipalpha_publish_repo_dirty() {
-  local dir="$1"
+  local dir="$1" tag
   [[ -d "$dir/.git" ]] || return 1
-  [[ -n "$(git -C "$dir" status --porcelain 2>/dev/null)" ]]
+  [[ -n "$(git -C "$dir" status --porcelain 2>/dev/null)" ]] && return 0
+  tag="$(git -C "$dir" describe --tags --abbrev=0 --match 'v*' 2>/dev/null)" || return 0
+  [[ -n "$(git -C "$dir" log --oneline "${tag}..HEAD" 2>/dev/null)" ]]
 }
 
 ipalpha_publish_dirty_repos() {
@@ -79,8 +82,12 @@ Respond with JSON only: {\"reason\",\"bump\",\"message\"}."
 
 ipalpha_publish_scope_clamp() {
   local dir="$1" bump="$2"
-  local files docs_only=1
+  local files docs_only=1 tag
   files="$(git -C "$dir" status --porcelain 2>/dev/null | sed -E 's/^...//; s/.* -> //' | tr -d '"')"
+  if [[ -z "$files" ]]; then
+    tag="$(git -C "$dir" describe --tags --abbrev=0 --match 'v*' 2>/dev/null)" || tag=""
+    [[ -n "$tag" ]] && files="$(git -C "$dir" diff --name-only "${tag}..HEAD" 2>/dev/null)"
+  fi
   [[ -z "$files" ]] && { echo "$bump"; return; }
   while IFS= read -r f; do
     [[ -z "$f" ]] && continue
@@ -136,8 +143,11 @@ ipalpha_publish_ask_ai() {
 git status:
 $(git -C "$dir" status --porcelain 2>/dev/null)
 
-git diff --stat:
+git diff --stat (working tree):
 $(git -C "$dir" diff --stat HEAD 2>/dev/null | tail -n 20)
+
+changes since last release tag:
+$(tag="$(git -C "$dir" describe --tags --abbrev=0 --match 'v*' 2>/dev/null)"; [[ -n "$tag" ]] && git -C "$dir" diff --stat "${tag}..HEAD" 2>/dev/null | tail -n 20)
 
 recent commits:
 $(git -C "$dir" log --oneline -8 2>/dev/null)"
