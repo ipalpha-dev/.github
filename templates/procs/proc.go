@@ -47,6 +47,7 @@ type proc struct {
 	cwd       string
 	port      string
 	frontend  string
+	parent    string
 	deps      []string
 	softDeps  []string
 	shell     bool

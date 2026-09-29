@@ -108,7 +108,7 @@ func (m model) layout() (listW, logW, listH, vpW, vpH int) {
 	if logW < 24 {
 		logW = 24
 	}
-	bodyH := m.height - 4
+	bodyH := m.height - 5
 	if bodyH < 8 {
 		bodyH = 8
 	}

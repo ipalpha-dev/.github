@@ -475,7 +475,7 @@ ipalpha_write_projects_json() {
       display="$(tr '[:lower:]' '[:upper:]' <<<"${display:0:1}")${display:1}"
       port="$(ipalpha_settings_ms_port "$repo")"
       echo "    ,"
-      echo "    {\"name\": \"$repo-web\", \"kind\": \"app\", \"path\": \"core/$repo/frontend\", \"display\": \"$display\", \"port\": \"$((port + 2000))\", \"autostart\": true, \"cmd\": \"$root/.ipalpha/bin/vite-dev $repo $((port + 2000)) $port\", \"frontend\": \"http://localhost:$((port + 2000))/frontend/\"}"
+      echo "    {\"name\": \"$repo-web\", \"kind\": \"attached\", \"parent\": \"$repo\", \"path\": \"core/$repo/frontend\", \"display\": \"Frontend\", \"port\": \"$((port + 2000))\", \"autostart\": true, \"cmd\": \"$root/.ipalpha/bin/vite-dev $repo $((port + 2000)) $port\", \"frontend\": \"http://localhost:$((port + 2000))/frontend/\"}"
     done
     echo "  ]"
     echo "}"

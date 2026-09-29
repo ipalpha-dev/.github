@@ -44,8 +44,12 @@ func (m model) View() string {
 	list.WriteString(muted.Render(listTitle) + "\n")
 	prevKind := ""
 	for i, p := range m.procs {
-		if p.kind != prevKind {
-			switch p.kind {
+		section := p.kind
+		if section == "attached" {
+			section = "service"
+		}
+		if section != prevKind {
+			switch section {
 			case "service":
 				if prevKind != "" {
 					list.WriteString("\n")
@@ -55,7 +59,7 @@ func (m model) View() string {
 				list.WriteString("\n")
 				list.WriteString(muted.Render(tr("section_web")) + "\n")
 			}
-			prevKind = p.kind
+			prevKind = section
 		}
 
 		st, code, _ := p.snapshot()
@@ -76,6 +80,10 @@ func (m model) View() string {
 		}
 
 		label := p.name
+		indent := ""
+		if p.kind == "attached" {
+			indent = "  "
+		}
 		if st == stateExited && code != 0 {
 			label = fmt.Sprintf("%s  %s %d", label, tr("exit"), code)
 		} else if st == stateWaiting && len(p.deps) > 0 {
@@ -94,18 +102,18 @@ func (m model) View() string {
 		var line string
 		if i == m.selected {
 			if st == stateExited && code != 0 {
-				line = exitStyle.Render("› ") + dotS + " " + exitStyle.Render(label)
+				line = exitStyle.Render("› ") + indent + dotS + " " + exitStyle.Render(label)
 			} else {
-				line = selStyle.Render("› ") + dotS + " " + selStyle.Render(label)
+				line = selStyle.Render("› ") + indent + dotS + " " + selStyle.Render(label)
 			}
 		} else if st == stateExited && code != 0 {
-			line = "  " + dotS + " " + failBg.Render(label)
+			line = "  " + indent + dotS + " " + failBg.Render(label)
 		} else {
-			line = "  " + dotS + " " + label
+			line = "  " + indent + dotS + " " + label
 		}
 		list.WriteString(line + "\n")
 	}
-	innerListH := listH
+	innerListH := listH - 1
 	if innerListH < 1 {
 		innerListH = 1
 	}
