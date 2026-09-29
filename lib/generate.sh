@@ -495,7 +495,7 @@ for repo in "${ipalpha_web_repos[@]}"; do
   web_port="$(setting "${repo}_port")"
   (exec "$ipalpha_dir/bin/web-dev" "$repo") >"$log_dir/$repo.log" 2>&1 &
   pids+=("$!")
-  echo "started $repo → http://localhost:${web_port:-$(ipalpha_default_web_port "$repo")}/frontend/"
+  echo "started $repo → http://localhost:${web_port:-$(ipalpha_default_web_port "$repo")}/"
 done
 
 echo
@@ -542,7 +542,7 @@ ipalpha_write_projects_json() {
       display="$(tr '[:lower:]' '[:upper:]' <<<"${display:0:1}")${display:1} Web"
       port="$(ipalpha_settings_web_port "$repo")"
       echo "    ,"
-      echo "    {\"name\": \"$repo\", \"kind\": \"app\", \"path\": \"core/$repo\", \"display\": \"$display\", \"port\": \"$port\", \"autostart\": true, \"cmd\": \"$root/.ipalpha/bin/web-dev $repo\", \"frontend\": \"http://localhost:$port/frontend/\"}"
+      echo "    {\"name\": \"$repo\", \"kind\": \"app\", \"path\": \"core/$repo\", \"display\": \"$display\", \"port\": \"$port\", \"autostart\": true, \"cmd\": \"$root/.ipalpha/bin/web-dev $repo\", \"frontend\": \"http://localhost:$port/\"}"
     done
     echo "  ]"
     echo "}"
