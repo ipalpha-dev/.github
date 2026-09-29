@@ -30,6 +30,10 @@ func (m model) View() string {
 		return tr("loading") + "\n"
 	}
 
+	if m.selectMode {
+		return muted.Render(tr("select_on")) + "\n" + m.vp.View() + "\n"
+	}
+
 	listW, logW, listH, _, _ := m.layout()
 
 	var list strings.Builder

@@ -1,7 +1,11 @@
 package main
 
 import (
+	"encoding/base64"
+	"fmt"
+	"os"
 	"os/exec"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -31,6 +35,7 @@ type model struct {
 	shutdownDone bool
 	vp           viewport.Model
 	follow       bool
+	selectMode   bool
 	focusLog     bool
 	events       chan teaMsg
 	status       string
@@ -307,6 +312,24 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.refreshLog(true)
 			}
 			return m, nil
+		case "m":
+			m.selectMode = !m.selectMode
+			if m.selectMode {
+				m.status = tr("select_on")
+				return m, tea.DisableMouse
+			}
+			m.status = tr("select_off")
+			return m, tea.EnableMouseCellMotion
+		case "y":
+			if p := m.selectedProc(); p != nil {
+				_, _, lines := p.snapshot()
+				if err := copyToClipboard(stripANSI(strings.Join(lines, "\n"))); err != nil {
+					m.status = tr("copy_fail")
+				} else {
+					m.status = fmt.Sprintf("%s: %d %s", tr("copied"), len(lines), tr("lines"))
+				}
+			}
+			return m, nil
 		case "f":
 			m.follow = !m.follow
 			if m.follow {
@@ -393,4 +416,32 @@ func openURL(u string) {
 		name = "open"
 	}
 	_ = exec.Command(name, u).Start()
+}
+
+var reANSI = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]`)
+
+func stripANSI(s string) string {
+	return reANSI.ReplaceAllString(s, "")
+}
+
+func copyToClipboard(text string) error {
+	var c *exec.Cmd
+	switch {
+	case runtime.GOOS == "darwin":
+		c = exec.Command("pbcopy")
+	case commandExists("wl-copy"):
+		c = exec.Command("wl-copy")
+	case commandExists("xclip"):
+		c = exec.Command("xclip", "-selection", "clipboard")
+	default:
+		fmt.Fprintf(os.Stderr, "\x1b]52;c;%s\a", base64.StdEncoding.EncodeToString([]byte(text)))
+		return nil
+	}
+	c.Stdin = strings.NewReader(text)
+	return c.Run()
+}
+
+func commandExists(name string) bool {
+	_, err := exec.LookPath(name)
+	return err == nil
 }
