@@ -27,7 +27,7 @@ Layout gerado:
 
 ```text
 IpAlpha/
-├── core/           # shared-js, auth-api, auth-webapp, person-api, organization-api, projects-api, notification-api
+├── core/           # shared-js, shared-ui, auth-api, auth-webapp, person-api, organization-api, projects-api, notification-api
 ├── deployment/     # manifestos k8s (namespace ipalpha-core, imagens ghcr.io/ipalpha-dev/<ms>)
 ├── run  publish  pull  set-keys
 └── .ipalpha/       # settings, compose, portas, mprocs (opt-in), scripts auxiliares

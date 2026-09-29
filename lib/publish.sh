@@ -273,6 +273,9 @@ ipalpha_publish_repo() {
     ipalpha_publish_npm "$dir" || return 1
     return 0
   fi
+  if [[ "$repo" == "shared-ui" ]]; then
+    return 0
+  fi
   ipalpha_publish_build_image "$repo" "$version" "$dir" || return 1
   ipalpha_publish_bump_deployment "$root" "$repo" "$version"
 }

@@ -428,12 +428,32 @@ set -euo pipefail
 ipalpha_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ipalpha_root="$(cd "$ipalpha_dir/.." && pwd)"
 
+# shared-ui is consumed by every frontend through `file:../../shared-ui`, so it must be
+# installed and built before them.
+ui="$ipalpha_root/core/shared-ui"
+if [[ -f "$ui/package.json" ]]; then
+  if [[ ! -d "$ui/node_modules" || "$ui/package-lock.json" -nt "$ui/node_modules" ]]; then
+    echo "install-deps: shared-ui"
+    (cd "$ui" && npm install --no-audit --no-fund --silent && touch node_modules)
+  fi
+  if [[ ! -d "$ui/dist" || -n "$(find "$ui/src" -newer "$ui/dist" -type f 2>/dev/null | head -n1)" ]]; then
+    echo "install-deps: build shared-ui"
+    (cd "$ui" && npm run build --silent)
+  fi
+fi
+
 for dir in "$ipalpha_root"/core/*/; do
   dir="${dir%/}"
   [[ -f "$dir/package.json" ]] || continue
+  [[ "$dir" == "$ui" ]] && continue
   if [[ ! -d "$dir/node_modules" || "$dir/package-lock.json" -nt "$dir/node_modules" ]]; then
     echo "install-deps: $(basename "$dir")"
     (cd "$dir" && npm install --no-audit --no-fund --silent && touch node_modules)
+  fi
+  fe="$dir/frontend"
+  if [[ -f "$fe/package.json" && ( ! -d "$fe/node_modules" || "$fe/package-lock.json" -nt "$fe/node_modules" ) ]]; then
+    echo "install-deps: $(basename "$dir")/frontend"
+    (cd "$fe" && npm install --no-audit --no-fund --silent && touch node_modules)
   fi
 done
 SCRIPT

@@ -3,7 +3,7 @@
 ipalpha_org="ipalpha-dev"
 ipalpha_registry="ghcr.io/${ipalpha_org}"
 
-ipalpha_ms_repos=(shared-js projects-api person-api organization-api notification-api auth-api)
+ipalpha_ms_repos=(shared-js shared-ui projects-api person-api organization-api notification-api auth-api)
 ipalpha_ms_order=(projects-api person-api organization-api notification-api auth-api)
 # Standalone web apps under core/: cloned, deps installed, image published, no .env, run with Vite.
 ipalpha_web_repos=(auth-webapp)
@@ -73,7 +73,7 @@ ipalpha_is_web_repo() {
 
 ipalpha_is_image_repo() {
   case "$1" in
-    shared-js) return 1 ;;
+    shared-js|shared-ui) return 1 ;;
     *) return 0 ;;
   esac
 }

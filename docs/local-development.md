@@ -50,6 +50,7 @@ keeps it). `./pull` re-downloads `.github` into a temp folder to refresh
 | --- | --- |
 | `.github` | org profile page + this tooling (not cloned into the workspace) |
 | `shared-js` | npm library `@ipalpha/shared-js` on npmjs.com (helpers only) |
+| `shared-ui` | React component library `@ipalpha/shared-ui`, consumed by every frontend via `file:../../shared-ui`; built by `install-deps` before the frontends (not published) |
 | `auth-api` | NestJS + TypeScript backend, no frontend (its UI is `auth-webapp`) |
 | `person-api`, `organization-api`, `projects-api`, `notification-api` | NestJS + TypeScript backend, each with a React+Vite frontend served under `/frontend`; sign-in goes through the auth-webapp popup (`VITE_AUTH_WEBAPP_URL`, `VITE_AUTH_API_URL` = webapp `/api`) |
 | `auth-webapp` | standalone Vite app: the sign-in popup (account chooser + consent). No `.env`; served at `/` (no `/frontend` prefix, like prod) on its own port with `/api` proxied to auth-api so there is no CORS; published as an nginx image |
