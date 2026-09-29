@@ -27,6 +27,8 @@ ipalpha_write_bin_infra_up() {
 set -euo pipefail
 
 ipalpha_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+state_dir="$ipalpha_dir/.state"
+mkdir -p "$state_dir"
 
 set -a
 # shellcheck disable=SC1091
@@ -41,71 +43,113 @@ if [[ -f "$ipalpha_dir/settings" ]]; then
 fi
 runtime="${runtime:-container}"
 
-if [[ "$runtime" == "container" ]] && command -v container >/dev/null 2>&1; then
-  infra_up_container() {
-    container system start >/dev/null 2>&1 || true
-    container network create ipalpha >/dev/null 2>&1 || true
-    container volume create ipalpha-mongo-data >/dev/null 2>&1 || true
-    container volume create ipalpha-redis-data >/dev/null 2>&1 || true
-    container volume create ipalpha-rabbitmq-data >/dev/null 2>&1 || true
+container_status() {
+  container inspect "$1" 2>/dev/null | tr -d ' \n' | sed -n 's/.*"status":"\([a-z]*\)".*/\1/p'
+}
 
-    reset_container() {
-      container kill "$1" >/dev/null 2>&1 || true
-      container rm "$1" >/dev/null 2>&1 || true
-    }
+ensure_container() {
+  local name="$1"; shift
+  local spec_hash status hash_file="$state_dir/$name.spec"
+  spec_hash="$(printf '%s\n' "$@" | { shasum 2>/dev/null || sha256sum; } | awk '{print $1}')"
+  status="$(container_status "$name")"
+  if [[ -n "$status" && "$(cat "$hash_file" 2>/dev/null)" != "$spec_hash" ]]; then
+    echo "  $name: config changed — recreating"
+    container stop "$name" >/dev/null 2>&1 || true
+    container delete --force "$name" >/dev/null 2>&1 || true
+    status=""
+  fi
+  case "$status" in
+    running)
+      echo "  $name: running"
+      ;;
+    "")
+      echo "  $name: creating"
+      container run --detach --name "$name" "$@" >/dev/null 2>"$state_dir/$name.err" \
+        || { cat "$state_dir/$name.err" >&2; return 1; }
+      printf '%s\n' "$spec_hash" >"$hash_file"
+      ;;
+    *)
+      echo "  $name: starting"
+      container start "$name" >/dev/null 2>"$state_dir/$name.err" \
+        || { cat "$state_dir/$name.err" >&2; return 1; }
+      ;;
+  esac
+}
 
-    reset_container ipalpha-mongo
-    container run --detach --name ipalpha-mongo \
-      --network ipalpha \
-      --publish "${MONGO_HOST_PORT:-27017}:27017" \
-      --env "MONGO_INITDB_ROOT_USERNAME=${MONGO_USERNAME:-ipalpha}" \
-      --env "MONGO_INITDB_ROOT_PASSWORD=${MONGO_PASSWORD:-ipalpha}" \
-      --volume ipalpha-mongo-data:/data/db \
-      mongo:8 || return 1
-
-    reset_container ipalpha-redis
-    container run --detach --name ipalpha-redis \
-      --network ipalpha \
-      --publish "${REDIS_HOST_PORT:-6379}:6379" \
-      --volume ipalpha-redis-data:/data \
-      redis:7-alpine --appendonly yes || return 1
-
-    reset_container ipalpha-rabbitmq
-    container run --detach --name ipalpha-rabbitmq \
-      --network ipalpha \
-      --publish "${RABBITMQ_HOST_PORT:-5672}:5672" \
-      --publish "${RABBITMQ_MGMT_HOST_PORT:-15672}:15672" \
-      --env "RABBITMQ_DEFAULT_USER=${RABBITMQ_USERNAME:-ipalpha}" \
-      --env "RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASSWORD:-ipalpha}" \
-      --volume ipalpha-rabbitmq-data:/var/lib/rabbitmq \
-      rabbitmq:4-management || return 1
-
-    wait_ready() {
-      local name="$1"; shift
-      local i
-      for i in $(seq 1 60); do
-        if container exec "$name" "$@" >/dev/null 2>&1; then
-          echo "  $name ready"
-          return 0
-        fi
-        sleep 2
-      done
-      echo "  warning: $name not healthy yet (continuing)" >&2
+wait_ready() {
+  local name="$1"; shift
+  local _
+  for _ in $(seq 1 60); do
+    if container exec "$name" "$@" >/dev/null 2>&1; then
+      echo "  $name ready"
       return 0
-    }
+    fi
+    sleep 1
+  done
+  echo "  warning: $name not healthy yet (continuing)" >&2
+}
 
-    wait_ready ipalpha-mongo mongosh --quiet \
-      --username "${MONGO_USERNAME:-ipalpha}" --password "${MONGO_PASSWORD:-ipalpha}" \
-      --authenticationDatabase admin --eval 'db.adminCommand({ ping: 1 })'
-    wait_ready ipalpha-redis redis-cli ping
-    wait_ready ipalpha-rabbitmq rabbitmq-diagnostics -q ping
-  }
+infra_up_container() {
+  container system start >/dev/null 2>&1 || true
+  container network create ipalpha >/dev/null 2>&1 || true
+  container volume create ipalpha-mongo-data >/dev/null 2>&1 || true
+  container volume create ipalpha-redis-data >/dev/null 2>&1 || true
+  container volume create ipalpha-rabbitmq-data >/dev/null 2>&1 || true
 
+  ensure_container ipalpha-mongo \
+    --network ipalpha \
+    --publish "${MONGO_HOST_PORT:-27017}:27017" \
+    --env "MONGO_INITDB_ROOT_USERNAME=${MONGO_USERNAME:-ipalpha}" \
+    --env "MONGO_INITDB_ROOT_PASSWORD=${MONGO_PASSWORD:-ipalpha}" \
+    --volume ipalpha-mongo-data:/data/db \
+    mongo:8 || return 1
+
+  ensure_container ipalpha-redis \
+    --network ipalpha \
+    --publish "${REDIS_HOST_PORT:-6379}:6379" \
+    --volume ipalpha-redis-data:/data \
+    redis:7-alpine --appendonly yes || return 1
+
+  ensure_container ipalpha-rabbitmq \
+    --network ipalpha \
+    --publish "${RABBITMQ_HOST_PORT:-5672}:5672" \
+    --publish "${RABBITMQ_MGMT_HOST_PORT:-15672}:15672" \
+    --env "RABBITMQ_DEFAULT_USER=${RABBITMQ_USERNAME:-ipalpha}" \
+    --env "RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASSWORD:-ipalpha}" \
+    --volume ipalpha-rabbitmq-data:/var/lib/rabbitmq \
+    rabbitmq:4-management || return 1
+
+  wait_ready ipalpha-mongo mongosh --quiet \
+    --username "${MONGO_USERNAME:-ipalpha}" --password "${MONGO_PASSWORD:-ipalpha}" \
+    --authenticationDatabase admin --eval 'db.adminCommand({ ping: 1 })'
+  wait_ready ipalpha-redis redis-cli ping
+  wait_ready ipalpha-rabbitmq rabbitmq-diagnostics -q ping
+}
+
+compose() {
+  docker compose --env-file "$ipalpha_dir/.env" --env-file "$ipalpha_dir/ports.env" \
+    -f "$ipalpha_dir/compose.yaml" "$@"
+}
+
+docker_ours_running() {
+  command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1 \
+    && [[ -n "$(compose ps --quiet 2>/dev/null)" ]]
+}
+
+if [[ "$runtime" == "container" ]] && command -v container >/dev/null 2>&1; then
+  if docker_ours_running; then
+    echo "  stopping Docker copy of the infra (runtime=container)"
+    compose stop >/dev/null 2>&1 || true
+  fi
   if infra_up_container; then
+    echo container >"$state_dir/runtime"
     exit 0
   fi
   if command -v docker >/dev/null 2>&1; then
     echo "warning: Apple container failed — falling back to Docker" >&2
+    for name in ipalpha-mongo ipalpha-redis ipalpha-rabbitmq; do
+      container stop "$name" >/dev/null 2>&1 || true
+    done
   else
     echo "Apple container runtime failed and docker is not installed." >&2
     exit 1
@@ -117,8 +161,34 @@ if ! command -v docker >/dev/null 2>&1; then
   exit 1
 fi
 docker info >/dev/null 2>&1 || { echo "docker daemon is not running." >&2; exit 1; }
-docker compose --env-file "$ipalpha_dir/.env" --env-file "$ipalpha_dir/ports.env" \
-  -f "$ipalpha_dir/compose.yaml" up --detach --wait
+compose up --detach --wait
+echo docker >"$state_dir/runtime"
+SCRIPT
+  chmod +x "$dest"
+}
+
+ipalpha_write_bin_infra_logs() {
+  local dest="$1"
+  cat >"$dest" <<'SCRIPT'
+#!/usr/bin/env bash
+set -euo pipefail
+
+ipalpha_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+runtime="$(cat "$ipalpha_dir/.state/runtime" 2>/dev/null || echo docker)"
+
+if [[ "$runtime" == "container" ]]; then
+  pids=()
+  trap 'kill "${pids[@]}" 2>/dev/null || true' EXIT INT TERM
+  for name in ipalpha-mongo ipalpha-redis ipalpha-rabbitmq; do
+    container logs --follow -n 100 "$name" 2>&1 | sed -u "s/^/$(printf '%-17s' "$name")| /" &
+    pids+=("$!")
+  done
+  wait
+  exit 0
+fi
+
+exec docker compose --env-file "$ipalpha_dir/.env" --env-file "$ipalpha_dir/ports.env" \
+  -f "$ipalpha_dir/compose.yaml" logs --follow --tail=100
 SCRIPT
   chmod +x "$dest"
 }
@@ -130,16 +200,25 @@ ipalpha_write_bin_infra_down() {
 set -euo pipefail
 
 ipalpha_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+purge=false
+[[ "${1:-}" == "--purge" ]] && purge=true
 
-if command -v docker >/dev/null 2>&1 && [[ -f "$ipalpha_dir/compose.yaml" ]]; then
-  docker compose --env-file "$ipalpha_dir/.env" --env-file "$ipalpha_dir/ports.env" \
-    -f "$ipalpha_dir/compose.yaml" down >/dev/null 2>&1 || true
+if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1 && [[ -f "$ipalpha_dir/compose.yaml" ]]; then
+  compose=(docker compose --env-file "$ipalpha_dir/.env" --env-file "$ipalpha_dir/ports.env" -f "$ipalpha_dir/compose.yaml")
+  if [[ "$purge" == true ]]; then
+    "${compose[@]}" down >/dev/null 2>&1 || true
+  else
+    "${compose[@]}" stop >/dev/null 2>&1 || true
+  fi
 fi
 
 if command -v container >/dev/null 2>&1; then
   for name in ipalpha-mongo ipalpha-redis ipalpha-rabbitmq; do
-    container kill "$name" >/dev/null 2>&1 || true
-    container rm "$name" >/dev/null 2>&1 || true
+    container stop "$name" >/dev/null 2>&1 || true
+    if [[ "$purge" == true ]]; then
+      container delete --force "$name" >/dev/null 2>&1 || true
+      rm -f "$ipalpha_dir/.state/$name.spec"
+    fi
   done
 fi
 echo "infra stopped"
@@ -181,6 +260,27 @@ SCRIPT
   chmod +x "$dest"
 }
 
+ipalpha_write_mprocs_yaml() {
+  local root="$1" dest="$2"
+  local projects_port notification_port repo cwd
+  projects_port="$(ipalpha_settings_ms_port projects-api)"
+  notification_port="$(ipalpha_settings_ms_port notification-api)"
+  {
+    echo "proc_list_width: 36"
+    echo "scrollback: 10000"
+    echo "procs:"
+    for repo in "${ipalpha_ms_order[@]}"; do
+      echo "  \"MS · $repo\":"
+      echo "    cwd: \"$root/core/$repo\""
+      case "$repo" in
+        projects-api) echo "    shell: \"$root/.ipalpha/bin/node-dev $repo\"" ;;
+        auth-api) echo "    shell: \"$root/.ipalpha/bin/node-dev $repo $projects_port $notification_port\"" ;;
+        *) echo "    shell: \"$root/.ipalpha/bin/node-dev $repo $projects_port\"" ;;
+      esac
+    done
+  } >"$dest"
+}
+
 ipalpha_write_bin_node_dev() {
   local dest="$1"
   cat >"$dest" <<'SCRIPT'
@@ -204,13 +304,27 @@ if [[ ! -d node_modules ]]; then
   npm install --no-audit --no-fund --silent
 fi
 
-for port in "$@"; do
-  "$ipalpha_dir/bin/wait-for-http" "http://127.0.0.1:$port" 180 || \
-    echo "node-dev: dependency on port $port not up — starting anyway" >&2
-done
+if [[ -f .env ]]; then
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ "$line" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]] || continue
+    key="${line%%=*}"
+    val="${line#*=}"
+    if [[ "$val" =~ ^\'(.*)\'$ || "$val" =~ ^\"(.*)\"$ ]]; then
+      val="${BASH_REMATCH[1]}"
+    fi
+    export "$key=$val"
+  done <.env
+fi
+
+if [[ -z "${IPALPHA_PANEL:-}" ]]; then
+  for port in "$@"; do
+    "$ipalpha_dir/bin/wait-for-http" "http://127.0.0.1:$port" 60 || \
+      echo "node-dev: dependency on port $port not up — starting anyway" >&2
+  done
+fi
 
 script="$(node -p "const s=require('./package.json').scripts||{}; s['start:dev']?'start:dev':(s['dev']?'dev':'start')")"
-exec npm run --if-present "$script"
+exec npm run --silent "$script"
 SCRIPT
   chmod +x "$dest"
 }
@@ -224,12 +338,12 @@ set -euo pipefail
 ipalpha_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ipalpha_root="$(cd "$ipalpha_dir/.." && pwd)"
 
-for repo in projects-api person-api organization-api notification-api auth-api; do
-  dir="$ipalpha_root/core/$repo"
+for dir in "$ipalpha_root"/core/*/; do
+  dir="${dir%/}"
   [[ -f "$dir/package.json" ]] || continue
   if [[ ! -d "$dir/node_modules" || "$dir/package-lock.json" -nt "$dir/node_modules" ]]; then
-    echo "install-deps: $repo"
-    (cd "$dir" && npm install --no-audit --no-fund --silent)
+    echo "install-deps: $(basename "$dir")"
+    (cd "$dir" && npm install --no-audit --no-fund --silent && touch node_modules)
   fi
 done
 SCRIPT
@@ -243,7 +357,6 @@ ipalpha_write_bin_fallback_run() {
 set -euo pipefail
 
 ipalpha_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ipalpha_root="$(cd "$ipalpha_dir/.." && pwd)"
 log_dir="${TMPDIR:-/tmp}/ipalpha-run-logs"
 mkdir -p "$log_dir"
 
@@ -252,19 +365,19 @@ setting() {
 }
 
 projects_port="$(setting 'projects-api_port')"
-notification_port="$(setting 'notification-api_port')"
-
-"$ipalpha_dir/bin/infra-up"
-"$ipalpha_dir/bin/install-deps"
+auth_port="$(setting 'auth-api_port')"
 
 pids=()
 cleanup() {
   local p
+  trap - EXIT INT TERM
   for p in "${pids[@]:-}"; do
-    kill "$p" 2>/dev/null || true
+    [[ -n "$p" ]] && kill -TERM -- "-$p" 2>/dev/null || true
   done
+  "$ipalpha_dir/bin/infra-down" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT INT TERM
+set -m
 
 start() {
   local repo="$1"; shift
@@ -274,38 +387,74 @@ start() {
 }
 
 start projects-api
-start person-api "$projects_port"
-start organization-api "$projects_port"
-start notification-api "$projects_port"
-start auth-api "$projects_port" "$notification_port"
+start person-api
+start notification-api
+start auth-api
+start organization-api "$auth_port" "$projects_port"
 
 echo
 echo "all services starting — logs in $log_dir"
+echo "  tail -f $log_dir/*.log"
 echo "press Ctrl+C to stop"
 wait
 SCRIPT
   chmod +x "$dest"
 }
 
-ipalpha_write_mprocs_yaml() {
+ipalpha_write_projects_json() {
   local root="$1" dest="$2"
-  local projects_port notification_port repo cwd
-  projects_port="$(ipalpha_settings_ms_port projects-api)"
-  notification_port="$(ipalpha_settings_ms_port notification-api)"
+  local repo first=true display port
   {
-    echo "proc_list_width: 36"
-    echo "scrollback: 10000"
-    echo "procs:"
+    echo "{"
+    echo "  \"root\": \"$root\","
+    echo "  \"lang\": \"${ipalpha_lang:-pt-BR}\","
+    echo "  \"infra\": {"
+    echo "    \"start\": \"$root/.ipalpha/bin/infra-up\","
+    echo "    \"logs\": \"$root/.ipalpha/bin/infra-logs\","
+    echo "    \"stop\": \"$root/.ipalpha/bin/infra-down\""
+    echo "  },"
+    echo "  \"projects\": ["
     for repo in "${ipalpha_ms_order[@]}"; do
-      echo "  \"MS · $repo\":"
-      echo "    cwd: \"$root/core/$repo\""
-      case "$repo" in
-        projects-api) echo "    shell: \"$root/.ipalpha/bin/node-dev $repo\"" ;;
-        auth-api) echo "    shell: \"$root/.ipalpha/bin/node-dev $repo $projects_port $notification_port\"" ;;
-        *) echo "    shell: \"$root/.ipalpha/bin/node-dev $repo $projects_port\"" ;;
-      esac
+      display="${repo%-api}"
+      display="$(tr '[:lower:]' '[:upper:]' <<<"${display:0:1}")${display:1}"
+      port="$(ipalpha_settings_ms_port "$repo")"
+      [[ "$first" == true ]] || echo "    ,"
+      first=false
+      echo "    {\"name\": \"$repo\", \"kind\": \"service\", \"path\": \"core/$repo\", \"display\": \"$display\", \"port\": \"$port\", \"autostart\": true, \"frontend\": \"http://localhost:$port/frontend\"}"
     done
+    echo "  ]"
+    echo "}"
   } >"$dest"
+}
+
+ipalpha_procs_asset() {
+  local os arch
+  os="$(uname -s | tr '[:upper:]' '[:lower:]')"
+  arch="$(uname -m)"
+  case "$arch" in
+    x86_64|amd64) arch=amd64 ;;
+    arm64|aarch64) arch=arm64 ;;
+  esac
+  echo "ipalpha-procs-$os-$arch"
+}
+
+ipalpha_install_procs() {
+  local setup_root="$1" dest="$2"
+  local url
+  if [[ -f "$setup_root/templates/procs/main.go" ]] && command -v go >/dev/null 2>&1; then
+    if (cd "$setup_root/templates/procs" && CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o "$dest" .) >/dev/null 2>&1; then
+      return 0
+    fi
+  fi
+  url="https://github.com/${ipalpha_org}/${ipalpha_tooling_repo}/releases/download/procs-latest/$(ipalpha_procs_asset)"
+  if curl -fsSL -o "$dest.tmp" "$url" 2>/dev/null; then
+    mv "$dest.tmp" "$dest"
+    chmod +x "$dest"
+    return 0
+  fi
+  rm -f "$dest.tmp"
+  echo "  $(ipalpha_msg procs_missing)"
+  return 1
 }
 
 ipalpha_write_root_run() {
@@ -330,6 +479,9 @@ case "${1:-}" in
     ipalpha_msg help_run
     exit 0
     ;;
+  stop)
+    exec "$ipalpha_dir/bin/infra-down" "${@:2}"
+    ;;
 esac
 
 runtime="${ipalpha_runtime:-container}"
@@ -339,21 +491,23 @@ if [[ "$runtime" == "docker" ]]; then
   docker compose version >/dev/null 2>&1 || { echo "docker compose v2 is required." >&2; exit 1; }
 fi
 
+echo "$(ipalpha_msg run_infra)"
 "$ipalpha_dir/bin/infra-up"
 "$ipalpha_dir/bin/install-deps"
 
-runner="${ipalpha_runner:-background}"
-runner="${IPALPHA_RUNNER:-$runner}"
+runner="${IPALPHA_RUNNER:-${ipalpha_runner:-auto}}"
 case "$runner" in
-  mprocs|background) ;;
-  *) runner="background" ;;
+  auto|panel)
+    if [[ -t 1 && -x "$ipalpha_dir/bin/ipalpha-procs" ]]; then
+      exec "$ipalpha_dir/bin/ipalpha-procs" "$ipalpha_dir"
+    fi
+    ;;
+  mprocs)
+    if command -v mprocs >/dev/null 2>&1; then
+      exec mprocs --config "$ipalpha_dir/mprocs.yaml"
+    fi
+    ;;
 esac
-
-# mprocs is opt-in only: install it yourself and run with IPALPHA_RUNNER=mprocs.
-# Default is the embedded background runner (logs under $TMPDIR/ipalpha-run-logs).
-if [[ "$runner" == "mprocs" ]] && command -v mprocs >/dev/null 2>&1; then
-  exec mprocs --config "$ipalpha_dir/mprocs.yaml"
-fi
 
 exec "$ipalpha_dir/bin/fallback-run"
 SCRIPT
@@ -460,6 +614,7 @@ ipalpha_materialize_workspace() {
   ipalpha_write_ports_env "$dir/ports.env"
 
   ipalpha_write_bin_infra_up "$dir/bin/infra-up"
+  ipalpha_write_bin_infra_logs "$dir/bin/infra-logs"
   ipalpha_write_bin_infra_down "$dir/bin/infra-down"
   ipalpha_write_bin_wait_for_http "$dir/bin/wait-for-http"
   ipalpha_write_bin_node_dev "$dir/bin/node-dev"
@@ -468,6 +623,8 @@ ipalpha_materialize_workspace() {
   ipalpha_write_bin_fallback_run "$dir/bin/fallback-run"
 
   ipalpha_write_mprocs_yaml "$target_root" "$dir/mprocs.yaml"
+  ipalpha_write_projects_json "$target_root" "$dir/projects.json"
+  ipalpha_install_procs "$setup_root" "$dir/bin/ipalpha-procs" || true
   ipalpha_write_root_run "$target_root"
   ipalpha_write_root_pull "$target_root"
   ipalpha_write_root_publish "$target_root"

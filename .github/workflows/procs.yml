@@ -1,0 +1,36 @@
+name: procs
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - templates/procs/**
+      - .github/workflows/procs.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: templates/procs/go.mod
+      - name: Build
+        working-directory: templates/procs
+        run: |
+          go vet ./...
+          for target in darwin/arm64 darwin/amd64 linux/arm64 linux/amd64; do
+            GOOS="${target%/*}" GOARCH="${target#*/}" CGO_ENABLED=0 \
+              go build -trimpath -ldflags "-s -w" -o "../../dist/ipalpha-procs-${target%/*}-${target#*/}" .
+          done
+      - name: Publish procs-latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view procs-latest >/dev/null 2>&1 \
+            || gh release create procs-latest --title "ipalpha-procs (latest)" --notes "Process panel used by ./run. Rebuilt on every change to templates/procs." --latest=false
+          gh release upload procs-latest dist/* --clobber

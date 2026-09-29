@@ -25,18 +25,14 @@ ipalpha_update_refresh_libs() {
     rm -rf "$tmp"
     return 0
   fi
-  mkdir -p "$root/.ipalpha/lib"
   for f in "$src"/lib/*.sh; do
     [[ -f "$f" ]] || continue
-    cp "$f" "$root/.ipalpha/lib/"
+    # shellcheck disable=SC1090
+    source "$f"
   done
-  if [[ -d "$src/templates/env-fallback" ]]; then
-    rm -rf "$root/.ipalpha/env-fallback"
-    cp -R "$src/templates/env-fallback" "$root/.ipalpha/env-fallback"
-  fi
-  if [[ -f "$src/templates/compose.yaml" ]]; then
-    cp "$src/templates/compose.yaml" "$root/.ipalpha/compose.yaml"
-  fi
+  ipalpha_load_settings "$root" 2>/dev/null || true
+  [[ "${ipalpha_runner:-}" == "background" ]] && ipalpha_runner="auto"
+  ipalpha_materialize_workspace "$src" "$root"
   if [[ -f "$src/set-keys" ]]; then
     cp "$src/set-keys" "$root/set-keys" && chmod +x "$root/set-keys"
   fi
@@ -69,10 +65,8 @@ ipalpha_update() {
   ipalpha_rewrites_from_settings
   ipalpha_apply_port_rewrites "$root"
 
+  ipalpha_seed_local_clients "$root"
   ipalpha_update_refresh_libs "$root"
-  ipalpha_write_ports_env "$root/.ipalpha/ports.env"
-  ipalpha_write_mprocs_yaml "$root" "$root/.ipalpha/mprocs.yaml"
-  ipalpha_write_root_run "$root"
 
   echo "$(ipalpha_msg update_done)"
 }

@@ -61,7 +61,7 @@ if [[ "$ipalpha_skip_tools" != true ]]; then
 else
   ipalpha_detect_runtime
   ipalpha_runtime="${ipalpha_runtime:-docker}"
-  ipalpha_runner="${ipalpha_runner:-background}"
+  ipalpha_runner="${ipalpha_runner:-auto}"
 fi
 
 ipalpha_ai_cli="${IPALPHA_AI_CLI:-}"
@@ -92,6 +92,7 @@ done
 
 ipalpha_resolve_ports
 ipalpha_apply_port_rewrites "$ipalpha_target_root"
+ipalpha_seed_local_clients "$ipalpha_target_root"
 
 if [[ "${IPALPHA_SKIP_INSTALL:-}" != "1" ]]; then
   for repo in "${ipalpha_ms_repos[@]}"; do

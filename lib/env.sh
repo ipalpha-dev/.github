@@ -100,3 +100,44 @@ ipalpha_rewrite_port_in_file() {
     "$file" >"$tmp"
   mv "$tmp" "$file"
 }
+
+ipalpha_seed_local_clients() {
+  local root="$1" repo env_file secret auth_env
+  auth_env="$(ipalpha_repo_path "$root" auth-api)/.env"
+  [[ -f "$auth_env" ]] || return 0
+  echo "  $(ipalpha_msg auth_clients)"
+  for repo in "${ipalpha_ms_order[@]}"; do
+    env_file="$(ipalpha_repo_path "$root" "$repo")/.env"
+    [[ -f "$env_file" ]] || continue
+    [[ -n "$(ipalpha_env_get "$env_file" AUTH_CLIENT_ID)" ]] || ipalpha_env_set_key "$env_file" AUTH_CLIENT_ID "$repo"
+    if [[ -z "$(ipalpha_env_get "$env_file" AUTH_CLIENT_SECRET)" ]]; then
+      secret="$(openssl rand -hex 24 2>/dev/null || LC_ALL=C tr -dc 'a-f0-9' </dev/urandom | head -c 48)"
+      ipalpha_env_set_key "$env_file" AUTH_CLIENT_SECRET "$secret"
+    fi
+  done
+  IPALPHA_ROOT="$root" IPALPHA_MS="${ipalpha_ms_order[*]}" node -e '
+    const fs = require("fs");
+    const path = require("path");
+    const root = process.env.IPALPHA_ROOT;
+    const read = f => Object.fromEntries(fs.readFileSync(f, "utf8").split("\n")
+      .filter(l => /^[A-Za-z_][A-Za-z0-9_]*=/.test(l))
+      .map(l => [l.slice(0, l.indexOf("=")), l.slice(l.indexOf("=") + 1).replace(/^["\x27]|["\x27]$/g, "")]));
+    const ours = process.env.IPALPHA_MS.split(" ").map(ms => {
+      const f = path.join(root, "core", ms, ".env");
+      if (!fs.existsSync(f)) return null;
+      const e = read(f);
+      return e.AUTH_CLIENT_ID && e.AUTH_CLIENT_SECRET ? { clientId: e.AUTH_CLIENT_ID, secret: e.AUTH_CLIENT_SECRET, ms } : null;
+    }).filter(Boolean);
+    const authEnv = path.join(root, "core", "auth-api", ".env");
+    let current = [];
+    try { current = JSON.parse(read(authEnv).SEED_CLIENTS_JSON || "[]"); } catch {}
+    const ids = new Set(ours.map(c => c.clientId));
+    const merged = [...current.filter(c => !ids.has(c.clientId)), ...ours];
+    const text = fs.readFileSync(authEnv, "utf8");
+    const line = "SEED_CLIENTS_JSON=\x27" + JSON.stringify(merged) + "\x27";
+    fs.writeFileSync(authEnv, /^SEED_CLIENTS_JSON=.*$/m.test(text)
+      ? text.replace(/^SEED_CLIENTS_JSON=.*$/m, () => line)
+      : text.replace(/\n?$/, "\n") + line + "\n");
+    fs.chmodSync(authEnv, 0o600);
+  '
+}

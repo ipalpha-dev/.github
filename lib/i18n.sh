@@ -110,30 +110,48 @@ ipalpha_msg() {
     en-US:cleanup) echo "Removing the setup clone" ;;
     pt-BR:update_no_settings) echo "Falta .ipalpha/settings — rode o setup primeiro." ;;
     en-US:update_no_settings) echo "Missing .ipalpha/settings — run setup first." ;;
-    pt-BR:help_run) echo "Uso: ./run
+    pt-BR:help_run) echo "Uso: ./run [stop [--purge]]
 
 Sobe o ambiente local do IPAlpha:
-  1. Infra no contêiner (MongoDB, Redis, RabbitMQ + UI de management)
+  1. Infra no contêiner (MongoDB, Redis, RabbitMQ + UI de management) — reaproveita contêineres existentes
   2. Instala dependências npm que faltam (shared-js vem do npm)
-  3. Sobe os MSs em background (projects-api, person-api, organization-api, notification-api, auth-api, nesta ordem)
+  3. Abre o painel de processos (infra + MSs, logs ao vivo, iniciar/parar/reiniciar por MS)
+
+Teclas do painel: ↑/↓ seleciona · Tab foco no log · s inicia/para · r reinicia · o abre /frontend · c limpa · f segue · q sai
 
 Runner (settings runner= ou IPALPHA_RUNNER=):
-  background  padrão — runner embutido, logs em \$TMPDIR/ipalpha-run-logs
-  mprocs      opt-in — usa mprocs se estiver instalado (instale por conta própria)
+  auto        padrão — painel embutido; sem terminal interativo usa background
+  background  runner simples, logs em \$TMPDIR/ipalpha-run-logs
+  mprocs      opt-in — usa mprocs se estiver instalado
 
-Portas vêm de .ipalpha/settings / .ipalpha/ports.env. Pare com .ipalpha/bin/infra-down." ;;
-    en-US:help_run) echo "Usage: ./run
+./run stop           para a infra (mantém os contêineres para subir rápido)
+./run stop --purge   remove os contêineres (os volumes/dados ficam)
+
+Portas vêm de .ipalpha/settings / .ipalpha/ports.env." ;;
+    en-US:help_run) echo "Usage: ./run [stop [--purge]]
 
 Start the local IPAlpha stack:
-  1. Infra in containers (MongoDB, Redis, RabbitMQ + management UI)
+  1. Infra in containers (MongoDB, Redis, RabbitMQ + management UI) — reuses existing containers
   2. Install missing npm dependencies (shared-js comes from npm)
-  3. Bring up the MSs in the background (projects-api, person-api, organization-api, notification-api, auth-api, in that order)
+  3. Open the process panel (infra + MSs, live logs, start/stop/restart per MS)
+
+Panel keys: ↑/↓ select · Tab log focus · s start/stop · r restart · o open /frontend · c clear · f follow · q quit
 
 Runner (settings runner= or IPALPHA_RUNNER=):
-  background  default — embedded runner, logs under \$TMPDIR/ipalpha-run-logs
-  mprocs      opt-in — use mprocs if installed (install it yourself)
+  auto        default — built-in panel; without an interactive terminal falls back to background
+  background  plain runner, logs under \$TMPDIR/ipalpha-run-logs
+  mprocs      opt-in — use mprocs if installed
 
-Ports come from .ipalpha/settings / .ipalpha/ports.env. Stop infra with .ipalpha/bin/infra-down." ;;
+./run stop           stop infra (keeps containers for a fast next start)
+./run stop --purge   remove containers (volumes/data are kept)
+
+Ports come from .ipalpha/settings / .ipalpha/ports.env." ;;
+    pt-BR:run_infra) echo "Subindo a infra…" ;;
+    en-US:run_infra) echo "Starting infrastructure…" ;;
+    pt-BR:procs_missing) echo "Painel de processos indisponível (sem go e sem download) — ./run usará o modo background" ;;
+    en-US:procs_missing) echo "Process panel unavailable (no go and download failed) — ./run will use background mode" ;;
+    pt-BR:auth_clients) echo "Gerando credenciais locais dos MSs (AUTH_CLIENT_ID/SECRET + SEED_CLIENTS_JSON)" ;;
+    en-US:auth_clients) echo "Generating local MS credentials (AUTH_CLIENT_ID/SECRET + SEED_CLIENTS_JSON)" ;;
     pt-BR:help_pull) echo "Uso: ./pull
 
 Sincroniza esta máquina com a org ipalpha:

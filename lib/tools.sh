@@ -124,12 +124,8 @@ ipalpha_ensure_runtime() {
   done
 }
 
-# The setup never installs or asks about mprocs. The process panel was the wrong
-# default for solo dev — the embedded simple runner is fine for everything we ship.
-# To use mprocs anyway, install it yourself and run `IPALPHA_RUNNER=mprocs ./run`
-# (the generated ./run still honours the override).
 ipalpha_prompt_mprocs() {
-  ipalpha_runner="background"
+  ipalpha_runner="auto"
 }
 
 ipalpha_ensure_tools() {

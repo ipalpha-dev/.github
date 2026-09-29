@@ -37,7 +37,7 @@ ipalpha_settings_ms_port() {
 
 ipalpha_load_settings() {
   local root="$1"
-  local file line key val
+  local file line key val ms
   file="$(ipalpha_settings_file "$root")"
   [[ -f "$file" ]] || return 1
   while IFS= read -r line || [[ -n "$line" ]]; do
@@ -58,9 +58,9 @@ ipalpha_load_settings() {
       *) 
         case "$key" in
           *_port)
-            if ipalpha_is_ms_repo "${key%_port}"; then
-              var="ipalpha_port_${key%_port//-/_}"
-              printf -v "$var" '%s' "$val"
+            ms="${key%_port}"
+            if ipalpha_is_ms_repo "$ms"; then
+              printf -v "ipalpha_port_${ms//-/_}" '%s' "$val"
             fi
             ;;
         esac
