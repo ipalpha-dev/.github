@@ -409,9 +409,11 @@ fi
 
 export IPALPHA_FRONTEND_ROOT="$frontend" IPALPHA_WEB_PORT="$web_port" IPALPHA_API_PORT="$api_port"
 auth_port="$(sed -n 's/^auth-api_port=//p' "$ipalpha_dir/settings" 2>/dev/null | head -n1)"
-if [[ "$repo" != "auth-api" && -z "${VITE_AUTH_API_URL:-}" ]]; then
-  export VITE_AUTH_API_URL="http://localhost:$(( ${auth_port:-3005} + 2000 ))"
-fi
+webapp_port="$(sed -n 's/^auth-webapp_port=//p' "$ipalpha_dir/settings" 2>/dev/null | head -n1)"
+# Sign-in popup = auth-webapp; its /api proxies auth-api, so both URLs share the webapp origin.
+export VITE_AUTH_WEBAPP_URL="${VITE_AUTH_WEBAPP_URL:-http://localhost:${webapp_port:-5100}}"
+export VITE_AUTH_API_URL="${VITE_AUTH_API_URL:-http://localhost:${webapp_port:-5100}/api}"
+: "$auth_port"
 exec ./node_modules/.bin/vite --config "$ipalpha_dir/vite.dev.mjs"
 SCRIPT
   chmod +x "$dest"
