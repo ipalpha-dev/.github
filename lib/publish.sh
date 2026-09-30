@@ -4,6 +4,12 @@ ipalpha_publish_cache_dir=""
 
 ipalpha_publish_help() {
   ipalpha_msg help_publish
+  echo "  --ci             publish sources for TeamCity image builds"
+  echo "  --initialize     initialize a new private service repository"
+  echo "  --resume         resume a tagged image release without another bump"
+  echo "  --npm-only       publish the existing shared-js release to npm"
+  echo "  --tooling        publish workspace publisher changes"
+  echo "  --deployment-path PATH  publish a selected non-secret deployment file"
 }
 
 # "Dirty" = uncommitted changes OR commits since the last release tag (v<version>).
@@ -44,6 +50,23 @@ ipalpha_publish_parse_decision() {
   '
 }
 
+# Bound release-analysis CLIs so an unavailable engine cannot stall publication.
+ipalpha_publish_ai_run() {
+  python3 - "$@" <<'PYRUN'
+import os, signal, subprocess, sys, tempfile
+process = subprocess.Popen(sys.argv[1:], cwd=tempfile.gettempdir(), stdout=subprocess.PIPE,
+                           stderr=subprocess.DEVNULL, text=True, start_new_session=True)
+try:
+    output, _ = process.communicate(timeout=60)
+except subprocess.TimeoutExpired:
+    os.killpg(process.pid, signal.SIGKILL)
+    process.communicate()
+    sys.exit(1)
+sys.stdout.write(output)
+sys.exit(process.returncode)
+PYRUN
+}
+
 ipalpha_ai_decide() {
   local engine="$1" model="$2" system="$3" body="$4"
   local full out
@@ -55,22 +78,22 @@ Respond with JSON only: {\"reason\",\"bump\",\"message\"}."
   case "$engine" in
     pi)
       if [[ -n "$model" ]]; then
-        out="$(cd "${TMPDIR:-/tmp}" && pi -p "$full" --model "$model" 2>/dev/null)" || \
-          out="$(cd "${TMPDIR:-/tmp}" && pi "$full" 2>/dev/null)" || out=""
+        out="$(ipalpha_publish_ai_run pi -p "$full" --model "$model" 2>/dev/null)" || \
+          out="$(ipalpha_publish_ai_run pi "$full" 2>/dev/null)" || out=""
       else
-        out="$(cd "${TMPDIR:-/tmp}" && pi -p "$full" 2>/dev/null)" || \
-          out="$(cd "${TMPDIR:-/tmp}" && pi "$full" 2>/dev/null)" || out=""
+        out="$(ipalpha_publish_ai_run pi -p "$full" 2>/dev/null)" || \
+          out="$(ipalpha_publish_ai_run pi "$full" 2>/dev/null)" || out=""
       fi
       ;;
     claude)
-      out="$(cd "${TMPDIR:-/tmp}" && claude -p "$full" ${model:+--model "$model"} 2>/dev/null)" || out=""
+      out="$(ipalpha_publish_ai_run claude -p "$full" ${model:+--model "$model"} 2>/dev/null)" || out=""
       ;;
     grok)
-      out="$(cd "${TMPDIR:-/tmp}" && grok -p "$full" ${model:+--model "$model"} 2>/dev/null)" || \
-        out="$(cd "${TMPDIR:-/tmp}" && grok "$full" 2>/dev/null)" || out=""
+      out="$(ipalpha_publish_ai_run grok -p "$full" ${model:+--model "$model"} 2>/dev/null)" || \
+        out="$(ipalpha_publish_ai_run grok "$full" 2>/dev/null)" || out=""
       ;;
     codex)
-      out="$(cd "${TMPDIR:-/tmp}" && codex exec --skip-git-repo-check "$full" 2>/dev/null)" || out=""
+      out="$(ipalpha_publish_ai_run codex exec --skip-git-repo-check "$full" 2>/dev/null)" || out=""
       ;;
     *)
       out=""
@@ -131,6 +154,13 @@ ipalpha_publish_set_version() {
     const pkg = JSON.parse(fs.readFileSync(p, "utf8"));
     pkg.version = process.argv[2];
     fs.writeFileSync(p, JSON.stringify(pkg, null, 2) + "\n");
+    const lockPath = process.argv[1] + "/package-lock.json";
+    if (fs.existsSync(lockPath)) {
+      const lock = JSON.parse(fs.readFileSync(lockPath, "utf8"));
+      lock.version = process.argv[2];
+      if (lock.packages && lock.packages[""]) lock.packages[""].version = process.argv[2];
+      fs.writeFileSync(lockPath, JSON.stringify(lock, null, 2) + "\n");
+    }
   ' "$dir" "$version"
 }
 
@@ -236,45 +266,59 @@ ipalpha_publish_build_image() {
 
 ipalpha_publish_npm() {
   local dir="$1"
-  if ! npm whoami >/dev/null 2>&1; then
+  if ! (cd "$dir" && npm whoami >/dev/null 2>&1); then
     echo "  shared-js: not logged in to npm — run: npm login" >&2
     return 1
   fi
+  # Deleted source modules must not survive in the published tarball.
+  rm -rf "$dir/dist"
   (cd "$dir" && npm publish) || { echo "  shared-js: npm publish failed" >&2; return 1; }
 }
 
 ipalpha_publish_bump_deployment() {
   local root="$1" repo="$2" version="$3"
   local dep="$root/deployment" pattern file
+  local -a image_files=()
   [[ -d "$dep/.git" ]] || { echo "  $(ipalpha_msg publish_deployment_missing)"; return 0; }
   pattern="${ipalpha_registry}/${repo}:"
   while IFS= read -r file; do
     [[ -n "$file" ]] || continue
+    image_files+=("$file")
     ipalpha_sed_inplace "$file" -E "s|${pattern}[^[:space:]\"']*|${pattern}${version}|g"
   done < <(grep -rl -F "$pattern" "$dep" --include='*.yaml' --include='*.yml' 2>/dev/null)
   if [[ -z "$(git -C "$dep" status --porcelain 2>/dev/null)" ]]; then
     return 0
   fi
-  git -C "$dep" add -A
-  git -C "$dep" commit -q -m "bump ${repo} to ${version}" || return 0
-  git -C "$dep" push >/dev/null 2>&1 || echo "  deployment push failed" >&2
+  [[ ${#image_files[@]} -gt 0 ]] || return 0
+  git -C "$dep" add -- "${image_files[@]}"
+  git -C "$dep" diff --cached --quiet && return 0
+  git -C "$dep" commit -q -m "bump ${repo} to ${version}"
+  git -C "$dep" push
 }
 
 ipalpha_publish_repo() {
   local root="$1" repo="$2" version="$3" message="$4" bump="$5"
   local dir
   dir="$(ipalpha_repo_path "$root" "$repo")"
+  # Check npm before committing a new release, so an expired token leaves Git untouched.
+  if [[ "$repo" == shared-js && "$bump" != none ]]; then
+    (cd "$dir" && npm whoami >/dev/null 2>&1) || {
+      echo "shared-js: not logged in to npm — run: npm login" >&2; return 1;
+    }
+  fi
   if [[ "$bump" != "none" ]]; then
     ipalpha_publish_set_version "$dir" "$version"
   fi
   git -C "$dir" add -A
-  git -C "$dir" commit -q -m "$message" || true
-  if [[ "$bump" != "none" ]]; then
-    git -C "$dir" tag "v${version}" >/dev/null 2>&1 || true
+  if ! git -C "$dir" diff --cached --quiet; then
+    git -C "$dir" commit -q -m "$message"
   fi
-  git -C "$dir" push >/dev/null 2>&1 || echo "  $repo: push failed" >&2
   if [[ "$bump" != "none" ]]; then
-    git -C "$dir" push origin "v${version}" >/dev/null 2>&1 || true
+    git -C "$dir" tag "v${version}"
+  fi
+  git -C "$dir" push --set-upstream origin HEAD
+  if [[ "$bump" != "none" ]]; then
+    git -C "$dir" push origin "v${version}"
   fi
   if [[ "$bump" == "none" ]]; then
     return 0
@@ -286,17 +330,49 @@ ipalpha_publish_repo() {
   if [[ "$repo" == "shared-ui" ]]; then
     return 0
   fi
-  ipalpha_publish_build_image "$repo" "$version" "$dir" || return 1
+  if [[ "${ipalpha_publish_ci:-false}" != true ]]; then
+    ipalpha_publish_build_image "$repo" "$version" "$dir" || return 1
+  fi
   ipalpha_publish_bump_deployment "$root" "$repo" "$version"
+}
+
+ipalpha_publish_initialize() {
+  local root="$1" repo="$2" dry_run="$3" dir
+  ipalpha_is_ms_repo "$repo" || { echo "Unknown repository: $repo" >&2; return 1; }
+  dir="$(ipalpha_repo_path "$root" "$repo")"
+  [[ -d "$dir" && -f "$dir/package.json" && -f "$dir/.gitignore" ]] || {
+    echo "New service needs package.json and .gitignore: $repo" >&2; return 1;
+  }
+  [[ ! -d "$dir/.git" ]] || { echo "$repo: Git is already initialized"; return 0; }
+  if [[ "$dry_run" == true ]]; then
+    echo "Initialize $repo on master and create private repository $ipalpha_org/$repo (no commit or push)"
+    return 0
+  fi
+  git init -q -b master "$dir"
+  if gh repo view "$ipalpha_org/$repo" --json name >/dev/null 2>&1; then
+    git -C "$dir" remote add origin "git@github.com:$ipalpha_org/$repo.git"
+  else
+    gh repo create "$ipalpha_org/$repo" --private --source "$dir" --remote origin
+    git -C "$dir" remote set-url origin "git@github.com:$ipalpha_org/$repo.git"
+  fi
 }
 
 ipalpha_publish() {
   local root="$1"; shift
-  local dry_run=false folder="" engine="${ipalpha_ai_cli:-pi}" model="${ipalpha_ai_model:-}"
-  local arg
+  local dry_run=false initialize=false npm_only=false resume=false tooling=false folder="" engine="${ipalpha_ai_cli:-pi}" model="${ipalpha_ai_model:-}"
+  local arg deployment_message="Update deployment configuration"
+  local -a deployment_paths=()
+  ipalpha_publish_ci=false
   while [[ $# -gt 0 ]]; do
     arg="$1"
     case "$arg" in
+      --ci) ipalpha_publish_ci=true ;;
+      --initialize) initialize=true ;;
+      --npm-only) npm_only=true ;;
+      --resume) resume=true ;;
+      --tooling) tooling=true ;;
+      --deployment-path) shift; deployment_paths+=("${1:?path required}") ;;
+      --message) shift; deployment_message="${1:?message required}" ;;
       -d|--dry-run) dry_run=true ;;
       -f|--folder) shift; folder="${1:-}" ;;
       -f*) folder="${arg#-f}" ;;
@@ -316,6 +392,88 @@ ipalpha_publish() {
     esac
     shift
   done
+
+  if [[ "$tooling" == true ]]; then
+    local tooling_dir="$root/.ipalpha/tooling"
+    [[ -d "$tooling_dir/.git" ]] || { echo "Workspace tooling repository missing" >&2; return 1; }
+    if [[ "$dry_run" == true ]]; then
+      git -C "$tooling_dir" diff --stat -- lib/common.sh lib/publish.sh
+      return 0
+    fi
+    [[ -z "$(git -C "$tooling_dir" diff --cached --name-only)" ]] || { echo "Tooling index is not empty" >&2; return 1; }
+    git -C "$tooling_dir" add -- lib/common.sh lib/publish.sh
+    git -C "$tooling_dir" diff --cached --quiet && return 0
+    git -C "$tooling_dir" commit -m "$deployment_message"
+    git -C "$tooling_dir" push --set-upstream origin HEAD
+    return
+  fi
+
+  if [[ "$resume" == true ]]; then
+    ipalpha_is_ms_repo "$folder" && ipalpha_is_image_repo "$folder" || {
+      echo "--resume requires an image repository folder" >&2; return 1;
+    }
+    local resume_dir resume_version
+    resume_dir="$(ipalpha_repo_path "$root" "$folder")"
+    resume_version="$(ipalpha_publish_current_version "$resume_dir")"
+    [[ -z "$(git -C "$resume_dir" status --porcelain)" ]] || { echo "$folder must be clean" >&2; return 1; }
+    [[ "$(git -C "$resume_dir" rev-parse "v$resume_version^{commit}")" == "$(git -C "$resume_dir" rev-parse HEAD)" ]] || {
+      echo "$folder HEAD must match its release tag" >&2; return 1;
+    }
+    echo "Resume $folder $resume_version (no version bump or new commit)"
+    [[ "$dry_run" == true ]] && return 0
+    git -C "$resume_dir" push --set-upstream origin HEAD
+    git -C "$resume_dir" push origin "v$resume_version"
+    if [[ "$ipalpha_publish_ci" != true ]]; then
+      ipalpha_publish_build_image "$folder" "$resume_version" "$resume_dir" || return 1
+    fi
+    ipalpha_publish_bump_deployment "$root" "$folder" "$resume_version"
+    return
+  fi
+
+  # Resume npm publication of an already committed/tagged release without another bump.
+  if [[ "$npm_only" == true ]]; then
+    [[ "$folder" == shared-js ]] || { echo "--npm-only requires --folder shared-js" >&2; return 1; }
+    local npm_dir npm_version
+    npm_dir="$(ipalpha_repo_path "$root" "$folder")"
+    npm_version="$(node -p 'require(process.argv[1]).version' "$npm_dir/package.json")"
+    [[ -z "$(git -C "$npm_dir" status --porcelain)" ]] || { echo "shared-js must be clean" >&2; return 1; }
+    [[ "$(git -C "$npm_dir" rev-parse "v$npm_version^{commit}")" == "$(git -C "$npm_dir" rev-parse HEAD)" ]] || {
+      echo "shared-js HEAD must match its release tag" >&2; return 1;
+    }
+    echo "Publish existing shared-js $npm_version to npm (no Git changes)"
+    [[ "$dry_run" == true ]] && return 0
+    ipalpha_publish_npm "$npm_dir"
+    return
+  fi
+
+  if [[ "$initialize" == true ]]; then
+    [[ -n "$folder" ]] || { echo "--initialize requires --folder" >&2; return 1; }
+    ipalpha_publish_initialize "$root" "$folder" "$dry_run"
+    return
+  fi
+
+  if [[ ${#deployment_paths[@]} -gt 0 ]]; then
+    local dep="$root/deployment" path
+    if [[ -n "$(git -C "$dep" diff --cached --name-only)" ]]; then
+      echo "Deployment index is not empty; review staged changes first" >&2; return 1
+    fi
+    for path in "${deployment_paths[@]}"; do
+      case "$path" in /*|../*|*/../*|*secret*|*Secret*)
+        echo "Unsafe deployment publication path: $path" >&2; return 1 ;;
+      esac
+      [[ -e "$dep/$path" ]] || { echo "Missing deployment path: $path" >&2; return 1; }
+    done
+    if [[ "$dry_run" == true ]]; then
+      printf 'Deployment files to publish: %s\n' "${deployment_paths[*]}"
+      git -C "$dep" diff --stat -- "${deployment_paths[@]}"
+      return 0
+    fi
+    git -C "$dep" add -- "${deployment_paths[@]}"
+    git -C "$dep" diff --cached --quiet && return 0
+    git -C "$dep" commit -m "$deployment_message"
+    git -C "$dep" push
+    return
+  fi
 
   if [[ -n "$folder" ]]; then
     if ! ipalpha_is_ms_repo "$folder"; then

@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 
 ipalpha_org="ipalpha-dev"
-ipalpha_registry="ghcr.io/${ipalpha_org}"
+ipalpha_registry="${IPALPHA_REGISTRY:-registry.kevyn.com.br/ip-alpha/core}"
 
-ipalpha_ms_repos=(shared-js shared-ui projects-api person-api organization-api notification-api auth-api)
-ipalpha_ms_order=(projects-api person-api organization-api notification-api auth-api)
+ipalpha_ms_repos=(shared-js shared-ui projects-api person-api organization-api notification-api auth-api forms-api dispatch-api)
+ipalpha_ms_order=(projects-api person-api organization-api notification-api auth-api forms-api dispatch-api)
 # Standalone web apps under core/: cloned, deps installed, image published, no .env, run with Vite.
-ipalpha_web_repos=(auth-webapp)
+ipalpha_web_repos=(auth-webapp forms-webapp)
 ipalpha_root_repos=(deployment)
 ipalpha_tooling_repo=".github"
 
@@ -22,6 +22,8 @@ ipalpha_default_ms_port() {
     organization-api) echo 3003 ;;
     notification-api) echo 3004 ;;
     auth-api) echo 3005 ;;
+    forms-api) echo 3006 ;;
+    dispatch-api) echo 3007 ;;
     *) echo 3000 ;;
   esac
 }
@@ -30,6 +32,7 @@ ipalpha_default_ms_port() {
 ipalpha_default_web_port() {
   case "$1" in
     auth-webapp) echo 5100 ;;
+    forms-webapp) echo 5106 ;;
     *) echo 5199 ;;
   esac
 }
@@ -37,6 +40,7 @@ ipalpha_default_web_port() {
 ipalpha_web_api_backend() {
   case "$1" in
     auth-webapp) echo auth-api ;;
+    forms-webapp) echo forms-api ;;
     *) echo "" ;;
   esac
 }
