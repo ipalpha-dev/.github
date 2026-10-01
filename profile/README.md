@@ -22,9 +22,9 @@ Depois: `cd IpAlpha && ./run`.
 |---|---|
 | `shared-js` | Biblioteca comum (`@ipalpha/shared-js`) |
 | `auth-api` | Login (código por SMS, passkeys) e tokens |
-| `person-api` | Cadastro de pessoas, registro de acesso (LGPD) |
-| `organization-api` | Estrutura da igreja (organograma) |
+| `persons-api` | Cadastro de pessoas, registro de acesso (LGPD) |
+| `organizations-api` | Estrutura da igreja (organograma) |
 | `projects-api` | Projetos e aplicativos conectados |
-| `notification-api` | Envio de SMS e modelos de mensagem |
+| `notifications-api` | Envio de SMS e modelos de mensagem |
 | `deployment` | Manifestos Kubernetes |
 | `.github` | Esta página + as ferramentas de desenvolvimento |

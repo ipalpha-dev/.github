@@ -28,7 +28,7 @@ Long-form reference for tools, ports, degraded integrations, and troubleshooting
    background runner; logs land under `$TMPDIR/ipalpha-run-logs`. To use
    `mprocs` instead, install it manually and run with `IPALPHA_RUNNER=mprocs`.
 3. Clones the org repos into the layout: `core/shared-js`,
-   `core/{auth-api,person-api,organization-api,projects-api,notification-api}`,
+   `core/{auth-api,persons-api,organizations-api,projects-api,notifications-api}`,
    `deployment`. Existing folders are kept.
 4. Writes `.env` per microservice from each repo's `.env.example`; until those
    exist, the fallback templates in `templates/env-fallback/` are used (secrets
@@ -50,10 +50,15 @@ keeps it). `./pull` re-downloads `.github` into a temp folder to refresh
 | --- | --- |
 | `.github` | org profile page + this tooling (not cloned into the workspace) |
 | `shared-js` | npm library `@ipalpha/shared-js` on npmjs.com (helpers only) |
-| `shared-ui` | React component library `@ipalpha/shared-ui`, consumed by every frontend via `file:../../shared-ui`; built by `install-deps` before the frontends (not published) |
-| `auth-api` | NestJS + TypeScript backend, no frontend (its UI is `auth-webapp`) |
-| `person-api`, `organization-api`, `projects-api`, `notification-api` | NestJS + TypeScript backend, each with a React+Vite frontend served under `/frontend`; sign-in goes through the auth-webapp popup (`VITE_AUTH_WEBAPP_URL`, `VITE_AUTH_API_URL` = webapp `/api`) |
-| `auth-webapp` | standalone Vite app: the sign-in popup (account chooser + consent). No `.env`; served at `/` (no `/frontend` prefix, like prod) on its own port with `/api` proxied to auth-api so there is no CORS; published as an nginx image |
+| `shared-ui` | React component library `@ipalpha/shared-ui`, consumed by every webapp via `file:../shared-ui`; built by `install-deps` before them (not published) |
+| `auth-api`, `persons-api`, `organizations-api`, `projects-api`, `notifications-api`, `forms-api`, `dispatch-api` | NestJS + TypeScript backends, **no frontend of their own** |
+| `mordomia-webapp` | standalone Vite app (port 5110): Mordomia, the one UI for superuser + stewards over every core API (persons, projects, org chart, notifications, access, my data), live through dispatch-api |
+| `auth-webapp` | standalone Vite app (port 5100): the sign-in popup (account chooser + consent) |
+| `forms-webapp` | standalone Vite app (port 5106): IPAlpha Formulários |
+
+Every webapp is served at `/` and reaches the APIs same-origin at `/api/<name>` (`/api/auth`,
+`/api/projects`, `/api/persons`, `/api/organizations`, `/api/notifications`, `/api/forms`;
+sockets at `/api/dispatch/socket.io`): the Vite proxy locally, the ingress in production. No CORS.
 | `deployment` | k8s manifests under `core/<ms>/`, namespace `ipalpha-core` |
 
 The org name lives in one place (`ipalpha_org` in `lib/common.sh`); image names
@@ -120,9 +125,9 @@ Dev-only release (no prod rollout):
 | Service | Default host port |
 | --- | --- |
 | projects-api | 3001 |
-| person-api | 3002 |
-| organization-api | 3003 |
-| notification-api | 3004 |
+| persons-api | 3002 |
+| organizations-api | 3003 |
+| notifications-api | 3004 |
 | auth-api | 3005 |
 | auth-webapp (Vite) | 5100 |
 | MongoDB | 27017 |
@@ -136,7 +141,7 @@ Busy ports are remapped at setup; the mapping lives in `.ipalpha/settings` and
 ## Expected degraded integrations (local)
 
 - SMS providers need real `SMSBARATO_KEY` / `COMTELE_TOKEN` in
-  `core/notification-api/.env` — without them notification-api runs but cannot
+  `core/notifications-api/.env` — without them notifications-api runs but cannot
   send.
 - Superuser seed (`SUPERUSER_NAME/PHONE/EMAIL`) and `WEBAUTHN_RP_ID` are blank
   by default — auth-api will tell you what it needs.

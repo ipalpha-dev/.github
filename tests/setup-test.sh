@@ -27,7 +27,7 @@ echo "== setup (skip tools)"
 ipalpha_out="$("$ipalpha_repo_root/setup" --skip-tools --keep-setup 2>&1)" \
   || ipalpha_fail "setup failed: $ipalpha_out"
 
-for repo in shared-js shared-ui projects-api person-api organization-api notification-api auth-api auth-webapp; do
+for repo in shared-js shared-ui projects-api persons-api organizations-api notifications-api auth-api auth-webapp; do
   [[ -d "$ipalpha_tmp/IpAlpha/core/$repo/.git" ]] \
     || ipalpha_fail "ms repo not cloned: $repo"
 done
@@ -42,13 +42,13 @@ echo '{"name":"auth-webapp"}' >"$ipalpha_tmp/IpAlpha/core/auth-webapp/package.js
 [[ ! -e "$ipalpha_tmp/IpAlpha/.github" ]] || ipalpha_fail ".github must not be cloned into the workspace"
 [[ -x "$ipalpha_tmp/IpAlpha/set-keys" ]] || ipalpha_fail "./set-keys missing"
 
-for repo in projects-api person-api organization-api notification-api auth-api; do
+for repo in projects-api persons-api organizations-api notifications-api auth-api; do
   [[ -f "$ipalpha_tmp/IpAlpha/core/$repo/.env" ]] || ipalpha_fail "env missing: $repo"
 done
 grep -q '^SUPERUSER_NAME=$' "$ipalpha_tmp/IpAlpha/core/auth-api/.env" || ipalpha_fail "auth-api env missing SUPERUSER_NAME"
-grep -q '^SMSBARATO_KEY=$' "$ipalpha_tmp/IpAlpha/core/notification-api/.env" || ipalpha_fail "notification-api env missing SMSBARATO_KEY"
+grep -q '^SMSBARATO_KEY=$' "$ipalpha_tmp/IpAlpha/core/notifications-api/.env" || ipalpha_fail "notifications-api env missing SMSBARATO_KEY"
 grep -q '^PORT=3001$' "$ipalpha_tmp/IpAlpha/core/projects-api/.env" || ipalpha_fail "projects-api env wrong PORT"
-grep -q '^AUTH_API_URL=http://127.0.0.1:3005$' "$ipalpha_tmp/IpAlpha/core/person-api/.env" || ipalpha_fail "person-api env wrong AUTH_API_URL"
+grep -q '^AUTH_API_URL=http://127.0.0.1:3005$' "$ipalpha_tmp/IpAlpha/core/persons-api/.env" || ipalpha_fail "persons-api env wrong AUTH_API_URL"
 [[ ! -f "$ipalpha_tmp/IpAlpha/core/shared-js/.env" ]] || ipalpha_fail "shared-js must not get an env"
 [[ ! -f "$ipalpha_tmp/IpAlpha/core/shared-ui/.env" ]] || ipalpha_fail "shared-ui must not get an env"
 
@@ -57,7 +57,7 @@ grep -q '^AUTH_API_URL=http://127.0.0.1:3005$' "$ipalpha_tmp/IpAlpha/core/person
 [[ -x "$ipalpha_tmp/IpAlpha/pull" ]] || ipalpha_fail "./pull missing"
 [[ -f "$ipalpha_tmp/IpAlpha/.ipalpha/settings" ]] || ipalpha_fail "settings missing"
 
-for key in lang org runtime ai_cli ai_model runner mongo_port redis_port rabbitmq_port rabbitmq_mgmt_port projects-api_port person-api_port organization-api_port notification-api_port auth-api_port; do
+for key in lang org runtime ai_cli ai_model runner mongo_port redis_port rabbitmq_port rabbitmq_mgmt_port projects-api_port persons-api_port organizations-api_port notifications-api_port auth-api_port; do
   grep -q "^${key}=" "$ipalpha_tmp/IpAlpha/.ipalpha/settings" || ipalpha_fail "settings missing key: $key"
 done
 grep -q '^lang=en-US' "$ipalpha_tmp/IpAlpha/.ipalpha/settings" || ipalpha_fail "settings lang wrong"
@@ -105,9 +105,9 @@ done
 
 ipalpha_order="$(grep -E '^  "MS · ' "$ipalpha_tmp/IpAlpha/.ipalpha/mprocs.yaml" | sed 's/.*MS · //; s/":$//')"
 [[ "$ipalpha_order" == "projects-api
-person-api
-organization-api
-notification-api
+persons-api
+organizations-api
+notifications-api
 auth-api" ]] || ipalpha_fail "mprocs order wrong: $ipalpha_order"
 
 echo "== localized help"
@@ -126,7 +126,7 @@ inplace 's/^lang=pt-BR/lang=en-US/' "$ipalpha_tmp/IpAlpha/.ipalpha/settings"
 
 echo "== idempotent second run keeps local env and merges new keys"
 echo "LOCAL_CUSTOMIZATION=1" >>"$ipalpha_tmp/IpAlpha/core/projects-api/.env"
-cat >"$ipalpha_tmp/IpAlpha/core/person-api/.env.example" <<'EOF'
+cat >"$ipalpha_tmp/IpAlpha/core/persons-api/.env.example" <<'EOF'
 PORT=3002
 NEW_KEY=42
 EOF
@@ -134,19 +134,19 @@ ipalpha_out="$("$ipalpha_repo_root/setup" --skip-tools --keep-setup 2>&1)" \
   || ipalpha_fail "second setup failed: $ipalpha_out"
 grep -q 'LOCAL_CUSTOMIZATION=1' "$ipalpha_tmp/IpAlpha/core/projects-api/.env" \
   || ipalpha_fail "second run overwrote local env"
-grep -q '^NEW_KEY=42$' "$ipalpha_tmp/IpAlpha/core/person-api/.env" \
+grep -q '^NEW_KEY=42$' "$ipalpha_tmp/IpAlpha/core/persons-api/.env" \
   || ipalpha_fail "second run did not merge new keys"
 grep -q '"name": "auth-webapp", "kind": "app"' "$ipalpha_tmp/IpAlpha/.ipalpha/projects.json" || ipalpha_fail "projects.json missing auth-webapp app"
 grep -q 'Web · auth-webapp' "$ipalpha_tmp/IpAlpha/.ipalpha/mprocs.yaml" || ipalpha_fail "mprocs missing auth-webapp"
 grep -q 'web-dev auth-webapp' "$ipalpha_tmp/IpAlpha/.ipalpha/projects.json" || ipalpha_fail "projects.json auth-webapp cmd wrong"
 
 echo "== pull re-clones missing repo"
-rm -rf "$ipalpha_tmp/IpAlpha/core/person-api"
+rm -rf "$ipalpha_tmp/IpAlpha/core/persons-api"
 ipalpha_out="$(
   cd "$ipalpha_tmp/IpAlpha" && IPALPHA_CLONE_COMMAND="$ipalpha_repo_root/tests/fake-clone" ./pull 2>&1
 )" || ipalpha_fail "pull failed: $ipalpha_out"
-[[ -d "$ipalpha_tmp/IpAlpha/core/person-api/.git" ]] || ipalpha_fail "pull did not re-clone person-api"
-[[ -f "$ipalpha_tmp/IpAlpha/core/person-api/.env" ]] || ipalpha_fail "pull did not reinstall env"
+[[ -d "$ipalpha_tmp/IpAlpha/core/persons-api/.git" ]] || ipalpha_fail "pull did not re-clone persons-api"
+[[ -f "$ipalpha_tmp/IpAlpha/core/persons-api/.env" ]] || ipalpha_fail "pull did not reinstall env"
 
 echo "== publish smoke (no AI, dry-run aborts without changes)"
 repo_dir="$ipalpha_tmp/IpAlpha/core/projects-api"

@@ -3,10 +3,10 @@
 ipalpha_org="ipalpha-dev"
 ipalpha_registry="${IPALPHA_REGISTRY:-registry.kevyn.com.br/ip-alpha/core}"
 
-ipalpha_ms_repos=(shared-js shared-ui projects-api person-api organization-api notification-api auth-api forms-api dispatch-api)
-ipalpha_ms_order=(projects-api person-api organization-api notification-api auth-api forms-api dispatch-api)
+ipalpha_ms_repos=(shared-js shared-ui projects-api persons-api organizations-api notifications-api auth-api forms-api dispatch-api)
+ipalpha_ms_order=(projects-api persons-api organizations-api notifications-api auth-api forms-api dispatch-api)
 # Standalone web apps under core/: cloned, deps installed, image published, no .env, run with Vite.
-ipalpha_web_repos=(auth-webapp forms-webapp)
+ipalpha_web_repos=(auth-webapp forms-webapp mordomia-webapp)
 ipalpha_root_repos=(deployment)
 ipalpha_tooling_repo=".github"
 
@@ -18,9 +18,9 @@ ipalpha_default_rabbitmq_mgmt_port=15672
 ipalpha_default_ms_port() {
   case "$1" in
     projects-api) echo 3001 ;;
-    person-api) echo 3002 ;;
-    organization-api) echo 3003 ;;
-    notification-api) echo 3004 ;;
+    persons-api) echo 3002 ;;
+    organizations-api) echo 3003 ;;
+    notifications-api) echo 3004 ;;
     auth-api) echo 3005 ;;
     forms-api) echo 3006 ;;
     dispatch-api) echo 3007 ;;
@@ -33,6 +33,7 @@ ipalpha_default_web_port() {
   case "$1" in
     auth-webapp) echo 5100 ;;
     forms-webapp) echo 5106 ;;
+    mordomia-webapp) echo 5110 ;;
     *) echo 5199 ;;
   esac
 }
@@ -41,6 +42,7 @@ ipalpha_web_api_backend() {
   case "$1" in
     auth-webapp) echo auth-api ;;
     forms-webapp) echo forms-api ;;
+    mordomia-webapp) echo persons-api ;;
     *) echo "" ;;
   esac
 }

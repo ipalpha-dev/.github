@@ -39,7 +39,7 @@ su_name=$(ask "Superuser name")
 su_phone=$(ask "Superuser phone in E.164 (e.g. +5511999998888)")
 su_email=$(ask "Superuser email (optional)")
 
-n="$core/notification-api/.env"
+n="$core/notifications-api/.env"
 a="$core/auth-api/.env"
 [ -n "$barato" ] && set_key "$n" SMSBARATO_KEY "$barato"
 [ -n "$comtele_url" ] && set_key "$n" COMTELE_API_URL "$comtele_url"
@@ -47,4 +47,4 @@ a="$core/auth-api/.env"
 [ -n "$su_name" ] && set_key "$a" SUPERUSER_NAME "$su_name"
 [ -n "$su_phone" ] && set_key "$a" SUPERUSER_PHONE "$su_phone"
 [ -n "$su_email" ] && set_key "$a" SUPERUSER_EMAIL "$su_email"
-echo "Saved. Restart notification-api and auth-api to apply."
+echo "Saved. Restart notifications-api and auth-api to apply."
