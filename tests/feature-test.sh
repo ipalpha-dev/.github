@@ -215,7 +215,7 @@ echo b >>"$f2/core/forms-webapp/README.md"
   || ipalpha_fail "teammate commit lost"
 
 echo "== waits for the CI record (success via Git, no CI token)"
-export IPALPHA_TEST_NO_GH=1 IPALPHA_FEATURE_WAIT_MINUTES=1
+export IPALPHA_FEATURE_WAIT_MINUTES=1
 (
   for _ in $(seq 1 40); do
     git -C "$ci" fetch -q origin master && git -C "$ci" reset -q --hard origin/master
@@ -234,7 +234,7 @@ out="$(cd "$root" && ./feature extend hello-test 2>&1)" || ipalpha_fail "extend 
 wait "$ci_sim" || true
 grep -q 'https://ipalpha-hello-test.kevyn.com.br' <<<"$out" && grep -q '2099-02-01T00:00:00Z' <<<"$out" \
   || ipalpha_fail "extend output lacks URLs/expiry: $out"
-unset IPALPHA_TEST_NO_GH IPALPHA_FEATURE_WAIT_MINUTES
+unset IPALPHA_FEATURE_WAIT_MINUTES
 
 echo "== list"
 out="$(cd "$root" && ./feature list 2>&1)" || ipalpha_fail "list failed"
