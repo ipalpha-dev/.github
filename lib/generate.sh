@@ -206,12 +206,19 @@ set -euo pipefail
 ipalpha_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 infra="$(sed -n 's/^IPALPHA_INFRA_NAME=//p' "$ipalpha_dir/ports.env" 2>/dev/null | head -n1)"
 infra="${infra:-ipalpha}"
-purge=false
-[[ "${1:-}" == "--purge" ]] && purge=true
+purge=false volumes=false
+for arg in "$@"; do
+  case "$arg" in
+    --purge) purge=true ;;
+    --volumes) volumes=true ;;
+  esac
+done
 
 if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1 && [[ -f "$ipalpha_dir/compose.yaml" ]]; then
   compose=(docker compose --env-file "$ipalpha_dir/.env" --env-file "$ipalpha_dir/ports.env" -f "$ipalpha_dir/compose.yaml")
-  if [[ "$purge" == true ]]; then
+  if [[ "$purge" == true && "$volumes" == true ]]; then
+    "${compose[@]}" down --volumes >/dev/null 2>&1 || true
+  elif [[ "$purge" == true ]]; then
     "${compose[@]}" down >/dev/null 2>&1 || true
   else
     "${compose[@]}" stop >/dev/null 2>&1 || true
@@ -224,6 +231,7 @@ if command -v container >/dev/null 2>&1; then
     if [[ "$purge" == true ]]; then
       container delete --force "$name" >/dev/null 2>&1 || true
       rm -f "$ipalpha_dir/.state/$name.spec"
+      [[ "$volumes" == true ]] && container volume delete "$name-data" >/dev/null 2>&1 || true
     fi
   done
 fi

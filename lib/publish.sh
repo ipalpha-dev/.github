@@ -403,9 +403,14 @@ ipalpha_publish() {
     feature="$(sed -n 's/^slug=//p' "$root/.ipalpha/feature.env")"
   fi
   if [[ -n "$feature" ]]; then
+    if [[ "$tooling" == true || "$npm_only" == true || "$resume" == true || "$initialize" == true \
+          || -n "$folder" || ${#deployment_paths[@]} -gt 0 ]]; then
+      echo "--feature cannot be combined with release flags (--folder/--tooling/--npm-only/--resume/--initialize/--deployment-path)" >&2
+      return 1
+    fi
     # shellcheck source=lib/feature.sh
     source "$(dirname "${BASH_SOURCE[0]}")/feature.sh"
-    ipalpha_feature_publish "$root" "$feature" "$feature_wait" "$engine" "$model"
+    ipalpha_feature_publish "$root" "$feature" "$feature_wait" "$engine" "$model" "$dry_run"
     return
   fi
 

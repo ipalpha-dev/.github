@@ -83,23 +83,25 @@ ipalpha_resolve_port() {
   fi
 }
 
+# Every port variable a workspace owns, with its default ("var default" per line).
+ipalpha_port_vars() {
+  local repo
+  echo "ipalpha_port_mongo $ipalpha_default_mongo_port"
+  echo "ipalpha_port_redis $ipalpha_default_redis_port"
+  echo "ipalpha_port_rabbitmq $ipalpha_default_rabbitmq_port"
+  echo "ipalpha_port_rabbitmq_mgmt $ipalpha_default_rabbitmq_mgmt_port"
+  for repo in "${ipalpha_ms_order[@]}"; do echo "ipalpha_port_${repo//-/_} $(ipalpha_default_ms_port "$repo")"; done
+  for repo in "${ipalpha_web_repos[@]}"; do echo "ipalpha_port_${repo//-/_} $(ipalpha_default_web_port "$repo")"; done
+}
+
 ipalpha_resolve_ports() {
   echo "$(ipalpha_msg ports_check)"
   ipalpha_remap_from=()
   ipalpha_remap_to=()
-  ipalpha_resolve_port ipalpha_port_mongo "$ipalpha_default_mongo_port"
-  ipalpha_resolve_port ipalpha_port_redis "$ipalpha_default_redis_port"
-  ipalpha_resolve_port ipalpha_port_rabbitmq "$ipalpha_default_rabbitmq_port"
-  ipalpha_resolve_port ipalpha_port_rabbitmq_mgmt "$ipalpha_default_rabbitmq_mgmt_port"
-  local repo var
-  for repo in "${ipalpha_ms_order[@]}"; do
-    var="ipalpha_port_${repo//-/_}"
-    ipalpha_resolve_port "$var" "$(ipalpha_default_ms_port "$repo")"
-  done
-  for repo in "${ipalpha_web_repos[@]}"; do
-    var="ipalpha_port_${repo//-/_}"
-    ipalpha_resolve_port "$var" "$(ipalpha_default_web_port "$repo")"
-  done
+  local var default
+  while read -r var default; do
+    ipalpha_resolve_port "$var" "$default"
+  done < <(ipalpha_port_vars)
 }
 
 ipalpha_apply_port_rewrites() {

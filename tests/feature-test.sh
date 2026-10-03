@@ -28,7 +28,8 @@ for repo in "${repos[@]}"; do
   git init -q --bare -b master "$IPALPHA_TEST_ORIGINS/$repo.git"
   git clone -q "$IPALPHA_TEST_ORIGINS/$repo.git" "$seed/$repo" 2>/dev/null
   echo "# $repo" >"$seed/$repo/README.md"
-  printf '.env\nnode_modules\n' >"$seed/$repo/.gitignore"
+  # persons-api's .gitignore lacks .env on purpose: the feature worktree must still never stage it.
+  if [[ "$repo" == persons-api ]]; then echo node_modules >"$seed/$repo/.gitignore"; else printf '.env\nnode_modules\n' >"$seed/$repo/.gitignore"; fi
   case "$repo" in
     *-api)
       printf '{"name":"%s","version":"0.1.0"}\n' "$repo" >"$seed/$repo/package.json"
@@ -85,6 +86,8 @@ done
 [[ "$(git -C "$froot/core/shared-js" rev-parse HEAD)" == "$(git -C "$root/core/shared-js" rev-parse v1.0.0)" ]] \
   || ipalpha_fail "shared-js not pinned to the locked version tag"
 [[ -z "$(git -C "$root/core/auth-api" status --porcelain)" ]] || ipalpha_fail "main checkout touched"
+[[ -f "$froot/core/persons-api/.env" && -z "$(git -C "$froot/core/persons-api" status --porcelain)" ]] \
+  || ipalpha_fail "worktree .env is not excluded"
 [[ "$(git -C "$root/core/auth-api" symbolic-ref --short HEAD)" == master ]] || ipalpha_fail "main branch changed"
 for f in run publish pull feature; do [[ -x "$froot/$f" ]] || ipalpha_fail "feature ./$f missing"; done
 grep -q '^IPALPHA_INFRA_NAME=ipalpha-hello-test$' "$froot/.ipalpha/ports.env" || ipalpha_fail "feature infra name"
@@ -108,10 +111,25 @@ echo "== second feature gets another port block"
 grep -q '^mongo_port=27217$' "$root/features/second-one/.ipalpha/settings" || ipalpha_fail "second feature port block"
 (cd "$root" && ./feature new second-one >/dev/null 2>&1) && ipalpha_fail "duplicate feature accepted"
 
+echo "== failed new rolls back"
+git -C "$root/core/mordomia-webapp" checkout -q -b feat/rollback-me
+(cd "$root" && ./feature new rollback-me >/dev/null 2>&1) && ipalpha_fail "new succeeded with a branch checked out elsewhere"
+[[ ! -e "$root/features/rollback-me" ]] || ipalpha_fail "rollback left the folder"
+git -C "$root/core/auth-api" rev-parse -q --verify refs/heads/feat/rollback-me >/dev/null && ipalpha_fail "rollback left a created branch"
+[[ -z "$(git -C "$root/core/auth-api" worktree list | grep rollback-me)" ]] || ipalpha_fail "rollback left a worktree"
+git -C "$root/core/mordomia-webapp" rev-parse -q --verify refs/heads/feat/rollback-me >/dev/null || ipalpha_fail "rollback deleted a pre-existing branch"
+git -C "$root/core/mordomia-webapp" checkout -q master
+
 echo "== publish --feature"
 inplace() { if sed --version >/dev/null 2>&1; then sed -i "$@"; else sed -i '' "$@"; fi; }
 inplace 's/^ai_cli=.*/ai_cli=bogus/' "$froot/.ipalpha/settings"
 echo "change" >>"$froot/core/forms-webapp/README.md"
+out="$(cd "$froot" && ./publish --dry-run </dev/null 2>&1)" || ipalpha_fail "dry-run failed: $out"
+[[ -n "$(git -C "$froot/core/forms-webapp" status --porcelain)" ]] || ipalpha_fail "dry-run committed"
+git -C "$IPALPHA_TEST_ORIGINS/deployment.git" show master:previews/hello-test/release.json >/dev/null 2>&1 \
+  && ipalpha_fail "dry-run pushed a record"
+(cd "$froot" && ./publish --feature hello-test --folder forms-webapp </dev/null >/dev/null 2>&1) \
+  && ipalpha_fail "--feature accepted release flags"
 out="$(cd "$froot" && ./publish --no-wait </dev/null 2>&1)" || ipalpha_fail "publish --feature failed: $out"
 grep -q 'Changed services: forms-webapp$' <<<"$out" || ipalpha_fail "changed services wrong: $out"
 git -C "$IPALPHA_TEST_ORIGINS/forms-webapp.git" rev-parse -q --verify refs/heads/feat/hello-test >/dev/null \
@@ -157,6 +175,19 @@ node -e '
     { console.error(r); process.exit(1); }
 ' "$record" || ipalpha_fail "extend lost CI fields"
 
+echo "== teammate push is never overwritten"
+f2="$root/features/second-one"
+inplace 's/^ai_cli=.*/ai_cli=bogus/' "$f2/.ipalpha/settings"
+echo a >>"$f2/core/forms-webapp/README.md"
+(cd "$f2" && ./publish --no-wait </dev/null >/dev/null 2>&1) || ipalpha_fail "second-one publish failed"
+mate="$ipalpha_tmp/mate"; git clone -q -b feat/second-one "$IPALPHA_TEST_ORIGINS/forms-webapp.git" "$mate"
+echo mate >>"$mate/README.md"; git -C "$mate" commit -qam "teammate work"; git -C "$mate" push -q origin feat/second-one
+git -C "$f2/core/forms-webapp" fetch -q origin   # a fetch must not turn into permission to overwrite
+echo b >>"$f2/core/forms-webapp/README.md"
+(cd "$f2" && ./publish --no-wait </dev/null >/dev/null 2>&1) && ipalpha_fail "publish overwrote a teammate push"
+[[ "$(git -C "$IPALPHA_TEST_ORIGINS/forms-webapp.git" log -1 --format=%s feat/second-one)" == "teammate work" ]] \
+  || ipalpha_fail "teammate commit lost"
+
 echo "== list"
 out="$(cd "$root" && ./feature list 2>&1)" || ipalpha_fail "list failed"
 grep -q 'hello-test' <<<"$out" && grep -q 'live' <<<"$out" || ipalpha_fail "list output: $out"
@@ -175,5 +206,13 @@ node -e '
   const r = JSON.parse(process.argv[1]);
   if (r.action !== "destroy" || new Date(r.expiresAt) > new Date()) { console.error(r); process.exit(1); }
 ' "$record" || ipalpha_fail "destroy record wrong"
+
+echo "== new reuses a kept branch"
+out="$(cd "$root" && ./feature new hello-test 2>&1)" || ipalpha_fail "re-new failed: $out"
+node -e '
+  const r = require(process.argv[1]), f = r.repositories["forms-webapp"];
+  if (f.featureCommit === f.baseCommit) { console.error(f); process.exit(1); }
+' "$froot/.ipalpha/release.json" || ipalpha_fail "reused branch commits not reflected"
+[[ "$(git -C "$froot/core/forms-webapp" log -1 --format=%s)" != init ]] || ipalpha_fail "reused branch lost its commits"
 
 echo "feature-test: all assertions passed"

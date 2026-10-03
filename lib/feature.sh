@@ -22,6 +22,7 @@ ipalpha_feature_validate_slug() {
   [[ "$slug" =~ ^[a-z0-9-]{3,30}$ ]] || { ipalpha_feature_fail "$(ipalpha_msg feature_bad_slug): $slug"; return 1; }
   # DNS labels cannot start or end with a hyphen.
   [[ "$slug" != -* && "$slug" != *- ]] || { ipalpha_feature_fail "$(ipalpha_msg feature_bad_slug): $slug"; return 1; }
+  # Spec rule: every whole host ≤ 63 chars (stricter than the per-label DNS limit).
   for host in $(ipalpha_feature_hosts "$slug"); do
     (( ${#host} <= 63 )) || { ipalpha_feature_fail "host longer than 63 chars: $host"; return 1; }
   done
@@ -41,10 +42,6 @@ ipalpha_feature_main_root() {
 
 ipalpha_feature_dir() { echo "$1/features/$2"; }
 
-# Repositories that live in a feature workspace (everything the main workspace clones).
-ipalpha_feature_repos() {
-  ipalpha_all_repos
-}
 
 ipalpha_feature_now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 
@@ -87,31 +84,53 @@ ipalpha_feature_base_commit() {
   echo "$commit"
 }
 
+# Fetch every main clone in parallel (baseline commits/tags must be local before resolving).
+ipalpha_feature_fetch_all() {
+  local main="$1" repo dir
+  local -a pids=()
+  for repo in $(ipalpha_all_repos); do
+    dir="$(ipalpha_repo_path "$main" "$repo")"
+    ipalpha_is_git_repo "$dir" || continue
+    git -C "$dir" fetch -q --tags origin 2>/dev/null &
+    pids+=("$!")
+  done
+  for repo in "${pids[@]}"; do wait "$repo" || echo "  warning: a fetch failed (offline?)" >&2; done
+}
+
+# Prints the commit to record as baseCommit. A reused feat/<slug> (kept by destroy, or pushed by a
+# teammate) keeps its commits; its base becomes the merge-base so ./feature rebase moves it.
 ipalpha_feature_add_worktree() {
   local src="$1" dest="$2" branch="$3" base="$4"
   ipalpha_is_git_repo "$src" || { ipalpha_feature_fail "missing repository: $src"; return 1; }
-  git -C "$src" fetch -q origin || echo "  warning: fetch failed for $src" >&2
   git -C "$src" cat-file -e "$base^{commit}" 2>/dev/null \
     || { ipalpha_feature_fail "commit $base not found in $src"; return 1; }
   mkdir -p "$(dirname "$dest")"
   if git -C "$src" show-ref --verify --quiet "refs/heads/$branch"; then
-    git -C "$src" worktree add -q "$dest" "$branch"
+    git -C "$src" worktree add -q "$dest" "$branch" >&2 || return 1
   elif git -C "$src" show-ref --verify --quiet "refs/remotes/origin/$branch"; then
-    git -C "$src" worktree add -q --track -b "$branch" "$dest" "origin/$branch"
+    git -C "$src" worktree add -q --track -b "$branch" "$dest" "origin/$branch" >&2 || return 1
   else
-    git -C "$src" worktree add -q --no-track -b "$branch" "$dest" "$base"
+    git -C "$src" worktree add -q --no-track -b "$branch" "$dest" "$base" >&2 || return 1
+    echo "$base"; return 0
   fi
+  if git -C "$dest" merge-base --is-ancestor HEAD "$base"; then
+    git -C "$dest" merge -q --ff-only "$base" >&2 && { echo "$base"; return 0; }
+  fi
+  echo "  $(basename "$src"): $branch already has commits — base = merge-base (./feature rebase to move it)" >&2
+  git -C "$dest" merge-base HEAD "$base"
 }
 
-# Every port variable a workspace owns, with its default.
-ipalpha_feature_port_vars() {
-  local repo
-  echo "ipalpha_port_mongo $ipalpha_default_mongo_port"
-  echo "ipalpha_port_redis $ipalpha_default_redis_port"
-  echo "ipalpha_port_rabbitmq $ipalpha_default_rabbitmq_port"
-  echo "ipalpha_port_rabbitmq_mgmt $ipalpha_default_rabbitmq_mgmt_port"
-  for repo in "${ipalpha_ms_order[@]}"; do echo "ipalpha_port_${repo//-/_} $(ipalpha_default_ms_port "$repo")"; done
-  for repo in "${ipalpha_web_repos[@]}"; do echo "ipalpha_port_${repo//-/_} $(ipalpha_default_web_port "$repo")"; done
+# Undo a half-created feature: its worktrees, the branches this run created, the folder.
+ipalpha_feature_rollback() {
+  local main="$1" froot="$2" repo dir entry
+  for repo in $(ipalpha_all_repos); do
+    dir="$(ipalpha_repo_path "$froot" "$repo")"
+    [[ -e "$dir/.git" ]] && git -C "$(ipalpha_repo_path "$main" "$repo")" worktree remove --force "$dir" 2>/dev/null
+  done
+  for entry in "${ipalpha_feature_created_branches[@]}"; do
+    git -C "${entry% *}" branch -q -D "${entry#* }" 2>/dev/null || true
+  done
+  rm -rf "$froot"
 }
 
 # Distinct local ports: the first +100·k offset that no other workspace (main or feature) has
@@ -124,7 +143,7 @@ ipalpha_feature_assign_ports() {
     offset=$((k * 100)); ok=1
     while read -r var default; do
       [[ "$used" == *" $((default + offset)) "* ]] && { ok=0; break; }
-    done < <(ipalpha_feature_port_vars)
+    done < <(ipalpha_port_vars)
     [[ "$ok" == 1 ]] && break
   done
   [[ "$ok" == 1 ]] || { ipalpha_feature_fail "no free port block for another feature"; return 1; }
@@ -133,7 +152,7 @@ ipalpha_feature_assign_ports() {
     main_port="${!var:-$default}"
     ipalpha_resolve_port "$var" "$((default + offset))" >/dev/null
     from+=("$main_port"); to+=("${!var}")
-  done < <(ipalpha_feature_port_vars)
+  done < <(ipalpha_port_vars)
   ipalpha_remap_from=("${from[@]}")
   ipalpha_remap_to=("${to[@]}")
 }
@@ -162,9 +181,9 @@ ipalpha_feature_write_draft() {
     const baseline = JSON.parse(fs.readFileSync(baselineFile, "utf8"));
     const repositories = {};
     for (const line of fs.readFileSync(reposFile, "utf8").split("\n").filter(Boolean)) {
-      const [repo, commit] = line.split(" ");
+      const [repo, base, head] = line.split(" ");
       repositories[repo] = { url: `git@github.com:${org}/${repo}.git`, baseRef: "master",
-        baseCommit: commit, featureCommit: commit };
+        baseCommit: base, featureCommit: head };
     }
     Object.assign(r, { schemaVersion: 1, feature: slug, namespace: `ipalpha-feat-${slug}`, owner,
       baselineRelease: { id: baseline.release || null, deploymentCommit: baselineCommit },
@@ -189,6 +208,15 @@ ipalpha_feature_materialize() {
   printf 'slug=%s\nmain_root=%s\n' "$slug" "$main" >"$froot/.ipalpha/feature.env"
 }
 
+# Local secrets copied into a worktree must never be committable: ignore them through the shared
+# info/exclude (no tracked .gitignore change), whatever the branch's .gitignore says.
+ipalpha_feature_exclude_env() {
+  local dir="$1" exclude
+  exclude="$(git -C "$dir" rev-parse --path-format=absolute --git-common-dir)/info/exclude"
+  mkdir -p "$(dirname "$exclude")"
+  grep -qxF '.env' "$exclude" 2>/dev/null || echo '.env' >>"$exclude"
+}
+
 ipalpha_feature_new() {
   local root="$1" slug="$2" main froot baseline baseline_commit repo base repos_file dest
   main="$(ipalpha_feature_main_root "$root")"
@@ -198,19 +226,46 @@ ipalpha_feature_new() {
   ipalpha_load_settings "$main" >/dev/null 2>&1 || true
 
   baseline="$(mktemp)"; repos_file="$(mktemp)"
-  baseline_commit="$(ipalpha_feature_read_baseline "$main" "$baseline")" || { rm -f "$baseline" "$repos_file"; return 1; }
+  ipalpha_feature_created_branches=()
+  if ! ipalpha_feature_new_into "$main" "$froot" "$slug" "$baseline" "$repos_file"; then
+    ipalpha_feature_rollback "$main" "$froot"
+    rm -f "$baseline" "$repos_file"
+    return 1
+  fi
+  rm -f "$baseline" "$repos_file"
+
+  echo
+  echo "$(ipalpha_msg feature_created): $froot"
+  echo "  cd features/$slug && ./run        # mongo :$ipalpha_port_mongo · web :$ipalpha_port_mordomia_webapp"
+  echo "  ./publish --feature $slug         # preview:"
+  for host in $(ipalpha_feature_hosts "$slug"); do echo "    https://$host"; done
+}
+
+ipalpha_feature_new_into() {
+  local main="$1" froot="$2" slug="$3" baseline="$4" repos_file="$5" baseline_commit repo base dest src had_branch
+  baseline_commit="$(ipalpha_feature_read_baseline "$main" "$baseline")" || return 1
   echo "$(ipalpha_msg feature_creating) $slug ($(node -p 'JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).release' "$baseline"))"
-  for repo in $(ipalpha_feature_repos); do
+  ipalpha_feature_fetch_all "$main"
+  for repo in $(ipalpha_all_repos); do
     if [[ "$repo" == deployment ]]; then
       base="$(git -C "$main/deployment" rev-parse origin/master)"
     else
-      base="$(ipalpha_feature_base_commit "$main" "$baseline" "$repo")" || { rm -f "$baseline" "$repos_file"; return 1; }
+      base="$(ipalpha_feature_base_commit "$main" "$baseline" "$repo")" || return 1
     fi
     dest="$(ipalpha_repo_path "$froot" "$repo")"
-    ipalpha_feature_add_worktree "$(ipalpha_repo_path "$main" "$repo")" "$dest" "feat/$slug" "$base" \
-      || { rm -f "$baseline" "$repos_file"; return 1; }
+    src="$(ipalpha_repo_path "$main" "$repo")"
+    git -C "$src" show-ref --verify --quiet "refs/heads/feat/$slug" && had_branch=true || had_branch=false
+    base="$(ipalpha_feature_add_worktree "$src" "$dest" "feat/$slug" "$base")" || return 1
+    # Runs in this shell (not the $(...) above) so a rollback knows which branches are ours.
+    [[ "$had_branch" == true ]] || ipalpha_feature_created_branches+=("$src feat/$slug")
+    ipalpha_feature_exclude_env "$dest"
+    # The push lease starts from what origin already has (a teammate's branch we build on).
+    if git -C "$dest" show-ref --verify --quiet "refs/remotes/origin/feat/$slug"; then
+      mkdir -p "$froot/.ipalpha"
+      echo "$repo $(git -C "$dest" rev-parse "refs/remotes/origin/feat/$slug")" >>"$froot/.ipalpha/pushed"
+    fi
     echo "  $repo → feat/$slug @ ${base:0:12}"
-    echo "$repo $base" >>"$repos_file"
+    echo "$repo $base $(git -C "$dest" rev-parse HEAD)" >>"$repos_file"
   done
 
   # Local environment: the main workspace's .env files, rewritten to this feature's ports.
@@ -228,7 +283,6 @@ ipalpha_feature_new() {
 
   ipalpha_feature_write_draft "$froot" "$slug" "$baseline" "$baseline_commit" "$repos_file"
   cp "$baseline" "$froot/.ipalpha/baseline.json"
-  rm -f "$baseline" "$repos_file"
 
   echo
   echo "$(ipalpha_msg feature_created): $froot"
@@ -326,36 +380,63 @@ ipalpha_feature_wait() {
 }
 
 # ./publish --feature <slug>: commit (bump none) and push feat/<slug>, then the release record.
+ipalpha_feature_pushed_get() {
+  [[ -f "$1/.ipalpha/pushed" ]] || return 0
+  sed -n "s/^$2 //p" "$1/.ipalpha/pushed" | tail -n1
+}
+
+ipalpha_feature_pushed_set() {
+  local froot="$1" repo="$2" sha="$3" tmp
+  tmp="$(mktemp)"
+  { grep -v "^$repo " "$froot/.ipalpha/pushed" 2>/dev/null || true; echo "$repo $sha"; } >"$tmp"
+  mv "$tmp" "$froot/.ipalpha/pushed"
+}
+
 ipalpha_feature_publish() {
-  local root="$1" slug="$2" wait="$3" engine="$4" model="$5"
-  local main froot record repo dir branch decision message base head sha changed
+  local root="$1" slug="$2" wait="$3" engine="$4" model="$5" dry_run="${6:-false}"
+  local main froot record repo dir branch decision message base head sha changed lease
   main="$(ipalpha_feature_main_root "$root")"
   froot="$(ipalpha_feature_dir "$main" "$slug")"
   record="$froot/.ipalpha/release.json"
   [[ -f "$record" ]] || { ipalpha_feature_fail "$(ipalpha_msg feature_missing): $slug"; return 1; }
   ipalpha_feature_validate_slug "$slug" || return 1
 
-  for repo in $(ipalpha_feature_repos); do
+  for repo in $(ipalpha_all_repos); do
     dir="$(ipalpha_repo_path "$froot" "$repo")"
     ipalpha_is_git_repo "$dir" || continue
     branch="$(git -C "$dir" symbolic-ref --short -q HEAD || true)"
     [[ "$branch" == "feat/$slug" ]] || { ipalpha_feature_fail "$repo is on '$branch', expected feat/$slug"; return 1; }
+    if [[ "$dry_run" == true ]]; then
+      [[ -z "$(git -C "$dir" status --porcelain)" ]] || echo "  $repo: uncommitted changes would be committed"
+      continue
+    fi
     if [[ -n "$(git -C "$dir" status --porcelain)" ]]; then
       decision="$(ipalpha_publish_ask_ai "$froot" "$repo" "$engine" "$model")"
       message="$(sed -n 3p <<<"$decision")"
       git -C "$dir" add -A
+      if git -C "$dir" diff --cached --name-only | grep -qE '(^|/)\.env$'; then
+        git -C "$dir" reset -q
+        ipalpha_feature_fail "$repo: refusing to commit a .env file"; return 1
+      fi
       git -C "$dir" commit -q -m "${message:-Update $repo}"
       echo "  $repo: ${message:-Update $repo}"
     fi
     base="$(ipalpha_feature_json "$record" 'return (r.repositories[args[0]]||{}).baseCommit||""' "$repo")"
     head="$(git -C "$dir" rev-parse HEAD)"
     ipalpha_feature_json "$record" 'r.repositories[args[0]].featureCommit = args[1]' "$repo" "$head"
-    if [[ "$head" != "$base" ]] || git -C "$dir" show-ref --verify --quiet "refs/remotes/origin/feat/$slug"; then
-      # Feature branches are rewritten by ./feature rebase; never force over someone else's push.
-      git -C "$dir" push -q --force-with-lease origin "feat/$slug" \
-        || { ipalpha_feature_fail "push failed: $repo"; return 1; }
+    lease="$(ipalpha_feature_pushed_get "$froot" "$repo")"
+    if [[ "$head" != "$base" || -n "$lease" ]] && [[ "$head" != "$lease" ]]; then
+      # Rebase rewrites feat/<slug>, hence force — but only over the tip this workspace last
+      # pushed (empty lease = the branch must not exist yet), never over a teammate's push.
+      git -C "$dir" push -q --force-with-lease="feat/$slug:$lease" origin "feat/$slug" \
+        || { ipalpha_feature_fail "push rejected for $repo (someone else pushed feat/$slug?)"; return 1; }
+      ipalpha_feature_pushed_set "$froot" "$repo" "$head"
     fi
   done
+  if [[ "$dry_run" == true ]]; then
+    echo "$(ipalpha_msg feature_changed) (committed): $(ipalpha_feature_changed_services "$record" | tr '\n' ' ')"
+    return 0
+  fi
 
   changed="$(ipalpha_feature_changed_services "$record")"
   echo "$(ipalpha_msg feature_changed): ${changed//$'\n'/ }"
@@ -400,7 +481,7 @@ ipalpha_feature_destroy() {
   main="$(ipalpha_feature_main_root "$root")"
   froot="$(ipalpha_feature_dir "$main" "$slug")"
   [[ "$root" != "$froot" ]] || { ipalpha_feature_fail "run destroy from the main workspace"; return 1; }
-  for repo in $(ipalpha_feature_repos); do
+  for repo in $(ipalpha_all_repos); do
     dir="$(ipalpha_repo_path "$froot" "$repo")"
     ipalpha_is_git_repo "$dir" || continue
     if [[ "$force" != true && -n "$(git -C "$dir" status --porcelain)" ]]; then
@@ -410,12 +491,12 @@ ipalpha_feature_destroy() {
   ipalpha_feature_confirm "$slug" "$yes" || return 1
   ipalpha_feature_request "$root" "$slug" destroy "$wait" || return 1
   # Branches stay (local and pushed); only the worktrees and the folder go.
-  for repo in $(ipalpha_feature_repos); do
+  for repo in $(ipalpha_all_repos); do
     dir="$(ipalpha_repo_path "$froot" "$repo")"
     ipalpha_is_git_repo "$dir" || continue
     git -C "$(ipalpha_repo_path "$main" "$repo")" worktree remove --force "$dir"
   done
-  [[ -x "$froot/.ipalpha/bin/infra-down" ]] && "$froot/.ipalpha/bin/infra-down" --purge >/dev/null 2>&1 || true
+  [[ -x "$froot/.ipalpha/bin/infra-down" ]] && "$froot/.ipalpha/bin/infra-down" --purge --volumes >/dev/null 2>&1 || true
   rm -rf "$froot"
   echo "$(ipalpha_msg feature_destroyed): $slug"
 }
@@ -428,7 +509,7 @@ ipalpha_feature_rebase() {
   [[ -f "$record" ]] || { ipalpha_feature_fail "$(ipalpha_msg feature_missing): $slug"; return 1; }
   baseline="$(mktemp)"
   baseline_commit="$(ipalpha_feature_read_baseline "$main" "$baseline")" || { rm -f "$baseline"; return 1; }
-  for repo in $(ipalpha_feature_repos); do
+  for repo in $(ipalpha_all_repos); do
     dir="$(ipalpha_repo_path "$froot" "$repo")"
     ipalpha_is_git_repo "$dir" || continue
     [[ -z "$(git -C "$dir" status --porcelain)" ]] || { rm -f "$baseline"; ipalpha_feature_fail "$repo has uncommitted changes"; return 1; }
