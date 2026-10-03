@@ -52,10 +52,13 @@ node -e '
       sourceCommit: r === "ai-api" ? "0".repeat(40) : head(r) };
   require("fs").mkdirSync(`${seed}/deployment/releases`, { recursive: true });
   require("fs").writeFileSync(`${seed}/deployment/releases/core-latest.json`, JSON.stringify({
-    schemaVersion: 1, release: "core-deploy-1", services,
+    schemaVersion: 1, release: "core-deploy-1", services, deployment: { commit: head("deployment") },
     libraries: { "shared-ui": { commit: head("shared-ui") } } }, null, 2));
 ' "$seed" "${apis[@]}"
+deployment_base="$(git -C "$seed/deployment" rev-parse HEAD)"   # the deploy commit the baseline records
 git -C "$seed/deployment" add -A && git -C "$seed/deployment" commit -q -m baseline && git -C "$seed/deployment" push -q origin master
+echo later >>"$seed/deployment/README.md"
+git -C "$seed/deployment" commit -qam "master moves on" && git -C "$seed/deployment" push -q origin master
 auth_base="$(git -C "$seed/auth-api" rev-parse HEAD)"
 echo more >>"$seed/auth-api/README.md"
 git -C "$seed/auth-api" commit -qam "after baseline" && git -C "$seed/auth-api" push -q origin master
@@ -83,6 +86,7 @@ for repo in "${repos[@]}"; do
   [[ "$(git -C "$dir" symbolic-ref --short HEAD)" == feat/hello-test ]] || ipalpha_fail "$repo not on feat/hello-test"
 done
 [[ "$(git -C "$froot/core/auth-api" rev-parse HEAD)" == "$auth_base" ]] || ipalpha_fail "auth-api not pinned to baseline"
+[[ "$(git -C "$froot/deployment" rev-parse HEAD)" == "$deployment_base" ]] || ipalpha_fail "deployment not pinned to the baseline deploy commit"
 [[ "$(git -C "$froot/core/shared-js" rev-parse HEAD)" == "$(git -C "$root/core/shared-js" rev-parse v1.0.0)" ]] \
   || ipalpha_fail "shared-js not pinned to the locked version tag"
 [[ -z "$(git -C "$root/core/auth-api" status --porcelain)" ]] || ipalpha_fail "main checkout touched"

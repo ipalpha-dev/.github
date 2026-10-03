@@ -54,7 +54,9 @@ ipalpha_feature_read_baseline() {
 }
 
 # Commit the baseline pins for a repository. shared-js is consumed from npm, so its commit is the
-# release tag of the version locked by the APIs; deployment follows master (manifests, not images).
+# release tag of the version locked by the APIs. deployment starts at the commit whose base/ the
+# baseline images were deployed with (core-latest.json deployment.commit): previews render base/
+# from feat/<slug>, so manifests always match the images (Kevyn).
 ipalpha_feature_base_commit() {
   local main="$1" baseline="$2" repo="$3"
   local commit version="" api api_commit
@@ -76,7 +78,7 @@ ipalpha_feature_base_commit() {
   esac
   commit="$(node -e '
     const b = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")), r = process.argv[2];
-    const s = (b.services || {})[r] || (b.libraries || {})[r];
+    const s = r === "deployment" ? b.deployment : ((b.services || {})[r] || (b.libraries || {})[r]);
     process.stdout.write((s && (s.sourceCommit || s.commit)) || "");
   ' "$baseline" "$repo")"
   [[ -n "$commit" ]] || { ipalpha_feature_fail "baseline has no commit for $repo"; return 1; }
@@ -246,11 +248,7 @@ ipalpha_feature_new_into() {
   echo "$(ipalpha_msg feature_creating) $slug ($(node -p 'JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).release' "$baseline"))"
   ipalpha_feature_fetch_all "$main"
   for repo in $(ipalpha_all_repos); do
-    if [[ "$repo" == deployment ]]; then
-      base="$(git -C "$main/deployment" rev-parse origin/master)"
-    else
-      base="$(ipalpha_feature_base_commit "$main" "$baseline" "$repo")" || return 1
-    fi
+    base="$(ipalpha_feature_base_commit "$main" "$baseline" "$repo")" || return 1
     dest="$(ipalpha_repo_path "$froot" "$repo")"
     src="$(ipalpha_repo_path "$main" "$repo")"
     git -C "$src" show-ref --verify --quiet "refs/heads/feat/$slug" && had_branch=true || had_branch=false
@@ -531,11 +529,7 @@ ipalpha_feature_rebase() {
     ipalpha_is_git_repo "$dir" || continue
     [[ -z "$(git -C "$dir" status --porcelain)" ]] || { rm -f "$baseline"; ipalpha_feature_fail "$repo has uncommitted changes"; return 1; }
     old="$(ipalpha_feature_json "$record" 'return r.repositories[args[0]].baseCommit' "$repo")"
-    if [[ "$repo" == deployment ]]; then
-      new="$(git -C "$dir" rev-parse origin/master)"
-    else
-      new="$(ipalpha_feature_base_commit "$main" "$baseline" "$repo")" || { rm -f "$baseline"; return 1; }
-    fi
+    new="$(ipalpha_feature_base_commit "$main" "$baseline" "$repo")" || { rm -f "$baseline"; return 1; }
     [[ "$old" != "$new" ]] || continue
     git -C "$dir" fetch -q origin || true
     if ! git -C "$dir" rebase -q --onto "$new" "$old"; then
