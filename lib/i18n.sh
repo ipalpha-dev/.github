@@ -224,6 +224,7 @@ Flags:
     en-US:publish_folder_unknown) echo "Unknown repo:" ;;
     pt-BR:help_feature) echo "Uso: ./feature <comando> [slug] [flags]
   new <slug>       worktrees em feat/<slug> a partir do último Core Deploy verde (features/<slug>/)
+  new <slug> --baseline <commit>  base registrada antes (commit do deployment master)
   list             features locais + estado/expiração do preview
   rebase [slug]    move a base para o último Core Deploy verde (rebase dos branches)
   extend [slug]    +72 h sem build
@@ -233,6 +234,7 @@ Flags:
 Flags: -y/--yes (sem confirmação), --no-wait (não espera o TeamCity), --force (destroy com mudanças locais)" ;;
     en-US:help_feature) echo "Usage: ./feature <command> [slug] [flags]
   new <slug>       worktrees on feat/<slug> from the last green Core Deploy (features/<slug>/)
+  new <slug> --baseline <commit>  an earlier recorded baseline (deployment master commit)
   list             local features + preview state/expiry
   rebase [slug]    move the baseline to the last green Core Deploy (rebases branches)
   extend [slug]    +72 h without a build

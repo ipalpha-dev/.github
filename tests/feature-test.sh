@@ -110,9 +110,24 @@ node -e '
   if (!ok) { console.error(JSON.stringify(r, null, 2)); process.exit(1); }
 ' "$froot/.ipalpha/release.json" || ipalpha_fail "draft release.json wrong"
 
+echo "== --baseline pins an earlier recorded baseline"
+old_baseline="$(git -C "$IPALPHA_TEST_ORIGINS/deployment.git" rev-parse master)"
+node -e '
+  const fs=require("fs"), f=process.argv[1], r=JSON.parse(fs.readFileSync(f));
+  r.release="core-deploy-2"; r.services["auth-api"].sourceCommit=process.argv[2];
+  fs.writeFileSync(f, JSON.stringify(r, null, 2));' "$seed/deployment/releases/core-latest.json" "$(git -C "$seed/auth-api" rev-parse HEAD)"
+git -C "$seed/deployment" commit -qam "[core-release] core-deploy-2" && git -C "$seed/deployment" push -q origin master
+out="$(cd "$root" && ./feature new pinned-old --baseline "$old_baseline" 2>&1)" || ipalpha_fail "--baseline failed: $out"
+grep -q 'core-deploy-1' <<<"$out" || ipalpha_fail "--baseline did not use the older record: $out"
+[[ "$(git -C "$root/features/pinned-old/core/auth-api" rev-parse HEAD)" == "$auth_base" ]] || ipalpha_fail "--baseline auth-api pin"
+out="$(cd "$root" && ./feature new pinned-new 2>&1)" || ipalpha_fail "default baseline failed: $out"
+grep -q 'core-deploy-2' <<<"$out" || ipalpha_fail "default did not use the newest record"
+(cd "$root" && ./feature new pinned-bad --baseline deadbeef >/dev/null 2>&1) && ipalpha_fail "accepted an unknown --baseline"
+[[ ! -e "$root/features/pinned-bad" ]] || ipalpha_fail "bad --baseline left a folder"
+
 echo "== second feature gets another port block"
 (cd "$root" && ./feature new second-one >/dev/null 2>&1) || ipalpha_fail "second feature failed"
-grep -q '^mongo_port=27217$' "$root/features/second-one/.ipalpha/settings" || ipalpha_fail "second feature port block"
+grep -q '^mongo_port=27417$' "$root/features/second-one/.ipalpha/settings" || ipalpha_fail "second feature port block"
 (cd "$root" && ./feature new second-one >/dev/null 2>&1) && ipalpha_fail "duplicate feature accepted"
 
 echo "== failed new rolls back"
