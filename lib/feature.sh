@@ -44,13 +44,19 @@ ipalpha_feature_dir() { echo "$1/features/$2"; }
 
 ipalpha_feature_now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 
-# Baseline = releases/core-latest.json on deployment master (last green Core Deploy).
+# Baseline = releases/core-latest.json on deployment master (last green Core Deploy), or as of an
+# earlier deployment commit with --baseline <rev> (e.g. to test a branch in the world it was written
+# for; `git log deployment/releases/core-latest.json` lists the recorded baselines).
 ipalpha_feature_read_baseline() {
-  local main="$1" out="$2" dep="$1/deployment"
+  local main="$1" out="$2" dep="$1/deployment" ref
   git -C "$dep" fetch -q origin master || { ipalpha_feature_fail "cannot fetch deployment master"; return 1; }
-  git -C "$dep" show origin/master:releases/core-latest.json >"$out" 2>/dev/null \
+  ref="$(git -C "$dep" rev-parse --verify -q "${ipalpha_feature_baseline_ref:-origin/master}^{commit}")" \
+    || { ipalpha_feature_fail "unknown deployment revision: $ipalpha_feature_baseline_ref"; return 1; }
+  git -C "$dep" merge-base --is-ancestor "$ref" origin/master \
+    || { ipalpha_feature_fail "--baseline must be a commit on deployment master"; return 1; }
+  git -C "$dep" show "$ref:releases/core-latest.json" >"$out" 2>/dev/null \
     || { ipalpha_feature_fail "$(ipalpha_msg feature_no_baseline)"; return 1; }
-  git -C "$dep" rev-parse origin/master
+  echo "$ref"
 }
 
 # Commit the baseline pins for a repository. shared-js is consumed from npm, so its commit is the
@@ -576,14 +582,19 @@ ipalpha_feature() {
   local root="$1"; shift
   local cmd="${1:-}" slug="" yes=false wait=true force=false arg
   [[ $# -gt 0 ]] && shift
-  for arg in "$@"; do
+  ipalpha_feature_baseline_ref=""
+  while [[ $# -gt 0 ]]; do
+    arg="$1"
     case "$arg" in
       -y|--yes) yes=true ;;
       --no-wait) wait=false ;;
       --force) force=true ;;
+      --baseline) shift; ipalpha_feature_baseline_ref="${1:?--baseline needs a deployment commit}" ;;
+      --baseline=*) ipalpha_feature_baseline_ref="${arg#*=}" ;;
       -*) ipalpha_feature_fail "unknown flag: $arg"; return 1 ;;
       *) slug="$arg" ;;
     esac
+    shift
   done
   # Inside a feature workspace the slug defaults to that feature.
   [[ -n "$slug" ]] || slug="$(ipalpha_feature_env_get "$root" slug 2>/dev/null || true)"
