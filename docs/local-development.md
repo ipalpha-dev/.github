@@ -141,33 +141,51 @@ Busy ports are remapped at setup; the mapping lives in `.ipalpha/settings` and
 ## Feature environments: `./feature`
 
 One feature = one isolated workspace, one `feat/<slug>` branch per touched repo, one preview
-namespace with three public hosts, alive 72 h after each successful publish. Full design and
-the CI side: `deployment/docs/feature-environments.md`.
+namespace with its own Mongo/Redis/RabbitMQ and public HTTPS hosts, alive 72 h after each
+successful publish. Design and CI side: `deployment/docs/feature-environments.md`.
 
 ```sh
-./feature new <slug>            # features/<slug>/: worktrees on feat/<slug> from the last green Core Deploy
-cd features/<slug> && ./run     # same as ./run, own ports (+100 per feature) and own infra containers
-./publish --feature <slug>      # commit (no version bump) + push feat/<slug>, deploy the preview, print URLs
-./feature list                  # local features, generation, expiry
-./feature extend <slug>         # +72 h without a build
-./feature rebase <slug>         # move to the latest green Core Deploy (rebases feat/<slug>)
-./feature reset <slug>          # restore the synthetic seed (asks for the slug)
-./feature destroy <slug>        # delete the preview (namespace, DNS, record); keeps branches
+./feature new hello-preview          # features/hello-preview/: worktrees on feat/hello-preview at the last green Core Deploy
+cd features/hello-preview
+# … change code (e.g. core/forms-webapp) …
+./run                                # optional: same as ./run, own ports (+100 per feature) and own infra containers
+./publish                            # = ./publish --feature hello-preview: commit (no version bump), push, deploy the preview
+cd ../..
+./feature list                       # local features, generation, expiry, preview namespaces
+./feature extend hello-preview       # +72 h without a build
+./feature rebase hello-preview       # move to the latest green Core Deploy (rebases feat/hello-preview)
+./feature reset hello-preview        # back to the synthetic seed (asks you to type the slug)
+./feature destroy hello-preview      # delete the preview (namespace, record → archive); keeps branches
 ```
 
-- Slug: `^[a-z0-9-]{3,30}$`, no hyphen at either end. Hosts:
-  `ipalpha-<slug>.kevyn.com.br` (Mordomia), `forms-ipalpha-<slug>.kevyn.com.br`,
-  `auth-ipalpha-<slug>.kevyn.com.br`.
-- Your main checkouts are never touched: `features/<slug>/core/<repo>` are `git worktree`s of
-  them. Inside a feature folder, plain `./publish` means `--feature <its slug>` — a feature never
-  cuts a release, tag or version bump; CI tags images `<version>-<slug>-<buildId>` itself.
+After a successful publish you get:
+
+| URL | What |
+| --- | --- |
+| `https://ipalpha-<slug>.kevyn.com.br` | Mordomia (with the `preview · <slug> · expires in Nh` badge) |
+| `https://forms-ipalpha-<slug>.kevyn.com.br` | IPAlpha Formulários |
+| `https://auth-ipalpha-<slug>.kevyn.com.br` | sign-in popup |
+| `https://ipalpha-<slug>.kevyn.com.br/mailbox` | captured e-mail/SMS: your login codes (shared `previews` account) |
+
+Sign in with a fixture account (all fictional — `deployment/fixtures/1/README.md`):
+`ana.superuser@example.test` (superuser), `bruno.cuidado@example.test` (steward), `carla@example.test`,
+`gabi.presbi@example.test`. Codes never reach a real phone or mailbox; read them in `/mailbox`.
+`ci.preview@example.test` is reserved for the pipeline's own sign-in check.
+
+- Slug: `^[a-z0-9-]{3,30}$`, no hyphen at either end.
+- Your main checkouts are never touched: `features/<slug>/core/<repo>` are `git worktree`s. Inside a
+  feature folder plain `./publish` means `--feature <slug>`: no release, tag or version bump — CI
+  tags images `<version>-<slug>-<buildId>` in its own build copy.
 - Unchanged services run the baseline images (`deployment/releases/core-latest.json`, pinned at
-  `./feature new`). Changing `shared-js` rebuilds every API; `shared-ui`, every web app.
-- `./publish --feature` pushes `previews/<slug>/release.json` to deployment master; TeamCity's
-  `Preview` build does the rest. Status is read from TeamCity's public REST API — no token on
-  your machine. `--no-wait` returns right after the push.
-- Previews only hold the synthetic seed. Login codes land in the preview's captured inbox, never
-  in a real phone or mailbox. Never copy member data into a preview.
+  `./feature new`); `shared-js` changes rebuild every API, `shared-ui` every web app. Manifests come
+  from your `feat/<slug>` branch of `deployment` (it starts where the baseline was deployed from).
+- How you learn the result without any CI token: `./publish` pushes `previews/<slug>/release.json`
+  to deployment master, TeamCity `Preview` runs, and CI's answer is its own record commit on master
+  (URLs + expiry are printed). `--no-wait` returns right after the push; failures show in TeamCity
+  (*Ip Alpha / Core / Previews / Preview*).
+- Data survives republishes; `reset` wipes it. 72 h without a publish or `extend` and the preview
+  (with its data) is deleted by `PreviewCleanup` / the cluster janitor.
+- Previews only hold synthetic data. Never copy member data into one (LGPD).
 
 ## Expected degraded integrations (local)
 

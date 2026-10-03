@@ -280,12 +280,6 @@ ipalpha_feature_new_into() {
 
   ipalpha_feature_write_draft "$froot" "$slug" "$baseline" "$baseline_commit" "$repos_file"
   cp "$baseline" "$froot/.ipalpha/baseline.json"
-
-  echo
-  echo "$(ipalpha_msg feature_created): $froot"
-  echo "  cd features/$slug && ./run        # mongo :$ipalpha_port_mongo · web :$ipalpha_port_mordomia_webapp"
-  echo "  ./publish --feature $slug         # preview:"
-  for host in $(ipalpha_feature_hosts "$slug"); do echo "    https://$host"; done
 }
 
 # Changed = featureCommit != baseCommit, plus the dependency closure (decision 9):
