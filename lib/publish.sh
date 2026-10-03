@@ -10,12 +10,14 @@ ipalpha_publish_help() {
   echo "  --npm-only       publish the existing shared-js release to npm"
   echo "  --tooling        publish workspace publisher changes"
   echo "  --deployment-path PATH  publish a selected non-secret deployment file"
+  echo "  --feature SLUG   commit + push feat/<slug> (no version bump) and deploy its preview"
+  echo "  --no-wait        with --feature: do not wait for the TeamCity Preview build"
 }
 
 # "Dirty" = uncommitted changes OR commits since the last release tag (v<version>).
 ipalpha_publish_repo_dirty() {
   local dir="$1" tag
-  [[ -d "$dir/.git" ]] || return 1
+  ipalpha_is_git_repo "$dir" || return 1
   [[ -n "$(git -C "$dir" status --porcelain 2>/dev/null)" ]] && return 0
   tag="$(git -C "$dir" describe --tags --abbrev=0 --match 'v*' 2>/dev/null)" || return 0
   [[ -n "$(git -C "$dir" log --oneline "${tag}..HEAD" 2>/dev/null)" ]]
@@ -279,7 +281,7 @@ ipalpha_publish_bump_deployment() {
   local root="$1" repo="$2" version="$3"
   local dep="$root/deployment" pattern file
   local -a image_files=()
-  [[ -d "$dep/.git" ]] || { echo "  $(ipalpha_msg publish_deployment_missing)"; return 0; }
+  ipalpha_is_git_repo "$dep" || { echo "  $(ipalpha_msg publish_deployment_missing)"; return 0; }
   pattern="${ipalpha_registry}/${repo}:"
   while IFS= read -r file; do
     [[ -n "$file" ]] || continue
@@ -343,7 +345,7 @@ ipalpha_publish_initialize() {
   [[ -d "$dir" && -f "$dir/package.json" && -f "$dir/.gitignore" ]] || {
     echo "New service needs package.json and .gitignore: $repo" >&2; return 1;
   }
-  [[ ! -d "$dir/.git" ]] || { echo "$repo: Git is already initialized"; return 0; }
+  ! ipalpha_is_git_repo "$dir" || { echo "$repo: Git is already initialized"; return 0; }
   if [[ "$dry_run" == true ]]; then
     echo "Initialize $repo on master and create private repository $ipalpha_org/$repo (no commit or push)"
     return 0
@@ -360,7 +362,7 @@ ipalpha_publish_initialize() {
 ipalpha_publish() {
   local root="$1"; shift
   local dry_run=false initialize=false npm_only=false resume=false tooling=false folder="" engine="${ipalpha_ai_cli:-pi}" model="${ipalpha_ai_model:-}"
-  local arg deployment_message="Update deployment configuration"
+  local arg deployment_message="Update deployment configuration" feature="" feature_wait=true
   local -a deployment_paths=()
   ipalpha_publish_ci=false
   while [[ $# -gt 0 ]]; do
@@ -372,6 +374,9 @@ ipalpha_publish() {
       --resume) resume=true ;;
       --tooling) tooling=true ;;
       --deployment-path) shift; deployment_paths+=("${1:?path required}") ;;
+      --feature) shift; feature="${1:?slug required}" ;;
+      --feature=*) feature="${arg#*=}" ;;
+      --no-wait) feature_wait=false ;;
       --message) shift; deployment_message="${1:?message required}" ;;
       -d|--dry-run) dry_run=true ;;
       -f|--folder) shift; folder="${1:-}" ;;
@@ -393,9 +398,25 @@ ipalpha_publish() {
     shift
   done
 
+  # A feature workspace never cuts releases: plain ./publish there means --feature <its slug>.
+  if [[ -z "$feature" && -f "$root/.ipalpha/feature.env" ]]; then
+    feature="$(sed -n 's/^slug=//p' "$root/.ipalpha/feature.env")"
+  fi
+  if [[ -n "$feature" ]]; then
+    if [[ "$tooling" == true || "$npm_only" == true || "$resume" == true || "$initialize" == true \
+          || -n "$folder" || ${#deployment_paths[@]} -gt 0 ]]; then
+      echo "--feature cannot be combined with release flags (--folder/--tooling/--npm-only/--resume/--initialize/--deployment-path)" >&2
+      return 1
+    fi
+    # shellcheck source=lib/feature.sh
+    source "$(dirname "${BASH_SOURCE[0]}")/feature.sh"
+    ipalpha_feature_publish "$root" "$feature" "$feature_wait" "$engine" "$model" "$dry_run"
+    return
+  fi
+
   if [[ "$tooling" == true ]]; then
     local tooling_dir="$root/.ipalpha/tooling"
-    [[ -d "$tooling_dir/.git" ]] || { echo "Workspace tooling repository missing" >&2; return 1; }
+    ipalpha_is_git_repo "$tooling_dir" || { echo "Workspace tooling repository missing" >&2; return 1; }
     if [[ "$dry_run" == true ]]; then
       git -C "$tooling_dir" diff --stat -- lib/common.sh lib/publish.sh
       return 0

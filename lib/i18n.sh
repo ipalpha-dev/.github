@@ -222,6 +222,50 @@ Flags:
     en-US:publish_aborted) echo "Aborted." ;;
     pt-BR:publish_folder_unknown) echo "Repo desconhecido:" ;;
     en-US:publish_folder_unknown) echo "Unknown repo:" ;;
+    pt-BR:help_feature) echo "Uso: ./feature <comando> [slug] [flags]
+  new <slug>       worktrees em feat/<slug> a partir do último Core Deploy verde (features/<slug>/)
+  list             features locais + estado/expiração do preview
+  rebase [slug]    move a base para o último Core Deploy verde (rebase dos branches)
+  extend [slug]    +72 h sem build
+  reset [slug]     confirma → restaura o seed sintético (mantém imagens)
+  destroy [slug]   confirma → apaga namespace/DNS/registro; mantém branches, remove worktrees
+  ./publish --feature <slug>   commit + push de feat/<slug> e deploy do preview
+Flags: -y/--yes (sem confirmação), --no-wait (não espera o TeamCity), --force (destroy com mudanças locais)" ;;
+    en-US:help_feature) echo "Usage: ./feature <command> [slug] [flags]
+  new <slug>       worktrees on feat/<slug> from the last green Core Deploy (features/<slug>/)
+  list             local features + preview state/expiry
+  rebase [slug]    move the baseline to the last green Core Deploy (rebases branches)
+  extend [slug]    +72 h without a build
+  reset [slug]     confirm → restore the synthetic seed (keeps images)
+  destroy [slug]   confirm → delete namespace/DNS/record; keeps branches, removes worktrees
+  ./publish --feature <slug>   commit + push feat/<slug> and deploy its preview
+Flags: -y/--yes (no confirmation), --no-wait (do not wait for TeamCity), --force (destroy with local changes)" ;;
+    pt-BR:feature_bad_slug) echo "slug inválido (use ^[a-z0-9-]{3,30}$, sem hífen nas pontas)" ;;
+    en-US:feature_bad_slug) echo "invalid slug (use ^[a-z0-9-]{3,30}$, no leading/trailing hyphen)" ;;
+    pt-BR:feature_no_baseline) echo "deployment master ainda não tem releases/core-latest.json (nenhum Core Deploy verde registrado)" ;;
+    en-US:feature_no_baseline) echo "deployment master has no releases/core-latest.json yet (no green Core Deploy recorded)" ;;
+    pt-BR:feature_exists) echo "feature já existe" ;;
+    en-US:feature_exists) echo "feature already exists" ;;
+    pt-BR:feature_missing) echo "feature não encontrada (rode ./feature new)" ;;
+    en-US:feature_missing) echo "feature not found (run ./feature new)" ;;
+    pt-BR:feature_creating) echo "Criando a feature" ;;
+    en-US:feature_creating) echo "Creating feature" ;;
+    pt-BR:feature_created) echo "Feature criada" ;;
+    en-US:feature_created) echo "Feature created" ;;
+    pt-BR:feature_changed) echo "Serviços alterados" ;;
+    en-US:feature_changed) echo "Changed services" ;;
+    pt-BR:feature_waiting) echo "Aguardando o pipeline Preview" ;;
+    en-US:feature_waiting) echo "Waiting for the Preview pipeline" ;;
+    pt-BR:feature_status_unavailable) echo "status do TeamCity indisponível — acompanhe em $ipalpha_teamcity_url (o registro já foi enviado)" ;;
+    en-US:feature_status_unavailable) echo "TeamCity status unavailable — follow it at $ipalpha_teamcity_url (the record was already pushed)" ;;
+    pt-BR:feature_failed) echo "Preview falhou" ;;
+    en-US:feature_failed) echo "Preview failed" ;;
+    pt-BR:feature_confirm) echo "Digite o slug para confirmar" ;;
+    en-US:feature_confirm) echo "Type the slug to confirm" ;;
+    pt-BR:feature_destroyed) echo "Feature removida (branches mantidos)" ;;
+    en-US:feature_destroyed) echo "Feature removed (branches kept)" ;;
+    pt-BR:feature_rebased) echo "Base atualizada" ;;
+    en-US:feature_rebased) echo "Baseline refreshed" ;;
     *) echo "$key" ;;
   esac
 }

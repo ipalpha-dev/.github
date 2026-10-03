@@ -7,6 +7,7 @@ MONGO_HOST_PORT=${ipalpha_port_mongo:-$ipalpha_default_mongo_port}
 REDIS_HOST_PORT=${ipalpha_port_redis:-$ipalpha_default_redis_port}
 RABBITMQ_HOST_PORT=${ipalpha_port_rabbitmq:-$ipalpha_default_rabbitmq_port}
 RABBITMQ_MGMT_HOST_PORT=${ipalpha_port_rabbitmq_mgmt:-$ipalpha_default_rabbitmq_mgmt_port}
+IPALPHA_INFRA_NAME=${ipalpha_infra_name:-ipalpha}
 EOF
 }
 
@@ -36,6 +37,7 @@ set -a
 # shellcheck disable=SC1091
 [[ -f "$ipalpha_dir/.env" ]] && source "$ipalpha_dir/.env"
 set +a
+infra="${IPALPHA_INFRA_NAME:-ipalpha}"
 
 runtime="container"
 if [[ -f "$ipalpha_dir/settings" ]]; then
@@ -91,39 +93,39 @@ wait_ready() {
 
 infra_up_container() {
   container system start >/dev/null 2>&1 || true
-  container network create ipalpha >/dev/null 2>&1 || true
-  container volume create ipalpha-mongo-data >/dev/null 2>&1 || true
-  container volume create ipalpha-redis-data >/dev/null 2>&1 || true
-  container volume create ipalpha-rabbitmq-data >/dev/null 2>&1 || true
+  container network create "$infra" >/dev/null 2>&1 || true
+  container volume create "$infra-mongo-data" >/dev/null 2>&1 || true
+  container volume create "$infra-redis-data" >/dev/null 2>&1 || true
+  container volume create "$infra-rabbitmq-data" >/dev/null 2>&1 || true
 
-  ensure_container ipalpha-mongo \
-    --network ipalpha \
+  ensure_container "$infra-mongo" \
+    --network "$infra" \
     --publish "${MONGO_HOST_PORT:-27017}:27017" \
     --env "MONGO_INITDB_ROOT_USERNAME=${MONGO_USERNAME:-ipalpha}" \
     --env "MONGO_INITDB_ROOT_PASSWORD=${MONGO_PASSWORD:-ipalpha}" \
-    --volume ipalpha-mongo-data:/data/db \
+    --volume "$infra-mongo-data":/data/db \
     mongo:8 || return 1
 
-  ensure_container ipalpha-redis \
-    --network ipalpha \
+  ensure_container "$infra-redis" \
+    --network "$infra" \
     --publish "${REDIS_HOST_PORT:-6379}:6379" \
-    --volume ipalpha-redis-data:/data \
+    --volume "$infra-redis-data":/data \
     redis:7-alpine --appendonly yes || return 1
 
-  ensure_container ipalpha-rabbitmq \
-    --network ipalpha \
+  ensure_container "$infra-rabbitmq" \
+    --network "$infra" \
     --publish "${RABBITMQ_HOST_PORT:-5672}:5672" \
     --publish "${RABBITMQ_MGMT_HOST_PORT:-15672}:15672" \
     --env "RABBITMQ_DEFAULT_USER=${RABBITMQ_USERNAME:-ipalpha}" \
     --env "RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASSWORD:-ipalpha}" \
-    --volume ipalpha-rabbitmq-data:/var/lib/rabbitmq \
+    --volume "$infra-rabbitmq-data":/var/lib/rabbitmq \
     rabbitmq:4-management || return 1
 
-  wait_ready ipalpha-mongo mongosh --quiet \
+  wait_ready "$infra-mongo" mongosh --quiet \
     --username "${MONGO_USERNAME:-ipalpha}" --password "${MONGO_PASSWORD:-ipalpha}" \
     --authenticationDatabase admin --eval 'db.adminCommand({ ping: 1 })'
-  wait_ready ipalpha-redis redis-cli ping
-  wait_ready ipalpha-rabbitmq rabbitmq-diagnostics -q ping
+  wait_ready "$infra-redis" redis-cli ping
+  wait_ready "$infra-rabbitmq" rabbitmq-diagnostics -q ping
 }
 
 compose() {
@@ -147,7 +149,7 @@ if [[ "$runtime" == "container" ]] && command -v container >/dev/null 2>&1; then
   fi
   if command -v docker >/dev/null 2>&1; then
     echo "warning: Apple container failed — falling back to Docker" >&2
-    for name in ipalpha-mongo ipalpha-redis ipalpha-rabbitmq; do
+    for name in "$infra-mongo" "$infra-redis" "$infra-rabbitmq"; do
       container stop "$name" >/dev/null 2>&1 || true
     done
   else
@@ -174,12 +176,14 @@ ipalpha_write_bin_infra_logs() {
 set -euo pipefail
 
 ipalpha_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+infra="$(sed -n 's/^IPALPHA_INFRA_NAME=//p' "$ipalpha_dir/ports.env" 2>/dev/null | head -n1)"
+infra="${infra:-ipalpha}"
 runtime="$(cat "$ipalpha_dir/.state/runtime" 2>/dev/null || echo docker)"
 
 if [[ "$runtime" == "container" ]]; then
   pids=()
   trap 'kill "${pids[@]}" 2>/dev/null || true' EXIT INT TERM
-  for name in ipalpha-mongo ipalpha-redis ipalpha-rabbitmq; do
+  for name in "$infra-mongo" "$infra-redis" "$infra-rabbitmq"; do
     container logs --follow -n 100 "$name" 2>&1 | sed -u "s/^/$(printf '%-17s' "$name")| /" &
     pids+=("$!")
   done
@@ -200,12 +204,21 @@ ipalpha_write_bin_infra_down() {
 set -euo pipefail
 
 ipalpha_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-purge=false
-[[ "${1:-}" == "--purge" ]] && purge=true
+infra="$(sed -n 's/^IPALPHA_INFRA_NAME=//p' "$ipalpha_dir/ports.env" 2>/dev/null | head -n1)"
+infra="${infra:-ipalpha}"
+purge=false volumes=false
+for arg in "$@"; do
+  case "$arg" in
+    --purge) purge=true ;;
+    --volumes) volumes=true ;;
+  esac
+done
 
 if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1 && [[ -f "$ipalpha_dir/compose.yaml" ]]; then
   compose=(docker compose --env-file "$ipalpha_dir/.env" --env-file "$ipalpha_dir/ports.env" -f "$ipalpha_dir/compose.yaml")
-  if [[ "$purge" == true ]]; then
+  if [[ "$purge" == true && "$volumes" == true ]]; then
+    "${compose[@]}" down --volumes >/dev/null 2>&1 || true
+  elif [[ "$purge" == true ]]; then
     "${compose[@]}" down >/dev/null 2>&1 || true
   else
     "${compose[@]}" stop >/dev/null 2>&1 || true
@@ -213,11 +226,12 @@ if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1 && [[ -f "$i
 fi
 
 if command -v container >/dev/null 2>&1; then
-  for name in ipalpha-mongo ipalpha-redis ipalpha-rabbitmq; do
+  for name in "$infra-mongo" "$infra-redis" "$infra-rabbitmq"; do
     container stop "$name" >/dev/null 2>&1 || true
     if [[ "$purge" == true ]]; then
       container delete --force "$name" >/dev/null 2>&1 || true
       rm -f "$ipalpha_dir/.state/$name.spec"
+      [[ "$volumes" == true ]] && container volume delete "$name-data" >/dev/null 2>&1 || true
     fi
   done
 fi
@@ -532,6 +546,9 @@ ipalpha_procs_asset() {
 ipalpha_install_procs() {
   local setup_root="$1" dest="$2"
   local url
+  if [[ -n "${IPALPHA_PROCS_BINARY:-}" && -x "$IPALPHA_PROCS_BINARY" ]]; then
+    cp "$IPALPHA_PROCS_BINARY" "$dest" && chmod +x "$dest" && return 0
+  fi
   if [[ -f "$setup_root/templates/procs/main.go" ]] && command -v go >/dev/null 2>&1; then
     if (cd "$setup_root/templates/procs" && CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o "$dest" .) >/dev/null 2>&1; then
       return 0
@@ -680,6 +697,32 @@ SCRIPT
   chmod +x "$root/publish"
 }
 
+ipalpha_write_root_feature() {
+  local root="$1"
+  cat >"$root/feature" <<'SCRIPT'
+#!/usr/bin/env bash
+set -euo pipefail
+
+ipalpha_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ipalpha_dir="$ipalpha_root/.ipalpha"
+
+if [[ ! -f "$ipalpha_dir/lib/feature.sh" ]]; then
+  echo "missing $ipalpha_dir/lib/feature.sh — run ./pull." >&2
+  exit 1
+fi
+
+for lib in i18n common settings clone env ports generate publish feature; do
+  # shellcheck disable=SC1090
+  source "$ipalpha_dir/lib/$lib.sh"
+done
+
+ipalpha_load_settings "$ipalpha_root" 2>/dev/null || ipalpha_i18n_init pt-BR
+
+ipalpha_feature "$ipalpha_root" "$@"
+SCRIPT
+  chmod +x "$root/feature"
+}
+
 ipalpha_materialize_workspace() {
   local setup_root="$1" target_root="$2"
   local dir="$target_root/.ipalpha"
@@ -721,6 +764,7 @@ ipalpha_materialize_workspace() {
   ipalpha_write_root_run "$target_root"
   ipalpha_write_root_pull "$target_root"
   ipalpha_write_root_publish "$target_root"
+  ipalpha_write_root_feature "$target_root"
 
   echo "$(ipalpha_msg writing_settings)"
   ipalpha_write_settings "$target_root"

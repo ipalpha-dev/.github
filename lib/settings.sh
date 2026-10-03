@@ -13,6 +13,7 @@ ipalpha_write_settings() {
     echo "ai_cli=${ipalpha_ai_cli:-pi}"
     echo "ai_model=${ipalpha_ai_model:-cpamc/muse-spark-1.3-contributor}"
     echo "runner=${ipalpha_runner:-auto}"
+    echo "infra_name=${ipalpha_infra_name:-ipalpha}"
     echo "mongo_port=${ipalpha_port_mongo:-$ipalpha_default_mongo_port}"
     echo "redis_port=${ipalpha_port_redis:-$ipalpha_default_redis_port}"
     echo "rabbitmq_port=${ipalpha_port_rabbitmq:-$ipalpha_default_rabbitmq_port}"
@@ -65,6 +66,7 @@ ipalpha_load_settings() {
       ai_cli) ipalpha_ai_cli="$val" ;;
       ai_model) ipalpha_ai_model="$val" ;;
       runner) ipalpha_runner="$val" ;;
+      infra_name) ipalpha_infra_name="$val" ;;
       mongo_port) ipalpha_port_mongo="$val" ;;
       redis_port) ipalpha_port_redis="$val" ;;
       rabbitmq_port) ipalpha_port_rabbitmq="$val" ;;

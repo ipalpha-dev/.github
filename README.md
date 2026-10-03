@@ -29,7 +29,8 @@ Layout gerado:
 IpAlpha/
 ├── core/           # shared-js, shared-ui, auth-api, auth-webapp, persons-api, organizations-api, projects-api, notifications-api
 ├── deployment/     # manifestos k8s (namespace ipalpha-core, imagens ghcr.io/ipalpha-dev/<ms>)
-├── run  publish  pull  set-keys
+├── features/     # ./feature new <slug> (worktrees, um por feature)
+├── run  publish  pull  feature  set-keys
 └── .ipalpha/       # settings, compose, portas, mprocs (opt-in), scripts auxiliares
 ```
 
@@ -40,6 +41,7 @@ IpAlpha/
 | `./run` | Infra (MongoDB, Redis, RabbitMQ) → instala dependências npm que faltam → os 5 serviços em background (runner embutido; use `IPALPHA_RUNNER=mprocs ./run` se preferir o painel) |
 | `./pull` | Atualiza todos os repositórios, clona os novos, adiciona chaves novas nos `.env` e atualiza `.ipalpha/` a partir deste repositório |
 | `./publish` | Repositórios alterados → IA escolhe versão + mensagem → commit/push → imagem `ghcr.io/ipalpha-dev/<ms>` (ou npm, para o shared-js) → atualiza `deployment/` |
+| `./feature new <slug>` | Ambiente de feature isolado: `features/<slug>/` com worktrees em `feat/<slug>` a partir do último Core Deploy verde; `./publish --feature <slug>` publica um preview em `ipalpha-<slug>.kevyn.com.br` (72 h). Ver [docs/local-development.md](docs/local-development.md#feature-environments-feature) |
 | `./set-keys` | Pergunta as chaves (SMS Barato, Comtele, superusuário) e grava nos `.env` locais |
 
 `./run --help`, `./publish --help`, `./pull --help` mostram o uso completo.

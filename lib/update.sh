@@ -2,7 +2,7 @@
 
 ipalpha_update_repo() {
   local dir="$1" name="$2"
-  if [[ ! -d "$dir/.git" ]]; then
+  if ! ipalpha_is_git_repo "$dir"; then
     return 0
   fi
   if ! git -C "$dir" fetch --quiet >/dev/null 2>&1; then
@@ -43,6 +43,17 @@ ipalpha_update_refresh_libs() {
 ipalpha_update() {
   local root="$1"
   local repo dir
+
+  # Feature workspaces hold worktrees on feat/<slug>: fetch only, ./feature rebase moves them.
+  if [[ -f "$root/.ipalpha/feature.env" ]]; then
+    for repo in $(ipalpha_all_repos); do
+      dir="$(ipalpha_repo_path "$root" "$repo")"
+      ipalpha_is_git_repo "$dir" && git -C "$dir" fetch -q origin 2>/dev/null && echo "  $repo: fetched"
+    done
+    ipalpha_update_refresh_libs "$root"
+    echo "$(ipalpha_msg update_done)"
+    return 0
+  fi
 
   echo "$(ipalpha_msg update_pulling)"
   local out pids=() repos=()
