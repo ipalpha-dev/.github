@@ -2,12 +2,11 @@
 # Feature environments: one isolated workspace (git worktrees on feat/<slug>) + one preview
 # namespace per feature. Design: deployment/docs/feature-environments.md (decisions are final).
 # The cluster side only reacts to previews/<slug>/release.json pushed to deployment master; this
-# file never talks to Kubernetes for writes and never holds a TeamCity token.
+# file never talks to Kubernetes for writes and never holds a TeamCity token (TeamCity reports the
+# outcome as a GitHub commit status and as its record commit on deployment master).
 # shellcheck disable=SC2154,SC2034  # workspace globals live in common.sh / settings.sh / ports.sh
 
 ipalpha_feature_domain="${IPALPHA_PREVIEW_DOMAIN:-kevyn.com.br}"
-ipalpha_teamcity_url="${IPALPHA_TEAMCITY_URL:-https://devops.kevyn.com.br}"
-ipalpha_preview_build_type="${IPALPHA_PREVIEW_BUILD_TYPE:-IpAlpha_Core_Previews_Preview}"
 ipalpha_feature_wait_minutes="${IPALPHA_FEATURE_WAIT_MINUTES:-60}"
 
 ipalpha_feature_fail() { echo "feature: $*" >&2; return 1; }
@@ -55,7 +54,9 @@ ipalpha_feature_read_baseline() {
 }
 
 # Commit the baseline pins for a repository. shared-js is consumed from npm, so its commit is the
-# release tag of the version locked by the APIs; deployment follows master (manifests, not images).
+# release tag of the version locked by the APIs. deployment starts at the commit whose base/ the
+# baseline images were deployed with (core-latest.json deployment.commit): previews render base/
+# from feat/<slug>, so manifests always match the images (Kevyn).
 ipalpha_feature_base_commit() {
   local main="$1" baseline="$2" repo="$3"
   local commit version="" api api_commit
@@ -77,7 +78,7 @@ ipalpha_feature_base_commit() {
   esac
   commit="$(node -e '
     const b = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")), r = process.argv[2];
-    const s = (b.services || {})[r] || (b.libraries || {})[r];
+    const s = r === "deployment" ? b.deployment : ((b.services || {})[r] || (b.libraries || {})[r]);
     process.stdout.write((s && (s.sourceCommit || s.commit)) || "");
   ' "$baseline" "$repo")"
   [[ -n "$commit" ]] || { ipalpha_feature_fail "baseline has no commit for $repo"; return 1; }
@@ -247,11 +248,7 @@ ipalpha_feature_new_into() {
   echo "$(ipalpha_msg feature_creating) $slug ($(node -p 'JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).release' "$baseline"))"
   ipalpha_feature_fetch_all "$main"
   for repo in $(ipalpha_all_repos); do
-    if [[ "$repo" == deployment ]]; then
-      base="$(git -C "$main/deployment" rev-parse origin/master)"
-    else
-      base="$(ipalpha_feature_base_commit "$main" "$baseline" "$repo")" || return 1
-    fi
+    base="$(ipalpha_feature_base_commit "$main" "$baseline" "$repo")" || return 1
     dest="$(ipalpha_repo_path "$froot" "$repo")"
     src="$(ipalpha_repo_path "$main" "$repo")"
     git -C "$src" show-ref --verify --quiet "refs/heads/feat/$slug" && had_branch=true || had_branch=false
@@ -348,35 +345,50 @@ ipalpha_feature_push_record() {
   ipalpha_feature_fail "could not push the release record after 5 attempts"
 }
 
-# Status comes from TeamCity's public (guest) REST API; no token on laptops.
+# Outcome without any CI token on the laptop: success = CI's record commit on deployment master
+# (lastResult.requestedAt == ours; destroy = record archived); failure = the GitHub commit status
+# TeamCity publishes on our record commit (read with the developer's own gh login).
 ipalpha_feature_wait() {
-  local main="$1" slug="$2" sha="$3" url deadline state="" last="" body build_state status text web
-  url="$ipalpha_teamcity_url/guestAuth/app/rest/builds?locator=buildType:(id:$ipalpha_preview_build_type),revision:$sha,state:any,defaultFilter:false,count:1&fields=build(id,state,status,statusText,webUrl)"
-  echo "$(ipalpha_msg feature_waiting) ($ipalpha_teamcity_url)"
+  local main="$1" slug="$2" sha="$3" requested="$4" action="$5" deadline record state last=""
+  echo "$(ipalpha_msg feature_waiting) (${sha:0:12})"
   deadline=$(( $(date +%s) + ipalpha_feature_wait_minutes * 60 ))
   while (( $(date +%s) < deadline )); do
-    body="$(curl -fsS -H 'Accept: application/json' "$url" 2>/dev/null)" || {
-      echo "  $(ipalpha_msg feature_status_unavailable)"; return 0; }
-    state="$(node -e 'const b=(JSON.parse(process.argv[1]).build||[])[0]; process.stdout.write(b?`${b.state}\t${b.status||""}\t${(b.statusText||"").replace(/\s+/g," ")}\t${b.webUrl||""}`:"")' "$body")"
-    if [[ -n "$state" && "$state" != "$last" ]]; then
-      IFS=$'\t' read -r build_state status text web <<<"$state"
-      echo "  ${build_state} ${status} ${text}"
-      last="$state"
-      if [[ "$build_state" == finished ]]; then
-        if [[ "$status" == SUCCESS ]]; then
-          git -C "$main/deployment" fetch -q origin master
-          git -C "$main/deployment" show "origin/master:previews/$slug/release.json" 2>/dev/null \
-            | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const r=JSON.parse(s);for(const h of r.hosts||[])console.log("  https://"+h);console.log("  expires: "+(r.expiresAt||"-"))})' \
-            || true
-          return 0
-        fi
-        echo "  $(ipalpha_msg feature_failed): $web" >&2
-        return 1
+    git -C "$main/deployment" fetch -q origin master 2>/dev/null || true
+    record="$(git -C "$main/deployment" show "origin/master:previews/$slug/release.json" 2>/dev/null || true)"
+    if [[ "$action" == destroy && -z "$record" ]]; then
+      echo "  $(ipalpha_msg feature_destroyed): $slug"
+      return 0
+    fi
+    if [[ -n "$record" ]] && node -e '
+      const r = JSON.parse(process.argv[1]), l = r.lastResult || {};
+      process.exit(l.requestedAt === process.argv[2] && l.status === "success" ? 0 : 1);
+    ' "$record" "$requested"; then
+      node -e '
+        const r = JSON.parse(process.argv[1]);
+        for (const h of r.hosts || []) console.log("  https://" + h);
+        console.log("  inbox: https://" + (r.hosts || [""])[0] + "/mailbox");
+        console.log("  expires: " + (r.expiresAt || "-") + "   build: " + ((r.teamcityBuild || {}).url || "-"));
+      ' "$record"
+      return 0
+    fi
+    if [[ -z "${IPALPHA_TEST_NO_GH:-}" ]] && command -v gh >/dev/null 2>&1; then
+      state="$(gh api "repos/${ipalpha_org}/deployment/commits/$sha/status" \
+        --jq '[.state, ((.statuses // [])[0].description // ""), ((.statuses // [])[0].target_url // "")] | join("\t")' 2>/dev/null || true)"
+      if [[ -n "$state" && "$state" != "$last" ]]; then
+        last="$state"
+        case "${state%%$'\t'*}" in
+          failure|error)
+            echo "  $(ipalpha_msg feature_failed): ${state#*$'\t'}" >&2
+            return 1
+            ;;
+          pending) echo "  ${state#*$'\t'}" ;;
+        esac
       fi
     fi
     sleep 15
   done
   echo "  $(ipalpha_msg feature_status_unavailable)"
+  return 1
 }
 
 # ./publish --feature <slug>: commit (bump none) and push feat/<slug>, then the release record.
@@ -440,16 +452,18 @@ ipalpha_feature_publish() {
 
   changed="$(ipalpha_feature_changed_services "$record")"
   echo "$(ipalpha_msg feature_changed): ${changed//$'\n'/ }"
+  requested="$(ipalpha_feature_now)"
   sha="$(ipalpha_feature_push_record "$main" "$slug" "$record" "[preview] $slug publish" '
     r.generation = (r.generation || 0) + 1;
     r.action = "publish";
     r.requestedAt = args[0];
     r.images = r.images || {};
-    for (const s of args[1].split("\n").filter(Boolean)) r.images[s] = {};
-  ' "$(ipalpha_feature_now)" "$changed")" || return 1
+    // Keep the previous digest/inputHash so CI skips rebuilding what did not change since.
+    for (const s of args[1].split("\n").filter(Boolean)) r.images[s] = r.images[s] || {};
+  ' "$requested" "$changed")" || return 1
   echo "  record: ${sha:0:12} (deployment master previews/$slug/)"
   [[ "$wait" == true ]] || return 0
-  ipalpha_feature_wait "$main" "$slug" "$sha"
+  ipalpha_feature_wait "$main" "$slug" "$sha" "$requested" publish
 }
 
 ipalpha_feature_confirm() {
@@ -461,19 +475,20 @@ ipalpha_feature_confirm() {
 }
 
 ipalpha_feature_request() {
-  local root="$1" slug="$2" action="$3" wait="$4" main froot record sha
+  local root="$1" slug="$2" action="$3" wait="$4" main froot record sha requested
   main="$(ipalpha_feature_main_root "$root")"
   froot="$(ipalpha_feature_dir "$main" "$slug")"
   record="$froot/.ipalpha/release.json"
   [[ -f "$record" ]] || { ipalpha_feature_fail "$(ipalpha_msg feature_missing): $slug"; return 1; }
+  requested="$(ipalpha_feature_now)"
   sha="$(ipalpha_feature_push_record "$main" "$slug" "$record" "[preview] $slug $action" '
     r.action = args[0];
     r.requestedAt = args[1];
     if (args[0] === "destroy") r.expiresAt = args[1];
-  ' "$action" "$(ipalpha_feature_now)")" || return 1
+  ' "$action" "$requested")" || return 1
   echo "  record: ${sha:0:12} ($action)"
   [[ "$wait" == true ]] || return 0
-  ipalpha_feature_wait "$main" "$slug" "$sha"
+  ipalpha_feature_wait "$main" "$slug" "$sha" "$requested" "$action"
 }
 
 ipalpha_feature_destroy() {
@@ -514,11 +529,7 @@ ipalpha_feature_rebase() {
     ipalpha_is_git_repo "$dir" || continue
     [[ -z "$(git -C "$dir" status --porcelain)" ]] || { rm -f "$baseline"; ipalpha_feature_fail "$repo has uncommitted changes"; return 1; }
     old="$(ipalpha_feature_json "$record" 'return r.repositories[args[0]].baseCommit' "$repo")"
-    if [[ "$repo" == deployment ]]; then
-      new="$(git -C "$dir" rev-parse origin/master)"
-    else
-      new="$(ipalpha_feature_base_commit "$main" "$baseline" "$repo")" || { rm -f "$baseline"; return 1; }
-    fi
+    new="$(ipalpha_feature_base_commit "$main" "$baseline" "$repo")" || { rm -f "$baseline"; return 1; }
     [[ "$old" != "$new" ]] || continue
     git -C "$dir" fetch -q origin || true
     if ! git -C "$dir" rebase -q --onto "$new" "$old"; then

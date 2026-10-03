@@ -256,8 +256,8 @@ Flags: -y/--yes (no confirmation), --no-wait (do not wait for TeamCity), --force
     en-US:feature_changed) echo "Changed services" ;;
     pt-BR:feature_waiting) echo "Aguardando o pipeline Preview" ;;
     en-US:feature_waiting) echo "Waiting for the Preview pipeline" ;;
-    pt-BR:feature_status_unavailable) echo "status do TeamCity indisponível — acompanhe em $ipalpha_teamcity_url (o registro já foi enviado)" ;;
-    en-US:feature_status_unavailable) echo "TeamCity status unavailable — follow it at $ipalpha_teamcity_url (the record was already pushed)" ;;
+    pt-BR:feature_status_unavailable) echo "sem resultado ainda — o registro já foi enviado; acompanhe o build Preview no TeamCity ou rode de novo mais tarde" ;;
+    en-US:feature_status_unavailable) echo "no result yet — the record was already pushed; follow the Preview build in TeamCity or check again later" ;;
     pt-BR:feature_failed) echo "Preview falhou" ;;
     en-US:feature_failed) echo "Preview failed" ;;
     pt-BR:feature_confirm) echo "Digite o slug para confirmar" ;;
