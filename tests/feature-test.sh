@@ -175,6 +175,13 @@ node -e '
     { console.error(r); process.exit(1); }
 ' "$record" || ipalpha_fail "extend lost CI fields"
 
+echo "== a publish keeps the previous image entries (CI reuses unchanged builds)"
+echo again >>"$froot/core/forms-webapp/README.md"
+(cd "$froot" && ./publish --no-wait </dev/null >/dev/null 2>&1) || ipalpha_fail "republish failed"
+git -C "$IPALPHA_TEST_ORIGINS/deployment.git" show master:previews/hello-test/release.json | node -e '
+  let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const r=JSON.parse(s); process.exit(r.images["auth-webapp"] && r.images["auth-webapp"].digest==="sha256:ci"?0:1)})' \
+  || ipalpha_fail "publish clobbered previous image entries"
+
 echo "== teammate push is never overwritten"
 f2="$root/features/second-one"
 inplace 's/^ai_cli=.*/ai_cli=bogus/' "$f2/.ipalpha/settings"
@@ -187,6 +194,28 @@ echo b >>"$f2/core/forms-webapp/README.md"
 (cd "$f2" && ./publish --no-wait </dev/null >/dev/null 2>&1) && ipalpha_fail "publish overwrote a teammate push"
 [[ "$(git -C "$IPALPHA_TEST_ORIGINS/forms-webapp.git" log -1 --format=%s feat/second-one)" == "teammate work" ]] \
   || ipalpha_fail "teammate commit lost"
+
+echo "== waits for the CI record (success via Git, no CI token)"
+export IPALPHA_TEST_NO_GH=1 IPALPHA_FEATURE_WAIT_MINUTES=1
+(
+  for _ in $(seq 1 40); do
+    git -C "$ci" fetch -q origin master && git -C "$ci" reset -q --hard origin/master
+    if node -e 'const r=require(process.argv[1]); process.exit(r.action==="extend" && r.requestedAt && (r.lastResult||{}).requestedAt!==r.requestedAt?0:1)' "$ci/previews/hello-test/release.json"; then
+      node -e '
+        const fs=require("fs"), f=process.argv[1], r=JSON.parse(fs.readFileSync(f));
+        r.lastResult={action:r.action, requestedAt:r.requestedAt, status:"success"}; r.expiresAt="2099-02-01T00:00:00Z";
+        fs.writeFileSync(f, JSON.stringify(r, null, 2));' "$ci/previews/hello-test/release.json"
+      git -C "$ci" commit -qam "[preview-ci] hello-test extend" && git -C "$ci" push -q origin master && exit 0
+    fi
+    sleep 0.5
+  done
+) &
+ci_sim=$!
+out="$(cd "$root" && ./feature extend hello-test 2>&1)" || ipalpha_fail "extend did not see the CI record: $out"
+wait "$ci_sim" || true
+grep -q 'https://ipalpha-hello-test.kevyn.com.br' <<<"$out" && grep -q '2099-02-01T00:00:00Z' <<<"$out" \
+  || ipalpha_fail "extend output lacks URLs/expiry: $out"
+unset IPALPHA_TEST_NO_GH IPALPHA_FEATURE_WAIT_MINUTES
 
 echo "== list"
 out="$(cd "$root" && ./feature list 2>&1)" || ipalpha_fail "list failed"
