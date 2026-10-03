@@ -9,6 +9,8 @@ ipalpha_ms_order=(projects-api persons-api organizations-api notifications-api a
 ipalpha_web_repos=(auth-webapp forms-webapp mordomia-webapp)
 ipalpha_root_repos=(deployment)
 ipalpha_tooling_repo=".github"
+# Compose project / container prefix; feature workspaces use ipalpha-<slug> so they run side by side.
+ipalpha_infra_name="${ipalpha_infra_name:-ipalpha}"
 
 ipalpha_default_mongo_port=27017
 ipalpha_default_redis_port=6379
@@ -59,6 +61,12 @@ ipalpha_repo_path() {
     *" $repo "*) echo "$root/$repo" ;;
     *) echo "$root/core/$repo" ;;
   esac
+}
+
+# Worktrees have a .git *file*, so never test -d "$dir/.git". The -e guard keeps a plain folder
+# nested in some other repository from answering for its parent.
+ipalpha_is_git_repo() {
+  [[ -e "$1/.git" ]] && git -C "$1" rev-parse --git-dir >/dev/null 2>&1
 }
 
 ipalpha_is_ms_repo() {

@@ -33,14 +33,14 @@ ipalpha_owns_port() {
         hp="${entry##*:}"
         [[ "$hp" == "$port" ]] && return 0
       done < <(docker port "$cid" 2>/dev/null)
-    done < <(docker ps -aq --filter "label=com.docker.compose.project=ipalpha" 2>/dev/null)
+    done < <(docker ps -aq --filter "label=com.docker.compose.project=${ipalpha_infra_name:-ipalpha}" 2>/dev/null)
   fi
   # Apple container: well-known infra names defined in lib/generate.sh.
   if command -v container >/dev/null 2>&1; then
     while IFS= read -r name; do
       [[ -z "$name" ]] && continue
       case "$name" in
-        ipalpha-mongo|ipalpha-redis|ipalpha-rabbitmq) ;;
+        "${ipalpha_infra_name:-ipalpha}"-mongo|"${ipalpha_infra_name:-ipalpha}"-redis|"${ipalpha_infra_name:-ipalpha}"-rabbitmq) ;;
         *) continue ;;
       esac
       while IFS= read -r entry; do

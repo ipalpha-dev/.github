@@ -8,7 +8,7 @@ ipalpha_fail() { echo "FAIL: $1" >&2; exit 1; }
 
 echo "== bash -n over setup, lib and tests"
 bash -n setup || ipalpha_fail "syntax error in setup"
-for ipalpha_script in lib/*.sh tests/*.sh tests/fake-clone; do
+for ipalpha_script in lib/*.sh tests/*.sh tests/fake-clone tests/local-clone; do
   [[ -f "$ipalpha_script" ]] || continue
   bash -n "$ipalpha_script" || ipalpha_fail "syntax error in $ipalpha_script"
 done
@@ -40,7 +40,7 @@ else
 fi
 
 echo "== i18n keys present in both languages"
-for key in cleanup update_tooling_ok update_tooling_fail choose_lang target_folder checking_tools done done_run_now update_done help_run help_pull help_publish publish_no_dirty publish_done update_no_settings; do
+for key in help_feature feature_bad_slug feature_no_baseline feature_confirm cleanup update_tooling_ok update_tooling_fail choose_lang target_folder checking_tools done done_run_now update_done help_run help_pull help_publish publish_no_dirty publish_done update_no_settings; do
   grep -q "pt-BR:$key)" lib/i18n.sh || ipalpha_fail "missing pt-BR i18n key: $key"
   grep -q "en-US:$key)" lib/i18n.sh || ipalpha_fail "missing en-US i18n key: $key"
 done
@@ -63,5 +63,8 @@ fi
 
 echo "== setup fixture test"
 "$ipalpha_repo_root/tests/setup-test.sh"
+
+echo "== feature workspace test"
+"$ipalpha_repo_root/tests/feature-test.sh"
 
 echo "validate.sh: all checks passed"

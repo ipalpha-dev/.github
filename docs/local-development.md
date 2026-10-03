@@ -138,6 +138,37 @@ Dev-only release (no prod rollout):
 Busy ports are remapped at setup; the mapping lives in `.ipalpha/settings` and
 `.ipalpha/ports.env`.
 
+## Feature environments: `./feature`
+
+One feature = one isolated workspace, one `feat/<slug>` branch per touched repo, one preview
+namespace with three public hosts, alive 72 h after each successful publish. Full design and
+the CI side: `deployment/docs/feature-environments.md`.
+
+```sh
+./feature new <slug>            # features/<slug>/: worktrees on feat/<slug> from the last green Core Deploy
+cd features/<slug> && ./run     # same as ./run, own ports (+100 per feature) and own infra containers
+./publish --feature <slug>      # commit (no version bump) + push feat/<slug>, deploy the preview, print URLs
+./feature list                  # local features, generation, expiry
+./feature extend <slug>         # +72 h without a build
+./feature rebase <slug>         # move to the latest green Core Deploy (rebases feat/<slug>)
+./feature reset <slug>          # restore the synthetic seed (asks for the slug)
+./feature destroy <slug>        # delete the preview (namespace, DNS, record); keeps branches
+```
+
+- Slug: `^[a-z0-9-]{3,30}$`, no hyphen at either end. Hosts:
+  `ipalpha-<slug>.kevyn.com.br` (Mordomia), `forms-ipalpha-<slug>.kevyn.com.br`,
+  `auth-ipalpha-<slug>.kevyn.com.br`.
+- Your main checkouts are never touched: `features/<slug>/core/<repo>` are `git worktree`s of
+  them. Inside a feature folder, plain `./publish` means `--feature <its slug>` — a feature never
+  cuts a release, tag or version bump; CI tags images `<version>-<slug>-<buildId>` itself.
+- Unchanged services run the baseline images (`deployment/releases/core-latest.json`, pinned at
+  `./feature new`). Changing `shared-js` rebuilds every API; `shared-ui`, every web app.
+- `./publish --feature` pushes `previews/<slug>/release.json` to deployment master; TeamCity's
+  `Preview` build does the rest. Status is read from TeamCity's public REST API — no token on
+  your machine. `--no-wait` returns right after the push.
+- Previews only hold the synthetic seed. Login codes land in the preview's captured inbox, never
+  in a real phone or mailbox. Never copy member data into a preview.
+
 ## Expected degraded integrations (local)
 
 - SMS providers need real `SMSBARATO_KEY` / `COMTELE_TOKEN` in

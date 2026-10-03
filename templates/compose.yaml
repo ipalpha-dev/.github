@@ -1,9 +1,9 @@
-name: ipalpha
+name: ${IPALPHA_INFRA_NAME:-ipalpha}
 
 services:
   mongo:
     image: mongo:8
-    container_name: ipalpha-mongo
+    container_name: ${IPALPHA_INFRA_NAME:-ipalpha}-mongo
     ports:
       - "${MONGO_HOST_PORT:-27017}:27017"
     environment:
@@ -27,7 +27,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: ipalpha-redis
+    container_name: ${IPALPHA_INFRA_NAME:-ipalpha}-redis
     ports:
       - "${REDIS_HOST_PORT:-6379}:6379"
     command: redis-server --appendonly yes
@@ -42,8 +42,8 @@ services:
 
   rabbitmq:
     image: rabbitmq:4-management
-    container_name: ipalpha-rabbitmq
-    hostname: ipalpha-rabbitmq
+    container_name: ${IPALPHA_INFRA_NAME:-ipalpha}-rabbitmq
+    hostname: ${IPALPHA_INFRA_NAME:-ipalpha}-rabbitmq
     ports:
       - "${RABBITMQ_HOST_PORT:-5672}:5672"
       - "${RABBITMQ_MGMT_HOST_PORT:-15672}:15672"
@@ -61,12 +61,12 @@ services:
 
 networks:
   default:
-    name: ipalpha
+    name: ${IPALPHA_INFRA_NAME:-ipalpha}
 
 volumes:
   mongo-data:
-    name: ipalpha-mongo-data
+    name: ${IPALPHA_INFRA_NAME:-ipalpha}-mongo-data
   redis-data:
-    name: ipalpha-redis-data
+    name: ${IPALPHA_INFRA_NAME:-ipalpha}-redis-data
   rabbitmq-data:
-    name: ipalpha-rabbitmq-data
+    name: ${IPALPHA_INFRA_NAME:-ipalpha}-rabbitmq-data
