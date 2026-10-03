@@ -28,6 +28,7 @@ Layout gerado:
 ```text
 IpAlpha/
 ├── core/           # shared-js, shared-ui, auth-api, auth-webapp, persons-api, organizations-api, projects-api, notifications-api
+├── apps/           # apps fora do core (namespace próprio em produção): apps/forms/{forms-api,forms-webapp}
 ├── deployment/     # manifestos k8s (namespace ipalpha-core, imagens ghcr.io/ipalpha-dev/<ms>)
 ├── features/     # ./feature new <slug> (worktrees, um por feature)
 ├── run  publish  pull  feature  set-keys

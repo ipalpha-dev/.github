@@ -138,6 +138,18 @@ Dev-only release (no prod rollout):
 Busy ports are remapped at setup; the mapping lives in `.ipalpha/settings` and
 `.ipalpha/ports.env`.
 
+## Core and apps
+
+`core/` holds the shared capabilities (auth, persons, projects, organizations, notifications, dispatch,
+ai, developers, shared-js, shared-ui) and the core UIs (Mordomia, the auth popup). Apps that only
+*consume* core live in `apps/<app>/` — today `apps/forms/{forms-api,forms-webapp}` — and run in their
+own namespace in production (`ipalpha-forms`, own Mongo/Redis, events to core over HTTP webhooks).
+They still depend on `../../../core/shared-js` / `shared-ui`. `./pull` moves an older workspace's
+`core/forms-*` (and its feature worktrees) to `apps/forms/` automatically.
+
+In a feature environment every core service always runs; an app joins only when one of its own
+repos changed — a forms change never deploys other apps.
+
 ## Feature environments: `./feature`
 
 One feature = one isolated workspace, one `feat/<slug>` branch per touched repo, one preview

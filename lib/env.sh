@@ -115,15 +115,18 @@ ipalpha_seed_local_clients() {
       ipalpha_env_set_key "$env_file" AUTH_CLIENT_SECRET "$secret"
     fi
   done
-  IPALPHA_ROOT="$root" IPALPHA_MS="${ipalpha_ms_order[*]}" node -e '
+  local paths=""
+  for repo in "${ipalpha_ms_order[@]}"; do paths+="$repo=$(ipalpha_repo_rel "$repo") "; done
+  IPALPHA_ROOT="$root" IPALPHA_MS_PATHS="$paths" node -e '
     const fs = require("fs");
     const path = require("path");
     const root = process.env.IPALPHA_ROOT;
     const read = f => Object.fromEntries(fs.readFileSync(f, "utf8").split("\n")
       .filter(l => /^[A-Za-z_][A-Za-z0-9_]*=/.test(l))
       .map(l => [l.slice(0, l.indexOf("=")), l.slice(l.indexOf("=") + 1).replace(/^["\x27]|["\x27]$/g, "")]));
-    const ours = process.env.IPALPHA_MS.split(" ").map(ms => {
-      const f = path.join(root, "core", ms, ".env");
+    const ours = process.env.IPALPHA_MS_PATHS.trim().split(" ").map(entry => {
+      const [ms, rel] = entry.split("=");
+      const f = path.join(root, rel, ".env");
       if (!fs.existsSync(f)) return null;
       const e = read(f);
       return e.AUTH_CLIENT_ID && e.AUTH_CLIENT_SECRET ? { clientId: e.AUTH_CLIENT_ID, secret: e.AUTH_CLIENT_SECRET, ms } : null;

@@ -17,6 +17,7 @@ export GIT_AUTHOR_NAME=test GIT_AUTHOR_EMAIL=test@example.invalid
 export GIT_COMMITTER_NAME=test GIT_COMMITTER_EMAIL=test@example.invalid
 
 ipalpha_fail() { echo "FAIL: $1" >&2; exit 1; }
+rel() { case "$1" in deployment) echo deployment ;; forms-api|forms-webapp) echo "apps/forms/$1" ;; *) echo "core/$1" ;; esac; }
 
 repos=(deployment shared-js shared-ui projects-api persons-api organizations-api notifications-api auth-api
   forms-api dispatch-api auth-webapp forms-webapp mordomia-webapp)
@@ -81,7 +82,7 @@ echo "== feature new"
 out="$(cd "$root" && ./feature new hello-test 2>&1)" || ipalpha_fail "feature new failed: $out"
 froot="$root/features/hello-test"
 for repo in "${repos[@]}"; do
-  dir="$froot/core/$repo"; [[ "$repo" == deployment ]] && dir="$froot/deployment"
+  dir="$froot/$(rel "$repo")"
   [[ -f "$dir/.git" ]] || ipalpha_fail "$repo is not a worktree (.git file)"
   [[ "$(git -C "$dir" symbolic-ref --short HEAD)" == feat/hello-test ]] || ipalpha_fail "$repo not on feat/hello-test"
 done
@@ -142,9 +143,9 @@ git -C "$root/core/mordomia-webapp" checkout -q master
 echo "== publish --feature"
 inplace() { if sed --version >/dev/null 2>&1; then sed -i "$@"; else sed -i '' "$@"; fi; }
 inplace 's/^ai_cli=.*/ai_cli=bogus/' "$froot/.ipalpha/settings"
-echo "change" >>"$froot/core/forms-webapp/README.md"
+echo "change" >>"$froot/apps/forms/forms-webapp/README.md"
 out="$(cd "$froot" && ./publish --dry-run </dev/null 2>&1)" || ipalpha_fail "dry-run failed: $out"
-[[ -n "$(git -C "$froot/core/forms-webapp" status --porcelain)" ]] || ipalpha_fail "dry-run committed"
+[[ -n "$(git -C "$froot/apps/forms/forms-webapp" status --porcelain)" ]] || ipalpha_fail "dry-run committed"
 git -C "$IPALPHA_TEST_ORIGINS/deployment.git" show master:previews/hello-test/release.json >/dev/null 2>&1 \
   && ipalpha_fail "dry-run pushed a record"
 (cd "$froot" && ./publish --feature hello-test --folder forms-webapp </dev/null >/dev/null 2>&1) \
@@ -157,7 +158,7 @@ if git -C "$IPALPHA_TEST_ORIGINS/auth-api.git" rev-parse -q --verify refs/heads/
   ipalpha_fail "unchanged auth-api branch pushed"
 fi
 [[ "$(node -p 'require(process.argv[1]).version' "$froot/core/auth-api/package.json")" == 0.1.0 ]] || ipalpha_fail "version bumped"
-[[ -z "$(git -C "$froot/core/forms-webapp" tag)" ]] || ipalpha_fail "prerelease tag created"
+[[ -z "$(git -C "$froot/apps/forms/forms-webapp" tag)" ]] || ipalpha_fail "prerelease tag created"
 record="$(git -C "$IPALPHA_TEST_ORIGINS/deployment.git" show master:previews/hello-test/release.json)" \
   || ipalpha_fail "record not on deployment master"
 node -e '
@@ -174,8 +175,9 @@ echo "x" >>"$froot/core/shared-js/README.md"
 record="$(git -C "$IPALPHA_TEST_ORIGINS/deployment.git" show master:previews/hello-test/release.json)"
 node -e '
   const r = JSON.parse(process.argv[1]);
-  const need = ["auth-api","dispatch-api","forms-api","notifications-api","organizations-api","persons-api","projects-api","forms-webapp"];
-  if (r.generation !== 2 || !need.every(s => s in r.images) || "auth-webapp" in r.images) { console.error(r); process.exit(1); }
+  // shared-js → core APIs only; forms-api (apps/forms) is not pulled in, forms-webapp is there because it changed.
+  const need = ["auth-api","dispatch-api","notifications-api","organizations-api","persons-api","projects-api","forms-webapp"];
+  if (r.generation !== 2 || !need.every(s => s in r.images) || "auth-webapp" in r.images || "forms-api" in r.images) { console.error(r); process.exit(1); }
 ' "$record" || ipalpha_fail "shared-js closure wrong"
 
 echo "== CI fields on master survive the next publish"
@@ -195,7 +197,7 @@ node -e '
 ' "$record" || ipalpha_fail "extend lost CI fields"
 
 echo "== a publish keeps the previous image entries (CI reuses unchanged builds)"
-echo again >>"$froot/core/forms-webapp/README.md"
+echo again >>"$froot/apps/forms/forms-webapp/README.md"
 (cd "$froot" && ./publish --no-wait </dev/null >/dev/null 2>&1) || ipalpha_fail "republish failed"
 git -C "$IPALPHA_TEST_ORIGINS/deployment.git" show master:previews/hello-test/release.json | node -e '
   let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const r=JSON.parse(s); process.exit(r.images["auth-webapp"] && r.images["auth-webapp"].digest==="sha256:ci"?0:1)})' \
@@ -204,12 +206,12 @@ git -C "$IPALPHA_TEST_ORIGINS/deployment.git" show master:previews/hello-test/re
 echo "== teammate push is never overwritten"
 f2="$root/features/second-one"
 inplace 's/^ai_cli=.*/ai_cli=bogus/' "$f2/.ipalpha/settings"
-echo a >>"$f2/core/forms-webapp/README.md"
+echo a >>"$f2/apps/forms/forms-webapp/README.md"
 (cd "$f2" && ./publish --no-wait </dev/null >/dev/null 2>&1) || ipalpha_fail "second-one publish failed"
 mate="$ipalpha_tmp/mate"; git clone -q -b feat/second-one "$IPALPHA_TEST_ORIGINS/forms-webapp.git" "$mate"
 echo mate >>"$mate/README.md"; git -C "$mate" commit -qam "teammate work"; git -C "$mate" push -q origin feat/second-one
-git -C "$f2/core/forms-webapp" fetch -q origin   # a fetch must not turn into permission to overwrite
-echo b >>"$f2/core/forms-webapp/README.md"
+git -C "$f2/apps/forms/forms-webapp" fetch -q origin   # a fetch must not turn into permission to overwrite
+echo b >>"$f2/apps/forms/forms-webapp/README.md"
 (cd "$f2" && ./publish --no-wait </dev/null >/dev/null 2>&1) && ipalpha_fail "publish overwrote a teammate push"
 [[ "$(git -C "$IPALPHA_TEST_ORIGINS/forms-webapp.git" log -1 --format=%s feat/second-one)" == "teammate work" ]] \
   || ipalpha_fail "teammate commit lost"
@@ -241,14 +243,14 @@ out="$(cd "$root" && ./feature list 2>&1)" || ipalpha_fail "list failed"
 grep -q 'hello-test' <<<"$out" && grep -q 'live' <<<"$out" || ipalpha_fail "list output: $out"
 
 echo "== destroy"
-echo dirty >>"$froot/core/forms-webapp/README.md"
+echo dirty >>"$froot/apps/forms/forms-webapp/README.md"
 (cd "$root" && ./feature destroy hello-test --yes --no-wait >/dev/null 2>&1) && ipalpha_fail "destroy ignored local changes"
-git -C "$froot/core/forms-webapp" checkout -q -- README.md
+git -C "$froot/apps/forms/forms-webapp" checkout -q -- README.md
 (cd "$root" && ./feature destroy hello-test </dev/null >/dev/null 2>&1) && ipalpha_fail "destroy without confirmation"
 out="$(cd "$root" && echo hello-test | ./feature destroy hello-test --no-wait 2>&1)" || ipalpha_fail "destroy failed: $out"
 [[ ! -e "$froot" ]] || ipalpha_fail "feature folder still there"
-git -C "$root/core/forms-webapp" rev-parse -q --verify refs/heads/feat/hello-test >/dev/null || ipalpha_fail "branch deleted"
-[[ -z "$(git -C "$root/core/forms-webapp" worktree list | grep hello-test)" ]] || ipalpha_fail "worktree still registered"
+git -C "$root/apps/forms/forms-webapp" rev-parse -q --verify refs/heads/feat/hello-test >/dev/null || ipalpha_fail "branch deleted"
+[[ -z "$(git -C "$root/apps/forms/forms-webapp" worktree list | grep hello-test)" ]] || ipalpha_fail "worktree still registered"
 record="$(git -C "$IPALPHA_TEST_ORIGINS/deployment.git" show master:previews/hello-test/release.json)"
 node -e '
   const r = JSON.parse(process.argv[1]);
@@ -261,6 +263,19 @@ node -e '
   const r = require(process.argv[1]), f = r.repositories["forms-webapp"];
   if (f.featureCommit === f.baseCommit) { console.error(f); process.exit(1); }
 ' "$froot/.ipalpha/release.json" || ipalpha_fail "reused branch commits not reflected"
-[[ "$(git -C "$froot/core/forms-webapp" log -1 --format=%s)" != init ]] || ipalpha_fail "reused branch lost its commits"
+[[ "$(git -C "$froot/apps/forms/forms-webapp" log -1 --format=%s)" != init ]] || ipalpha_fail "reused branch lost its commits"
+
+echo "== ./pull moves forms out of core/ (clone + feature worktrees)"
+mv "$root/apps/forms/forms-api" "$root/core/forms-api"            # an old-layout workspace
+git -C "$root/core/forms-api" worktree repair >/dev/null 2>&1 || true
+legacy="$root/features/hello-test/apps/forms/forms-api"
+mkdir -p "$root/features/hello-test/core"
+git -C "$root/core/forms-api" worktree move "$legacy" "$root/features/hello-test/core/forms-api"
+echo wip >"$root/features/hello-test/core/forms-api/wip.txt"
+(cd "$root" && ./pull >/dev/null 2>&1) || ipalpha_fail "pull failed after layout change"
+[[ -d "$root/apps/forms/forms-api/.git" && ! -e "$root/core/forms-api" ]] || ipalpha_fail "main clone not moved to apps/forms"
+[[ -f "$legacy/.git" && -f "$legacy/wip.txt" && ! -e "$root/features/hello-test/core/forms-api" ]] || ipalpha_fail "feature worktree not moved"
+[[ "$(git -C "$legacy" symbolic-ref --short HEAD)" == feat/hello-test ]] || ipalpha_fail "moved worktree lost its branch"
+git -C "$root/apps/forms/forms-api" worktree list | grep -q "$legacy" || ipalpha_fail "worktree not registered at the new path"
 
 echo "feature-test: all assertions passed"

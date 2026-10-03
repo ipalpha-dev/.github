@@ -71,13 +71,13 @@ ipalpha_feature_base_commit() {
       for api in "${ipalpha_ms_order[@]}"; do
         api_commit="$(node -e 'const b=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")); const s=(b.services||{})[process.argv[2]]; process.stdout.write((s&&s.sourceCommit)||"")' "$baseline" "$api")"
         [[ -n "$api_commit" ]] || continue
-        version="$(git -C "$main/core/$api" show "$api_commit:package-lock.json" 2>/dev/null \
+        version="$(git -C "$(ipalpha_repo_path "$main" "$api")" show "$api_commit:package-lock.json" 2>/dev/null \
           | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const p=JSON.parse(s).packages["node_modules/@ipalpha/shared-js"];process.stdout.write((p&&p.version)||"")}catch{}})')"
         [[ -n "$version" ]] && break
       done
       [[ -n "$version" ]] || { ipalpha_feature_fail "cannot resolve the baseline shared-js version"; return 1; }
-      git -C "$main/core/shared-js" fetch -q --tags origin || true
-      git -C "$main/core/shared-js" rev-parse --verify -q "v$version^{commit}" \
+      git -C "$(ipalpha_repo_path "$main" shared-js)" fetch -q --tags origin || true
+      git -C "$(ipalpha_repo_path "$main" shared-js)" rev-parse --verify -q "v$version^{commit}" \
         || { ipalpha_feature_fail "shared-js tag v$version not found"; return 1; }
       return 0
       ;;
@@ -289,7 +289,8 @@ ipalpha_feature_new_into() {
 }
 
 # Changed = featureCommit != baseCommit, plus the dependency closure (decision 9):
-# shared-js → every *-api, shared-ui → every *-webapp. ai-api is not cloned locally; CI applies
+# shared-js → every core *-api, shared-ui → every core *-webapp. Apps outside core (apps/<app>) join a
+# preview only when one of their own repos changed (Kevyn). ai-api is not cloned locally; CI applies
 # the same closure to it.
 ipalpha_feature_changed_services() {
   local record="$1"
@@ -297,10 +298,11 @@ ipalpha_feature_changed_services() {
     const repos = r.repositories || {};
     const changed = new Set(Object.keys(repos).filter(k => repos[k].featureCommit !== repos[k].baseCommit));
     const all = Object.keys(repos);
-    if (changed.has("shared-js")) all.filter(k => k.endsWith("-api")).forEach(k => changed.add(k));
-    if (changed.has("shared-ui")) all.filter(k => k.endsWith("-webapp")).forEach(k => changed.add(k));
+    const core = all.filter(k => !args[0].split(" ").includes(k));
+    if (changed.has("shared-js")) core.filter(k => k.endsWith("-api")).forEach(k => changed.add(k));
+    if (changed.has("shared-ui")) core.filter(k => k.endsWith("-webapp")).forEach(k => changed.add(k));
     return [...changed].filter(k => k !== "shared-js" && k !== "shared-ui" && k !== "deployment").sort().join("\n");
-  '
+  ' "$(for repo in $(ipalpha_all_repos); do ipalpha_app_of "$repo" >/dev/null && printf "%s " "$repo"; done)"
 }
 
 # Push previews/<slug>/release.json to deployment master without touching the developer's checkouts:

@@ -5,7 +5,7 @@ ipalpha_registry="${IPALPHA_REGISTRY:-registry.kevyn.com.br/ip-alpha/core}"
 
 ipalpha_ms_repos=(shared-js shared-ui projects-api persons-api organizations-api notifications-api auth-api forms-api dispatch-api)
 ipalpha_ms_order=(projects-api persons-api organizations-api notifications-api auth-api forms-api dispatch-api)
-# Standalone web apps under core/: cloned, deps installed, image published, no .env, run with Vite.
+# Standalone web apps: cloned, deps installed, image published, no .env, run with Vite.
 ipalpha_web_repos=(auth-webapp forms-webapp mordomia-webapp)
 ipalpha_root_repos=(deployment)
 ipalpha_tooling_repo=".github"
@@ -55,12 +55,30 @@ ipalpha_settings_file() {
   echo "$1/${ipalpha_settings_name}"
 }
 
-ipalpha_repo_path() {
-  local root="$1" repo="$2"
-  case " ${ipalpha_root_repos[*]} " in
-    *" $repo "*) echo "$root/$repo" ;;
-    *) echo "$root/core/$repo" ;;
+# Apps outside core (Kevyn): consumers of core with their own namespace in production. They live
+# under apps/<app>/<repo>; core capabilities and core UIs stay under core/<repo>.
+ipalpha_app_of() {
+  case "$1" in
+    forms-api|forms-webapp) echo forms ;;
+    *) return 1 ;;
   esac
+}
+
+# Workspace-relative folder of a repository.
+ipalpha_repo_rel() {
+  local repo="$1" app
+  case " ${ipalpha_root_repos[*]} " in
+    *" $repo "*) echo "$repo"; return 0 ;;
+  esac
+  if app="$(ipalpha_app_of "$repo")"; then
+    echo "apps/$app/$repo"
+  else
+    echo "core/$repo"
+  fi
+}
+
+ipalpha_repo_path() {
+  echo "$1/$(ipalpha_repo_rel "$2")"
 }
 
 # Worktrees have a .git *file*, so never test -d "$dir/.git". The -e guard keeps a plain folder
