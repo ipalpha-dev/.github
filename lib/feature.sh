@@ -346,10 +346,10 @@ ipalpha_feature_push_record() {
 }
 
 # Outcome without any CI token on the laptop: success = CI's record commit on deployment master
-# (lastResult.requestedAt == ours; destroy = record archived); failure = the GitHub commit status
-# TeamCity publishes on our record commit (read with the developer's own gh login).
+# (lastResult.requestedAt == ours; destroy = record archived). Failures are read in TeamCity
+# (Kevyn: no GitHub commit statuses); after the wait the command says where to look.
 ipalpha_feature_wait() {
-  local main="$1" slug="$2" sha="$3" requested="$4" action="$5" deadline record state last=""
+  local main="$1" slug="$2" sha="$3" requested="$4" action="$5" deadline record
   echo "$(ipalpha_msg feature_waiting) (${sha:0:12})"
   deadline=$(( $(date +%s) + ipalpha_feature_wait_minutes * 60 ))
   while (( $(date +%s) < deadline )); do
@@ -370,20 +370,6 @@ ipalpha_feature_wait() {
         console.log("  expires: " + (r.expiresAt || "-") + "   build: " + ((r.teamcityBuild || {}).url || "-"));
       ' "$record"
       return 0
-    fi
-    if [[ -z "${IPALPHA_TEST_NO_GH:-}" ]] && command -v gh >/dev/null 2>&1; then
-      state="$(gh api "repos/${ipalpha_org}/deployment/commits/$sha/status" \
-        --jq '[.state, ((.statuses // [])[0].description // ""), ((.statuses // [])[0].target_url // "")] | join("\t")' 2>/dev/null || true)"
-      if [[ -n "$state" && "$state" != "$last" ]]; then
-        last="$state"
-        case "${state%%$'\t'*}" in
-          failure|error)
-            echo "  $(ipalpha_msg feature_failed): ${state#*$'\t'}" >&2
-            return 1
-            ;;
-          pending) echo "  ${state#*$'\t'}" ;;
-        esac
-      fi
     fi
     sleep 15
   done

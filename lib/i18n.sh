@@ -258,8 +258,8 @@ Flags: -y/--yes (no confirmation), --no-wait (do not wait for TeamCity), --force
     en-US:feature_changed) echo "Changed services" ;;
     pt-BR:feature_waiting) echo "Aguardando o pipeline Preview" ;;
     en-US:feature_waiting) echo "Waiting for the Preview pipeline" ;;
-    pt-BR:feature_status_unavailable) echo "sem resultado ainda — o registro já foi enviado; acompanhe o build Preview no TeamCity ou rode de novo mais tarde" ;;
-    en-US:feature_status_unavailable) echo "no result yet — the record was already pushed; follow the Preview build in TeamCity or check again later" ;;
+    pt-BR:feature_status_unavailable) echo "sem resultado ainda — o registro já foi enviado; veja o build Preview em https://devops.kevyn.com.br (Ip Alpha / Core / Previews) — falhas aparecem só lá" ;;
+    en-US:feature_status_unavailable) echo "no result yet — the record was already pushed; see the Preview build at https://devops.kevyn.com.br (Ip Alpha / Core / Previews) — failures are shown only there" ;;
     pt-BR:feature_failed) echo "Preview falhou" ;;
     en-US:feature_failed) echo "Preview failed" ;;
     pt-BR:feature_confirm) echo "Digite o slug para confirmar" ;;
