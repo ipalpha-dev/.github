@@ -108,7 +108,9 @@ ipalpha_order="$(grep -E '^  "MS · ' "$ipalpha_tmp/IpAlpha/.ipalpha/mprocs.yaml
 persons-api
 organizations-api
 notifications-api
-auth-api" ]] || ipalpha_fail "mprocs order wrong: $ipalpha_order"
+auth-api
+forms-api
+dispatch-api" ]] || ipalpha_fail "mprocs order wrong: $ipalpha_order"
 
 echo "== localized help"
 help_run="$("$ipalpha_tmp/IpAlpha/run" --help 2>&1)" || true
@@ -152,6 +154,8 @@ echo "== publish smoke (no AI, dry-run aborts without changes)"
 repo_dir="$ipalpha_tmp/IpAlpha/core/projects-api"
 git init -q -b master "$repo_dir"
 git -C "$repo_dir" -c user.name=test -c user.email=test@example.invalid commit -q --allow-empty -m "root"
+git init -q --bare "$ipalpha_tmp/origin/projects-api.git"
+git -C "$repo_dir" remote add origin "$ipalpha_tmp/origin/projects-api.git"
 printf '{\n  "name": "projects-api",\n  "version": "0.0.0",\n  "scripts": { "start:dev": "node -e \\"console.log(1)\\"" }\n}\n' >"$repo_dir/package.json"
 echo "dirty" >"$repo_dir/notes.txt"
 inplace 's/^ai_cli=.*/ai_cli=bogus/' "$ipalpha_tmp/IpAlpha/.ipalpha/settings"
