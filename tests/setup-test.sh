@@ -182,7 +182,7 @@ ipalpha_out="$(
 [[ -z "$(git -C "$repo_dir" status --porcelain)" ]] || ipalpha_fail "publish left dirty repo"
 git -C "$repo_dir" log --format=%s -1 | grep -q 'Update projects-api' \
   || ipalpha_fail "publish commit message wrong: $(git -C "$repo_dir" log --format=%s -1)"
-git -C "$repo_dir" tag | grep -q '^v0\.0\.1$' || ipalpha_fail "publish tag missing"
+[[ -z "$(git -C "$repo_dir" tag | grep '^v0\.0\.1$')" ]] || ipalpha_fail "publish must not tag image repos (CI tags after deploy)"
 node -p 'require(process.argv[1]).version' "$repo_dir/package.json" | grep -q '^0\.0\.1$' \
   || ipalpha_fail "publish version not bumped"
 
