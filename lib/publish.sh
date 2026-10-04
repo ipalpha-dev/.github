@@ -14,13 +14,19 @@ ipalpha_publish_help() {
   echo "  --no-wait        with --feature: do not wait for the TeamCity Preview build"
 }
 
-# "Dirty" = uncommitted changes OR commits since the last release tag (v<version>).
+# Image repos are tagged v<version> by CI once that version runs in production (Kevyn); libraries
+# (shared-js/shared-ui) are tagged here when published. ./publish only bumps package.json.
+ipalpha_publish_tags_locally() { [[ "$1" == shared-js || "$1" == shared-ui ]]; }
+
+# "Dirty" = uncommitted changes OR commits since the last tag whose version was not bumped yet
+# (a bumped-but-not-deployed repo is already marked; nothing more to publish).
 ipalpha_publish_repo_dirty() {
   local dir="$1" tag
   ipalpha_is_git_repo "$dir" || return 1
   [[ -n "$(git -C "$dir" status --porcelain 2>/dev/null)" ]] && return 0
   tag="$(git -C "$dir" describe --tags --abbrev=0 --match 'v*' 2>/dev/null)" || return 0
-  [[ -n "$(git -C "$dir" log --oneline "${tag}..HEAD" 2>/dev/null)" ]]
+  [[ -n "$(git -C "$dir" log --oneline "${tag}..HEAD" 2>/dev/null)" ]] || return 1
+  [[ "$(ipalpha_publish_current_version "$dir")" == "${tag#v}" ]]
 }
 
 ipalpha_publish_dirty_repos() {
@@ -315,11 +321,11 @@ ipalpha_publish_repo() {
   if ! git -C "$dir" diff --cached --quiet; then
     git -C "$dir" commit -q -m "$message"
   fi
-  if [[ "$bump" != "none" ]]; then
+  if [[ "$bump" != "none" ]] && ipalpha_publish_tags_locally "$repo"; then
     git -C "$dir" tag "v${version}"
   fi
   git -C "$dir" push --set-upstream origin HEAD
-  if [[ "$bump" != "none" ]]; then
+  if [[ "$bump" != "none" ]] && ipalpha_publish_tags_locally "$repo"; then
     git -C "$dir" push origin "v${version}"
   fi
   if [[ "$bump" == "none" ]]; then
@@ -437,13 +443,9 @@ ipalpha_publish() {
     resume_dir="$(ipalpha_repo_path "$root" "$folder")"
     resume_version="$(ipalpha_publish_current_version "$resume_dir")"
     [[ -z "$(git -C "$resume_dir" status --porcelain)" ]] || { echo "$folder must be clean" >&2; return 1; }
-    [[ "$(git -C "$resume_dir" rev-parse "v$resume_version^{commit}")" == "$(git -C "$resume_dir" rev-parse HEAD)" ]] || {
-      echo "$folder HEAD must match its release tag" >&2; return 1;
-    }
     echo "Resume $folder $resume_version (no version bump or new commit)"
     [[ "$dry_run" == true ]] && return 0
     git -C "$resume_dir" push --set-upstream origin HEAD
-    git -C "$resume_dir" push origin "v$resume_version"
     if [[ "$ipalpha_publish_ci" != true ]]; then
       ipalpha_publish_build_image "$folder" "$resume_version" "$resume_dir" || return 1
     fi

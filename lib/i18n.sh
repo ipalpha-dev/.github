@@ -174,10 +174,10 @@ Reads language and ports from .ipalpha/settings." ;;
 
 Release de dev:
   • Detecta repos sujos em core/ e apps/ (multi-seleção se vários; todos marcados por padrão)
-  • IA escolhe bump semver + mensagem de commit
+  • IA escolhe bump semver + mensagem de commit (a versão vai no package.json)
   • Commit/push de cada repo escolhido
-  • Build/push da imagem ghcr.io/ipalpha-dev/<ms>
-  • Atualiza a tag da imagem em deployment/base/ e push
+  • Tag Git v<versão>: aqui só para shared-js/shared-ui; nos demais o TeamCity cria a tag
+    quando essa versão passa a rodar em produção (a imagem usa a versão como tag)
 
 Flags:
   -d, --dry-run     preview e opção de aplicar exatamente esse plano
@@ -189,10 +189,10 @@ Flags:
 
 Dev release:
   • Detect dirty repos under core/ and apps/ (multi-select when several; all selected by default)
-  • AI picks semver bump + commit message
+  • AI picks semver bump + commit message (the version goes into package.json)
   • Commit/push each selected repo
-  • Build/push image ghcr.io/ipalpha-dev/<ms>
-  • Bump the image tag in deployment/base/ and push it
+  • Git tag v<version>: here only for shared-js/shared-ui; other repos are tagged by TeamCity
+    once that version runs in production (the image tag is the version)
 
 Flags:
   -d, --dry-run     preview, then optionally apply that exact plan
@@ -200,8 +200,8 @@ Flags:
   --engine NAME     AI CLI for this run only
   clean             wipe the decision cache
   -h, --help        this help" ;;
-    pt-BR:publish_no_dirty) echo "Nada a publicar em core/ e apps/ (sem mudanças locais nem commits desde a última tag v*)." ;;
-    en-US:publish_no_dirty) echo "Nothing to publish under core/ and apps/ (no local changes and no commits since the last v* tag)." ;;
+    pt-BR:publish_no_dirty) echo "Nada a publicar em core/ e apps/ (sem mudanças locais; versões já marcadas aguardam o deploy)." ;;
+    en-US:publish_no_dirty) echo "Nothing to publish under core/ and apps/ (no local changes; bumped versions wait for the deploy)." ;;
     pt-BR:publish_select) echo "Repos sujos — toggle pelo número, Enter confirma" ;;
     en-US:publish_select) echo "Dirty repos — toggle by number, Enter confirms" ;;
     pt-BR:publish_plan) echo "Plano de publicação" ;;
