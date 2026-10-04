@@ -540,21 +540,41 @@ ipalpha_feature_rebase() {
   echo "$(ipalpha_msg feature_rebased): $slug"
 }
 
+# Every preview recorded on deployment master (previews/<slug>/release.json) plus local-only
+# features, with the public URLs of the deployed ones. Read-only: git + optional kubectl.
 ipalpha_feature_list() {
-  local root="$1" main dir slug remote
+  local root="$1" main dep dir slug record slugs=""
   main="$(ipalpha_feature_main_root "$root")"
-  git -C "$main/deployment" fetch -q origin master 2>/dev/null || true
-  printf '%-30s %-5s %-22s %s\n' feature gen expires state
+  dep="$main/deployment"
+  git -C "$dep" fetch -q origin master 2>/dev/null || true
+  slugs="$(git -C "$dep" ls-tree --name-only "origin/master:previews" 2>/dev/null | grep -v '^_' || true)"
   for dir in "$main"/features/*/; do
     [[ -f "$dir/.ipalpha/release.json" ]] || continue
-    slug="$(basename "$dir")"
-    remote="$(git -C "$main/deployment" show "origin/master:previews/$slug/release.json" 2>/dev/null || echo '{}')"
+    slugs="$slugs"$'\n'"$(basename "$dir")"
+  done
+  slugs="$(printf '%s\n' "$slugs" | sed '/^$/d' | sort -u)"
+  [[ -n "$slugs" ]] || { echo "$(ipalpha_msg feature_list_empty)"; return 0; }
+  printf '%-28s %-4s %-12s %-21s %s\n' feature gen state expires local
+  for slug in $slugs; do
+    record="$(git -C "$dep" show "origin/master:previews/$slug/release.json" 2>/dev/null \
+      || cat "$main/features/$slug/.ipalpha/release.json" 2>/dev/null || echo '{}')"
     node -e '
-      const r = JSON.parse(process.argv[2]);
+      const [slug, local, raw] = process.argv.slice(1);
+      const r = JSON.parse(raw);
       const exp = r.expiresAt ? new Date(r.expiresAt) : null;
-      const state = !r.generation ? "local only" : !exp ? "publishing" : exp < new Date() ? "expired" : "live";
-      console.log(process.argv[1].padEnd(30), String(r.generation || 0).padEnd(5), (r.expiresAt || "-").padEnd(22), state);
-    ' "$slug" "$remote"
+      const last = r.lastResult || {};
+      const pending = r.requestedAt && last.requestedAt !== r.requestedAt;
+      const state = !r.generation && !pending ? "local only"
+        : pending ? (r.action || "publish") + "…"
+        : last.status === "failed" ? "failed"
+        : !exp ? "publishing" : exp < new Date() ? "expired" : "live";
+      const left = exp && exp > new Date() ? " (" + Math.round((exp - Date.now()) / 36e5) + "h)" : "";
+      console.log(slug.padEnd(28), String(r.generation || 0).padEnd(4), state.padEnd(12),
+        ((r.expiresAt || "-") + left).padEnd(21), local);
+      if (state === "live" || state === "expired" || (pending && r.generation))
+        for (const h of r.hosts || []) console.log("  https://" + h);
+      if (state === "live") console.log("  https://" + (r.hosts || [])[0] + "/mailbox");
+    ' "$slug" "$([[ -d "$main/features/$slug" ]] && echo yes || echo -)" "$record"
   done
   if command -v kubectl >/dev/null 2>&1; then
     kubectl get ns -l ipalpha.dev/preview=true \

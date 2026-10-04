@@ -225,7 +225,7 @@ Flags:
     pt-BR:help_feature) echo "Uso: ./feature <comando> [slug] [flags]
   new <slug>       worktrees em feat/<slug> a partir do último Core Deploy verde (features/<slug>/)
   new <slug> --baseline <commit>  base registrada antes (commit do deployment master)
-  list             features locais + estado/expiração do preview
+  list | ls        previews publicados + features locais, com URLs e expiração
   rebase [slug]    move a base para o último Core Deploy verde (rebase dos branches)
   extend [slug]    +72 h sem build
   reset [slug]     confirma → restaura o seed sintético (mantém imagens)
@@ -235,7 +235,7 @@ Flags: -y/--yes (sem confirmação), --no-wait (não espera o TeamCity), --force
     en-US:help_feature) echo "Usage: ./feature <command> [slug] [flags]
   new <slug>       worktrees on feat/<slug> from the last green Core Deploy (features/<slug>/)
   new <slug> --baseline <commit>  an earlier recorded baseline (deployment master commit)
-  list             local features + preview state/expiry
+  list | ls        published previews + local features, with URLs and expiry
   rebase [slug]    move the baseline to the last green Core Deploy (rebases branches)
   extend [slug]    +72 h without a build
   reset [slug]     confirm → restore the synthetic seed (keeps images)
@@ -246,6 +246,8 @@ Flags: -y/--yes (no confirmation), --no-wait (do not wait for TeamCity), --force
     en-US:feature_bad_slug) echo "invalid slug (use ^[a-z0-9-]{3,30}$, no leading/trailing hyphen)" ;;
     pt-BR:feature_no_baseline) echo "deployment master ainda não tem releases/core-latest.json (nenhum Core Deploy verde registrado)" ;;
     en-US:feature_no_baseline) echo "deployment master has no releases/core-latest.json yet (no green Core Deploy recorded)" ;;
+    pt-BR:feature_list_empty) echo "nenhum preview publicado nem feature local" ;;
+    en-US:feature_list_empty) echo "no published preview and no local feature" ;;
     pt-BR:feature_exists) echo "feature já existe" ;;
     en-US:feature_exists) echo "feature already exists" ;;
     pt-BR:feature_missing) echo "feature não encontrada (rode ./feature new)" ;;
