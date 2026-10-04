@@ -173,11 +173,11 @@ Reads language and ports from .ipalpha/settings." ;;
     pt-BR:help_publish) echo "Uso: ./publish [flags]
 
 Release de dev:
-  • Detecta repos sujos em core/ (multi-seleção se vários; todos marcados por padrão)
+  • Detecta repos sujos em core/ e apps/ (multi-seleção se vários; todos marcados por padrão)
   • IA escolhe bump semver + mensagem de commit
   • Commit/push de cada repo escolhido
   • Build/push da imagem ghcr.io/ipalpha-dev/<ms>
-  • Atualiza a tag da imagem em deployment/core/<ms>/ e push
+  • Atualiza a tag da imagem em deployment/base/ e push
 
 Flags:
   -d, --dry-run     preview e opção de aplicar exatamente esse plano
@@ -188,11 +188,11 @@ Flags:
     en-US:help_publish) echo "Usage: ./publish [flags]
 
 Dev release:
-  • Detect dirty repos under core/ (multi-select when several; all selected by default)
+  • Detect dirty repos under core/ and apps/ (multi-select when several; all selected by default)
   • AI picks semver bump + commit message
   • Commit/push each selected repo
   • Build/push image ghcr.io/ipalpha-dev/<ms>
-  • Bump image tag in deployment/core/<ms>/ and push it
+  • Bump the image tag in deployment/base/ and push it
 
 Flags:
   -d, --dry-run     preview, then optionally apply that exact plan
@@ -200,8 +200,8 @@ Flags:
   --engine NAME     AI CLI for this run only
   clean             wipe the decision cache
   -h, --help        this help" ;;
-    pt-BR:publish_no_dirty) echo "Nada a publicar em core/ (sem mudanças locais nem commits desde a última tag v*)." ;;
-    en-US:publish_no_dirty) echo "Nothing to publish under core/ (no local changes and no commits since the last v* tag)." ;;
+    pt-BR:publish_no_dirty) echo "Nada a publicar em core/ e apps/ (sem mudanças locais nem commits desde a última tag v*)." ;;
+    en-US:publish_no_dirty) echo "Nothing to publish under core/ and apps/ (no local changes and no commits since the last v* tag)." ;;
     pt-BR:publish_select) echo "Repos sujos — toggle pelo número, Enter confirma" ;;
     en-US:publish_select) echo "Dirty repos — toggle by number, Enter confirms" ;;
     pt-BR:publish_plan) echo "Plano de publicação" ;;

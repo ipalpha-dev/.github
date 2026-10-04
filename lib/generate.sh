@@ -285,7 +285,7 @@ ipalpha_write_mprocs_yaml() {
     echo "procs:"
     for repo in "${ipalpha_ms_order[@]}"; do
       echo "  \"MS · $repo\":"
-      echo "    cwd: \"$root/core/$repo\""
+      echo "    cwd: \"$(ipalpha_repo_path "$root" "$repo")\""
       case "$repo" in
         projects-api) echo "    shell: \"$root/.ipalpha/bin/node-dev $repo\"" ;;
         auth-api) echo "    shell: \"$root/.ipalpha/bin/node-dev $repo $projects_port $notification_port\"" ;;
@@ -293,15 +293,15 @@ ipalpha_write_mprocs_yaml() {
       esac
     done
     for repo in "${ipalpha_web_repos[@]}"; do
-      [[ -f "$root/core/$repo/package.json" ]] || continue
+      [[ -f "$(ipalpha_repo_path "$root" "$repo")/package.json" ]] || continue
       echo "  \"Web · $repo\":"
-      echo "    cwd: \"$root/core/$repo\""
+      echo "    cwd: \"$(ipalpha_repo_path "$root" "$repo")\""
       echo "    shell: \"$root/.ipalpha/bin/web-dev $repo\""
     done
   } >"$dest"
 }
 
-# Standalone web app (core/<repo>, own vite.config): Vite on its port, /api proxied to its backend MS.
+# Standalone web app (core/<repo> or apps/<app>/<repo>, own vite.config): Vite on its port, /api proxied.
 ipalpha_write_bin_web_dev() {
   local dest="$1"
   cat >"$dest" <<'SCRIPT'
@@ -312,10 +312,9 @@ repo="${1:?usage: web-dev <repo>}"
 
 ipalpha_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ipalpha_root="$(cd "$ipalpha_dir/.." && pwd)"
-app="$ipalpha_root/core/$repo"
-
 # shellcheck disable=SC1091
 source "$ipalpha_dir/lib/common.sh"
+app="$(ipalpha_repo_path "$ipalpha_root" "$repo")"
 
 if [[ ! -f "$app/package.json" ]]; then
   echo "web-dev: $repo is not cloned yet — nothing to run"
@@ -364,7 +363,9 @@ repo="${1:?usage: node-dev <repo> [dep-port ...]}"
 
 ipalpha_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ipalpha_root="$(cd "$ipalpha_dir/.." && pwd)"
-repo_dir="$ipalpha_root/core/$repo"
+# shellcheck disable=SC1091
+source "$ipalpha_dir/lib/common.sh"
+repo_dir="$(ipalpha_repo_path "$ipalpha_root" "$repo")"
 
 if [[ ! -f "$repo_dir/package.json" ]]; then
   echo "node-dev: $repo has no package.json yet — nothing to run"
@@ -407,8 +408,8 @@ set -euo pipefail
 ipalpha_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ipalpha_root="$(cd "$ipalpha_dir/.." && pwd)"
 
-# shared-ui is consumed by every standalone webapp through `file:../shared-ui`, so it must be
-# installed and built before them.
+# shared-ui is consumed by every standalone webapp (`file:../shared-ui` in core/, `file:../../../core/shared-ui`
+# in apps/), so it must be installed and built before them.
 ui="$ipalpha_root/core/shared-ui"
 if [[ -f "$ui/package.json" ]]; then
   if [[ ! -d "$ui/node_modules" || "$ui/package-lock.json" -nt "$ui/node_modules" ]]; then
@@ -421,7 +422,8 @@ if [[ -f "$ui/package.json" ]]; then
   fi
 fi
 
-for dir in "$ipalpha_root"/core/*/; do
+for dir in "$ipalpha_root"/core/*/ "$ipalpha_root"/apps/*/*/; do
+  [[ -d "$dir" ]] || continue
   dir="${dir%/}"
   [[ -f "$dir/package.json" ]] || continue
   [[ "$dir" == "$ui" ]] && continue
@@ -473,7 +475,7 @@ start() {
 # shellcheck disable=SC1091
 source "$ipalpha_dir/lib/common.sh"
 for repo in "${ipalpha_ms_order[@]}"; do
-  [[ -f "$ipalpha_dir/../core/$repo/package.json" ]] || continue
+  [[ -f "$(ipalpha_repo_path "$ipalpha_dir/.." "$repo")/package.json" ]] || continue
   case "$repo" in
     organizations-api) start "$repo" "$auth_port" "$projects_port" ;;
     *) start "$repo" ;;
@@ -482,7 +484,7 @@ done
 
 
 for repo in "${ipalpha_web_repos[@]}"; do
-  [[ -f "$ipalpha_dir/../core/$repo/package.json" ]] || continue
+  [[ -f "$(ipalpha_repo_path "$ipalpha_dir/.." "$repo")/package.json" ]] || continue
   web_port="$(setting "${repo}_port")"
   (exec "$ipalpha_dir/bin/web-dev" "$repo") >"$log_dir/$repo.log" 2>&1 &
   pids+=("$!")
@@ -517,15 +519,15 @@ ipalpha_write_projects_json() {
       port="$(ipalpha_settings_ms_port "$repo")"
       [[ "$first" == true ]] || echo "    ,"
       first=false
-      echo "    {\"name\": \"$repo\", \"kind\": \"service\", \"path\": \"core/$repo\", \"display\": \"$display\", \"port\": \"$port\", \"autostart\": true}"
+      echo "    {\"name\": \"$repo\", \"kind\": \"service\", \"path\": \"$(ipalpha_repo_rel "$repo")\", \"display\": \"$display\", \"port\": \"$port\", \"autostart\": true}"
     done
     for repo in "${ipalpha_web_repos[@]}"; do
-      [[ -f "$root/core/$repo/package.json" ]] || continue
+      [[ -f "$(ipalpha_repo_path "$root" "$repo")/package.json" ]] || continue
       display="${repo%-webapp}"
       display="$(tr '[:lower:]' '[:upper:]' <<<"${display:0:1}")${display:1} Web"
       port="$(ipalpha_settings_web_port "$repo")"
       echo "    ,"
-      echo "    {\"name\": \"$repo\", \"kind\": \"app\", \"path\": \"core/$repo\", \"display\": \"$display\", \"port\": \"$port\", \"autostart\": true, \"cmd\": \"$root/.ipalpha/bin/web-dev $repo\", \"frontend\": \"http://localhost:$port/\"}"
+      echo "    {\"name\": \"$repo\", \"kind\": \"app\", \"path\": \"$(ipalpha_repo_rel "$repo")\", \"display\": \"$display\", \"port\": \"$port\", \"autostart\": true, \"cmd\": \"$root/.ipalpha/bin/web-dev $repo\", \"frontend\": \"http://localhost:$port/\"}"
     done
     echo "  ]"
     echo "}"

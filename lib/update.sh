@@ -40,9 +40,33 @@ ipalpha_update_refresh_libs() {
   echo "  $(ipalpha_msg update_tooling_ok)"
 }
 
+# Repos that moved out of core/ (e.g. forms → apps/forms/): move the clone and every feature
+# worktree of it, keeping local branches, .env files and uncommitted work.
+ipalpha_migrate_layout() {
+  local root="$1" repo old new line wt rel_old rel_new
+  for repo in $(ipalpha_all_repos); do
+    ipalpha_app_of "$repo" >/dev/null || continue
+    old="$root/core/$repo"; new="$(ipalpha_repo_path "$root" "$repo")"
+    [[ -e "$old" && ! -e "$new" ]] || continue
+    rel_old="core/$repo"; rel_new="$(ipalpha_repo_rel "$repo")"
+    while IFS= read -r line; do
+      wt="${line#worktree }"
+      [[ "$wt" == "$root"/features/*/"$rel_old" ]] || continue
+      mkdir -p "$(dirname "${wt%/"$rel_old"}/$rel_new")"
+      git -C "$old" worktree move "$wt" "${wt%/"$rel_old"}/$rel_new"
+    done < <(git -C "$old" worktree list --porcelain 2>/dev/null | grep '^worktree ')
+    mkdir -p "$(dirname "$new")"
+    mv "$old" "$new"
+    git -C "$new" worktree repair >/dev/null 2>&1 || true
+    echo "  $repo: $rel_old → $rel_new"
+  done
+}
+
 ipalpha_update() {
   local root="$1"
   local repo dir
+
+  ipalpha_migrate_layout "$root"
 
   # Feature workspaces hold worktrees on feat/<slug>: fetch only, ./feature rebase moves them.
   if [[ -f "$root/.ipalpha/feature.env" ]]; then
