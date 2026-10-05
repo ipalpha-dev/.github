@@ -51,13 +51,15 @@ keeps it). `./pull` re-downloads `.github` into a temp folder to refresh
 | `.github` | org profile page + this tooling (not cloned into the workspace) |
 | `shared-js` | npm library `@ipalpha/shared-js` on npmjs.com (helpers only) |
 | `shared-ui` | React component library `@ipalpha/shared-ui`, consumed by every webapp via `file:../shared-ui`; built by `install-deps` before them (not published) |
-| `auth-api`, `persons-api`, `organizations-api`, `projects-api`, `notifications-api`, `forms-api`, `dispatch-api` | NestJS + TypeScript backends, **no frontend of their own** |
+| `auth-api`, `persons-api`, `organizations-api`, `projects-api`, `notifications-api`, `forms-api`, `dispatch-api`, `ai-api`, `developers-api` | NestJS + TypeScript backends, **no frontend of their own** |
 | `mordomia-webapp` | standalone Vite app (port 5110): Mordomia, the one UI for superuser + stewards over every core API (persons, projects, org chart, notifications, access, my data), live through dispatch-api |
 | `auth-webapp` | standalone Vite app (port 5100): the sign-in popup (account chooser + consent) |
 | `forms-webapp` | standalone Vite app (port 5106): IPAlpha Formulários |
+| `developers-webapp` | standalone Vite app (port 5111): IPAlpha Developers, the public developer portal (docs, app directory, requests); its /api proxy reaches developers-api, auth-api, projects-api and dispatch-api |
 
 Every webapp is served at `/` and reaches the APIs same-origin at `/api/<name>` (`/api/auth`,
-`/api/projects`, `/api/persons`, `/api/organizations`, `/api/notifications`, `/api/forms`;
+`/api/projects`, `/api/persons`, `/api/organizations`, `/api/notifications`, `/api/forms`, `/api/ai`,
+`/api/developers`;
 sockets at `/api/dispatch/socket.io`): the Vite proxy locally, the ingress in production. No CORS.
 | `deployment` | k8s manifests under `core/<ms>/`, namespace `ipalpha-core` |
 
@@ -129,7 +131,14 @@ Dev-only release (no prod rollout):
 | organizations-api | 3003 |
 | notifications-api | 3004 |
 | auth-api | 3005 |
+| forms-api | 3006 |
+| dispatch-api | 3007 |
+| ai-api | 3008 |
+| developers-api | 3009 |
 | auth-webapp (Vite) | 5100 |
+| forms-webapp (Vite) | 5106 |
+| mordomia-webapp (Vite) | 5110 |
+| developers-webapp (Vite) | 5111 |
 | MongoDB | 27017 |
 | Redis | 6379 |
 | RabbitMQ | 5672 |
@@ -183,6 +192,7 @@ After a successful publish you get:
 | `https://ipalpha-<slug>.kevyn.com.br` | Mordomia (with the `preview · <slug> · expires in Nh` badge) |
 | `https://forms-ipalpha-<slug>.kevyn.com.br` | IPAlpha Formulários |
 | `https://auth-ipalpha-<slug>.kevyn.com.br` | sign-in popup |
+| `https://developers-ipalpha-<slug>.kevyn.com.br` | IPAlpha Developers — when the baseline includes developers-webapp |
 | `https://ipalpha-<slug>.kevyn.com.br/mailbox` | captured e-mail/SMS: your login codes (shared `previews` account) |
 | `https://acampa-ipalpha-<slug>.kevyn.com.br` | Acampa Kids — only when an `acampa-kids-*` repo changed in this feature |
 

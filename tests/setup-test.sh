@@ -27,24 +27,39 @@ echo "== setup (skip tools)"
 ipalpha_out="$("$ipalpha_repo_root/setup" --skip-tools --keep-setup 2>&1)" \
   || ipalpha_fail "setup failed: $ipalpha_out"
 
-for repo in shared-js shared-ui projects-api persons-api organizations-api notifications-api auth-api auth-webapp; do
+for repo in shared-js shared-ui projects-api persons-api organizations-api notifications-api auth-api auth-webapp \
+  ai-api developers-api developers-webapp; do
   [[ -d "$ipalpha_tmp/IpAlpha/core/$repo/.git" ]] \
     || ipalpha_fail "ms repo not cloned: $repo"
 done
 [[ ! -f "$ipalpha_tmp/IpAlpha/core/auth-webapp/.env" ]] || ipalpha_fail "auth-webapp must not get an env"
+[[ ! -f "$ipalpha_tmp/IpAlpha/core/developers-webapp/.env" ]] || ipalpha_fail "developers-webapp must not get an env"
 grep -q '^auth-webapp_port=5100$' "$ipalpha_tmp/IpAlpha/.ipalpha/settings" || ipalpha_fail "settings missing auth-webapp_port"
+grep -q '^developers-webapp_port=5111$' "$ipalpha_tmp/IpAlpha/.ipalpha/settings" || ipalpha_fail "settings missing developers-webapp_port"
+grep -q '^ai-api_port=3008$' "$ipalpha_tmp/IpAlpha/.ipalpha/settings" || ipalpha_fail "settings missing ai-api_port"
+grep -q '^developers-api_port=3009$' "$ipalpha_tmp/IpAlpha/.ipalpha/settings" || ipalpha_fail "settings missing developers-api_port"
 [[ -x "$ipalpha_tmp/IpAlpha/.ipalpha/bin/web-dev" ]] || ipalpha_fail "web-dev missing"
 # fake clone has no package.json -> web app is skipped from the runners until cloned for real
 grep -q '"name": "auth-webapp"' "$ipalpha_tmp/IpAlpha/.ipalpha/projects.json" && ipalpha_fail "projects.json listed auth-webapp without package.json"
 echo '{"name":"auth-webapp"}' >"$ipalpha_tmp/IpAlpha/core/auth-webapp/package.json"
+echo '{"name":"developers-webapp"}' >"$ipalpha_tmp/IpAlpha/core/developers-webapp/package.json"
 [[ -d "$ipalpha_tmp/IpAlpha/deployment/.git" ]] || ipalpha_fail "deployment not cloned"
 [[ ! -e "$ipalpha_tmp/IpAlpha/develop" ]] || ipalpha_fail "develop must not be cloned"
 [[ ! -e "$ipalpha_tmp/IpAlpha/.github" ]] || ipalpha_fail ".github must not be cloned into the workspace"
 [[ -x "$ipalpha_tmp/IpAlpha/set-keys" ]] || ipalpha_fail "./set-keys missing"
 
-for repo in projects-api persons-api organizations-api notifications-api auth-api; do
+for repo in projects-api persons-api organizations-api notifications-api auth-api ai-api developers-api; do
   [[ -f "$ipalpha_tmp/IpAlpha/core/$repo/.env" ]] || ipalpha_fail "env missing: $repo"
 done
+grep -q '^PORT=3008$' "$ipalpha_tmp/IpAlpha/core/ai-api/.env" || ipalpha_fail "ai-api env wrong PORT"
+grep -q '^AI_API_KEY=$' "$ipalpha_tmp/IpAlpha/core/ai-api/.env" || ipalpha_fail "ai-api env must keep AI_API_KEY blank"
+grep -q '^PORT=3009$' "$ipalpha_tmp/IpAlpha/core/developers-api/.env" || ipalpha_fail "developers-api env wrong PORT"
+grep -q '^AUTH_CLIENT_ID=developers-api$' "$ipalpha_tmp/IpAlpha/core/developers-api/.env" || ipalpha_fail "developers-api system client not seeded"
+grep -q '"clientId":"ai-api"' "$ipalpha_tmp/IpAlpha/core/auth-api/.env" || ipalpha_fail "auth-api SEED_CLIENTS_JSON lacks ai-api"
+grep -q '^SOCKET_ALLOWED_ORIGINS=.*http://localhost:5111' "$ipalpha_tmp/IpAlpha/core/dispatch-api/.env" \
+  || ipalpha_fail "dispatch-api must allow the local developers-webapp origin"
+grep -q '^BUILTIN_DEVELOPERS_ORIGINS=http://localhost:5111$' "$ipalpha_tmp/IpAlpha/core/auth-api/.env" \
+  || ipalpha_fail "auth-api must allow the local developers-webapp origin"
 grep -q '^SUPERUSER_NAME=$' "$ipalpha_tmp/IpAlpha/core/auth-api/.env" || ipalpha_fail "auth-api env missing SUPERUSER_NAME"
 grep -q '^SMSBARATO_KEY=$' "$ipalpha_tmp/IpAlpha/core/notifications-api/.env" || ipalpha_fail "notifications-api env missing SMSBARATO_KEY"
 grep -q '^PORT=3001$' "$ipalpha_tmp/IpAlpha/core/projects-api/.env" || ipalpha_fail "projects-api env wrong PORT"
@@ -110,7 +125,15 @@ organizations-api
 notifications-api
 auth-api
 forms-api
+ai-api
+developers-api
 dispatch-api" ]] || ipalpha_fail "mprocs order wrong: $ipalpha_order"
+grep -q '"name": "developers-api", "kind": "service", "path": "core/developers-api", "display": "Developers", "port": "3009"' \
+  "$ipalpha_tmp/IpAlpha/.ipalpha/projects.json" || ipalpha_fail "projects.json developers-api entry wrong"
+grep -q '"name": "ai-api", "kind": "service", "path": "core/ai-api", "display": "AI", "port": "3008"' \
+  "$ipalpha_tmp/IpAlpha/.ipalpha/projects.json" || ipalpha_fail "projects.json ai-api entry wrong"
+grep -q 'export AI_API_URL="$(ms_url ai-api)" DEVELOPERS_API_URL="$(ms_url developers-api)"' "$ipalpha_tmp/IpAlpha/.ipalpha/bin/web-dev" \
+  || ipalpha_fail "web-dev must export AI_API_URL and DEVELOPERS_API_URL for the /api proxies"
 
 echo "== localized help"
 help_run="$("$ipalpha_tmp/IpAlpha/run" --help 2>&1)" || true
@@ -141,6 +164,18 @@ grep -q '^NEW_KEY=42$' "$ipalpha_tmp/IpAlpha/core/persons-api/.env" \
 grep -q '"name": "auth-webapp", "kind": "app"' "$ipalpha_tmp/IpAlpha/.ipalpha/projects.json" || ipalpha_fail "projects.json missing auth-webapp app"
 grep -q 'Web · auth-webapp' "$ipalpha_tmp/IpAlpha/.ipalpha/mprocs.yaml" || ipalpha_fail "mprocs missing auth-webapp"
 grep -q 'web-dev auth-webapp' "$ipalpha_tmp/IpAlpha/.ipalpha/projects.json" || ipalpha_fail "projects.json auth-webapp cmd wrong"
+grep -q '"name": "developers-webapp", "kind": "app", "path": "core/developers-webapp", "display": "Developers Web", "port": "5111"' \
+  "$ipalpha_tmp/IpAlpha/.ipalpha/projects.json" || ipalpha_fail "projects.json missing developers-webapp app on 5111"
+grep -q 'Web · developers-webapp' "$ipalpha_tmp/IpAlpha/.ipalpha/mprocs.yaml" || ipalpha_fail "mprocs missing developers-webapp"
+echo "== web-dev proxies developers-webapp to the local APIs"
+ipalpha_fakevite="$ipalpha_tmp/IpAlpha/core/developers-webapp/node_modules/.bin"
+mkdir -p "$ipalpha_fakevite"
+printf '#!/usr/bin/env bash\necho "vite $* auth=$AUTH_API_URL developers=$DEVELOPERS_API_URL dispatch=$DISPATCH_API_URL projects=$PROJECTS_API_URL ai=$AI_API_URL"\n' >"$ipalpha_fakevite/vite"
+chmod +x "$ipalpha_fakevite/vite"
+touch "$ipalpha_tmp/IpAlpha/core/developers-webapp/node_modules"
+ipalpha_out="$("$ipalpha_tmp/IpAlpha/.ipalpha/bin/web-dev" developers-webapp 2>&1)" || ipalpha_fail "web-dev developers-webapp failed: $ipalpha_out"
+[[ "$ipalpha_out" == "vite --port 5111 --strictPort auth=http://127.0.0.1:3005 developers=http://127.0.0.1:3009 dispatch=http://127.0.0.1:3007 projects=http://127.0.0.1:3001 ai=http://127.0.0.1:3008" ]] \
+  || ipalpha_fail "web-dev developers-webapp env wrong: $ipalpha_out"
 
 echo "== pull re-clones missing repo"
 rm -rf "$ipalpha_tmp/IpAlpha/core/persons-api"
@@ -149,6 +184,21 @@ ipalpha_out="$(
 )" || ipalpha_fail "pull failed: $ipalpha_out"
 [[ -d "$ipalpha_tmp/IpAlpha/core/persons-api/.git" ]] || ipalpha_fail "pull did not re-clone persons-api"
 [[ -f "$ipalpha_tmp/IpAlpha/core/persons-api/.env" ]] || ipalpha_fail "pull did not reinstall env"
+
+echo "== publish lists the new core repos"
+for repo in ai-api developers-api developers-webapp; do
+  repo_dir="$ipalpha_tmp/IpAlpha/core/$repo"
+  rm -rf "$repo_dir/.git"
+  git init -q -b master "$repo_dir"
+  git -C "$repo_dir" -c user.name=test -c user.email=test@example.invalid commit -q --allow-empty -m "root"
+done
+# shellcheck disable=SC1091
+ipalpha_dirty="$(source "$ipalpha_repo_root/lib/common.sh" && source "$ipalpha_repo_root/lib/publish.sh" \
+  && ipalpha_publish_dirty_repos "$ipalpha_tmp/IpAlpha")"
+for repo in ai-api developers-api developers-webapp; do
+  grep -qx "$repo" <<<"$ipalpha_dirty" || ipalpha_fail "publish does not offer untagged $repo: $ipalpha_dirty"
+done
+for repo in ai-api developers-api developers-webapp; do rm -rf "$ipalpha_tmp/IpAlpha/core/$repo/.git"; mkdir -p "$ipalpha_tmp/IpAlpha/core/$repo/.git"; done
 
 echo "== publish smoke (no AI, dry-run aborts without changes)"
 repo_dir="$ipalpha_tmp/IpAlpha/core/projects-api"

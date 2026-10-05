@@ -53,11 +53,18 @@ grep -qF 'bash <(curl -fsSL https://raw.githubusercontent.com/ipalpha-dev/.githu
 bash -n bootstrap.sh || ipalpha_fail "bootstrap.sh syntax"
 
 echo "== env fallback coverage and blank secrets"
-for key in AUTH_API_URL PROJECTS_API_URL RABBITMQ_URL AUTH_CLIENT_ID AUTH_CLIENT_SECRET MONGO_URI REDIS_URL PORT SMSBARATO_KEY COMTELE_API_URL COMTELE_TOKEN SUPERUSER_NAME SUPERUSER_PHONE SUPERUSER_EMAIL WEBAUTHN_RP_ID; do
+# shellcheck source=lib/common.sh
+source lib/common.sh
+for ipalpha_api in "${ipalpha_ms_order[@]}"; do
+  [[ -f "templates/env-fallback/$ipalpha_api.env" ]] || ipalpha_fail "env-fallback missing file: $ipalpha_api.env"
+  grep -q "^PORT=$(ipalpha_default_ms_port "$ipalpha_api")$" "templates/env-fallback/$ipalpha_api.env" \
+    || ipalpha_fail "env-fallback $ipalpha_api.env PORT differs from its default port"
+done
+for key in AUTH_API_URL PROJECTS_API_URL RABBITMQ_URL AUTH_CLIENT_ID AUTH_CLIENT_SECRET MONGO_URI REDIS_URL PORT SMSBARATO_KEY COMTELE_API_URL COMTELE_TOKEN SUPERUSER_NAME SUPERUSER_PHONE SUPERUSER_EMAIL WEBAUTHN_RP_ID AI_API_KEY OPENROUTER_API_KEY AI_LIVE_API_KEY PORTAL_EXTERNAL_CLIENT_IDS; do
   grep -q "^${key}=" templates/env-fallback/*.env \
     || ipalpha_fail "env-fallback missing key: $key"
 done
-if grep -HE '^(SMSBARATO_KEY|COMTELE_TOKEN|AUTH_CLIENT_ID|AUTH_CLIENT_SECRET|SUPERUSER_PHONE|SUPERUSER_EMAIL)=.+' templates/env-fallback/*.env; then
+if grep -HE '^(SMSBARATO_KEY|COMTELE_TOKEN|AUTH_CLIENT_ID|AUTH_CLIENT_SECRET|SUPERUSER_PHONE|SUPERUSER_EMAIL|AI_API_KEY|OPENROUTER_API_KEY|AI_LIVE_API_KEY)=.+' templates/env-fallback/*.env; then
   ipalpha_fail "secrets must stay blank in templates"
 fi
 

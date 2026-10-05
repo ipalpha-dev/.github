@@ -346,6 +346,7 @@ ms_url() {
 export AUTH_API_URL="$(ms_url auth-api)" PROJECTS_API_URL="$(ms_url projects-api)" PERSONS_API_URL="$(ms_url persons-api)"
 export ORGANIZATIONS_API_URL="$(ms_url organizations-api)" NOTIFICATIONS_API_URL="$(ms_url notifications-api)"
 export FORMS_API_URL="$(ms_url forms-api)" DISPATCH_API_URL="$(ms_url dispatch-api)"
+export AI_API_URL="$(ms_url ai-api)" DEVELOPERS_API_URL="$(ms_url developers-api)"
 [[ "$repo" != auth-webapp ]] || export AUTH_API_URL="http://127.0.0.1:$api_port"
 exec ./node_modules/.bin/vite --port "$web_port" --strictPort
 SCRIPT
@@ -516,6 +517,7 @@ ipalpha_write_projects_json() {
     for repo in "${ipalpha_ms_order[@]}"; do
       display="${repo%-api}"
       display="$(tr '[:lower:]' '[:upper:]' <<<"${display:0:1}")${display:1}"
+      [[ "$repo" != ai-api ]] || display="AI"
       port="$(ipalpha_settings_ms_port "$repo")"
       [[ "$first" == true ]] || echo "    ,"
       first=false
