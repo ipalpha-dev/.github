@@ -12,7 +12,8 @@ ipalpha_root_repos=(deployment)
 # ipalpha-dev/<repo>, local apps/<app>/<repo without the app prefix> (acampa-kids-backend → apps/acampa-kids/
 # backend). Optional: cloned when the account can read them (a failure only warns), skipped when absent.
 # Not run by ./run and never part of a core release; feature previews include them when they change.
-ipalpha_app_repos=(acampa-kids-backend acampa-kids-frontend)
+# The face service joined Acampa's previews (DECISIONS_ACAMPA 48), so a face change is publishable too.
+ipalpha_app_repos=(acampa-kids-backend acampa-kids-frontend acampa-kids-face-service)
 ipalpha_tooling_repo=".github"
 # Compose project / container prefix; feature workspaces use ipalpha-<slug> so they run side by side.
 ipalpha_infra_name="${ipalpha_infra_name:-ipalpha}"
@@ -65,7 +66,7 @@ ipalpha_settings_file() {
 ipalpha_app_of() {
   case "$1" in
     forms-api|forms-webapp) echo forms ;;
-    acampa-kids-backend|acampa-kids-frontend) echo acampa-kids ;;
+    acampa-kids-backend|acampa-kids-frontend|acampa-kids-face-service) echo acampa-kids ;;
     *) return 1 ;;
   esac
 }
@@ -83,6 +84,7 @@ ipalpha_app_image() {
   case "$1" in
     acampa-kids-backend) echo backend ;;
     acampa-kids-frontend) echo frontend ;;
+    acampa-kids-face-service) echo face ;;
     *) return 1 ;;
   esac
 }

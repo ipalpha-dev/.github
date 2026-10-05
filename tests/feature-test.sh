@@ -21,7 +21,8 @@ rel() { case "$1" in deployment) echo deployment ;; forms-api|forms-webapp) echo
   acampa-kids-*) echo "apps/acampa-kids/${1#acampa-kids-}" ;; *) echo "core/$1" ;; esac; }
 
 repos=(deployment shared-js shared-ui projects-api persons-api organizations-api notifications-api auth-api
-  forms-api dispatch-api auth-webapp forms-webapp mordomia-webapp acampa-kids-backend acampa-kids-frontend)
+  forms-api dispatch-api auth-webapp forms-webapp mordomia-webapp acampa-kids-backend acampa-kids-frontend
+  acampa-kids-face-service)
 apis=(projects-api persons-api organizations-api notifications-api auth-api forms-api dispatch-api)
 
 echo "== origins"
@@ -41,9 +42,11 @@ for repo in "${repos[@]}"; do
     acampa-kids-backend) printf '{"name":"camping-backend","version":"0.19.0"}\n' >"$seed/$repo/package.json" ;;
     acampa-kids-frontend) printf '{"name":"camping-frontend","version":"0.27.0"}\n' >"$seed/$repo/package.json" ;;
     deployment)   # production manifests of the app outside core: their image tags name the baseline version tags
-      mkdir -p "$seed/$repo/base/apps/acampa-kids/acampa-kids-backend" "$seed/$repo/base/apps/acampa-kids/acampa-kids-frontend"
+      mkdir -p "$seed/$repo/base/apps/acampa-kids/acampa-kids-backend" "$seed/$repo/base/apps/acampa-kids/acampa-kids-frontend" \
+        "$seed/$repo/base/apps/acampa-kids/acampa-kids-face-service"
       printf '        - image: registry.kevyn.com.br/ip-alpha/apps/acampa-kids/backend:0.19.0\n' >"$seed/$repo/base/apps/acampa-kids/acampa-kids-backend/backend.yaml"
       printf '        - image: registry.kevyn.com.br/ip-alpha/apps/acampa-kids/frontend:0.27.0\n' >"$seed/$repo/base/apps/acampa-kids/acampa-kids-frontend/frontend.yaml"
+      printf '        - image: registry.kevyn.com.br/ip-alpha/apps/acampa-kids/face:0.1.0\n' >"$seed/$repo/base/apps/acampa-kids/acampa-kids-face-service/face.yaml"
       ;;
   esac
   git -C "$seed/$repo" add -A
@@ -111,6 +114,9 @@ done
 [[ "$(git -C "$froot/apps/acampa-kids/frontend" rev-parse HEAD)" == "$acampa_frontend_master" ]] \
   || ipalpha_fail "acampa-kids-frontend without its version tag must start at origin/master"
 grep -q 'acampa-kids-frontend: no tag v0.27.0' <<<"$out" || ipalpha_fail "missing version tag not warned: $out"
+git -C "$froot/apps/acampa-kids/face-service" rev-parse --git-dir >/dev/null 2>&1 \
+  || ipalpha_fail "acampa-kids-face-service worktree missing (the face service is part of Acampa previews)"
+grep -q 'acampa-kids-face-service: no tag v0.1.0' <<<"$out" || ipalpha_fail "face service tag not resolved from face:0.1.0: $out"
 grep -q 'https://acampa-ipalpha-hello-test.kevyn.com.br' <<<"$out" || ipalpha_fail "app host not listed: $out"
 [[ -z "$(git -C "$root/core/auth-api" status --porcelain)" ]] || ipalpha_fail "main checkout touched"
 [[ -f "$froot/core/persons-api/.env" && -z "$(git -C "$froot/core/persons-api" status --porcelain)" ]] \
