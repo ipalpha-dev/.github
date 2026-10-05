@@ -26,6 +26,11 @@ ipalpha_clone_repo() {
 ipalpha_clone_org_repos() {
   local root="$1" repo
   for repo in $(ipalpha_all_repos); do
+    if ipalpha_is_app_repo "$repo"; then   # optional: not every account can read every app
+      ipalpha_clone_repo "$repo" "$(ipalpha_repo_path "$root" "$repo")" 2>/dev/null \
+        || echo "  $repo: $(ipalpha_msg clone_fail) (optional app, skipped)"
+      continue
+    fi
     ipalpha_clone_repo "$repo" "$(ipalpha_repo_path "$root" "$repo")" || return 1
   done
 }

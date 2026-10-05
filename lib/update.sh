@@ -87,6 +87,8 @@ ipalpha_update() {
     (
       if [[ -d "$dir" ]]; then
         ipalpha_update_repo "$dir" "$repo"
+      elif ipalpha_is_app_repo "$repo"; then   # optional app: cloned when readable, quietly skipped otherwise
+        ipalpha_clone_repo "$repo" "$dir" >/dev/null 2>&1 && echo "  $repo: $(ipalpha_msg update_pulled)" || true
       else
         ipalpha_clone_repo "$repo" "$dir" || echo "  $repo: $(ipalpha_msg update_clone_fail)"
       fi

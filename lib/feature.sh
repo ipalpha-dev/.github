@@ -16,13 +16,19 @@ ipalpha_feature_hosts() {
   echo "ipalpha-$slug.$ipalpha_feature_domain forms-ipalpha-$slug.$ipalpha_feature_domain auth-ipalpha-$slug.$ipalpha_feature_domain"
 }
 
+# Hosts of apps outside core with their own host, served only when the app is in the preview (it changed).
+ipalpha_feature_app_hosts() {
+  local slug="$1"
+  echo "acampa-ipalpha-$slug.$ipalpha_feature_domain"
+}
+
 ipalpha_feature_validate_slug() {
   local slug="$1" host
   [[ "$slug" =~ ^[a-z0-9-]{3,30}$ ]] || { ipalpha_feature_fail "$(ipalpha_msg feature_bad_slug): $slug"; return 1; }
   # DNS labels cannot start or end with a hyphen.
   [[ "$slug" != -* && "$slug" != *- ]] || { ipalpha_feature_fail "$(ipalpha_msg feature_bad_slug): $slug"; return 1; }
   # Spec rule: every whole host ≤ 63 chars (stricter than the per-label DNS limit).
-  for host in $(ipalpha_feature_hosts "$slug"); do
+  for host in $(ipalpha_feature_hosts "$slug") $(ipalpha_feature_app_hosts "$slug"); do
     (( ${#host} <= 63 )) || { ipalpha_feature_fail "host longer than 63 chars: $host"; return 1; }
   done
 }
@@ -62,10 +68,26 @@ ipalpha_feature_read_baseline() {
 # Commit the baseline pins for a repository. shared-js is consumed from npm, so its commit is the
 # release tag of the version locked by the APIs. deployment starts at the commit whose base/ the
 # baseline images were deployed with (core-latest.json deployment.commit): previews render base/
-# from feat/<slug>, so manifests always match the images (Kevyn).
+# from feat/<slug>, so manifests always match the images (Kevyn). Apps with their own registry
+# (ipalpha_app_repos) are not in the core baseline: their tag v<version> where <version> is the image tag
+# of their production manifest in that deployment commit (tags mark what runs in production, Kevyn);
+# origin/master with a warning when that tag is missing.
 ipalpha_feature_base_commit() {
   local main="$1" baseline="$2" repo="$3"
-  local commit version="" api api_commit
+  local commit version="" api api_commit app image deploy_commit dir
+  if ipalpha_is_app_repo "$repo"; then
+    app="$(ipalpha_app_of "$repo")"; image="$(ipalpha_app_image "$repo")"; dir="$(ipalpha_repo_path "$main" "$repo")"
+    deploy_commit="$(node -p 'JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).deployment.commit' "$baseline")"
+    version="$(git -C "$main/deployment" grep -h -o -E "ip-alpha/apps/$app/$image:[0-9]+\.[0-9]+\.[0-9]+" \
+      "$deploy_commit" -- base/apps 2>/dev/null | head -n1 | sed 's/.*://')"
+    if [[ -n "$version" ]] && commit="$(git -C "$dir" rev-parse --verify -q "v$version^{commit}")"; then
+      echo "$commit"; return 0
+    fi
+    echo "  warning: $repo: no tag v${version:-?} for the production manifest's image tag — starting at origin/master" >&2
+    git -C "$dir" rev-parse --verify -q "origin/master^{commit}" \
+      || { ipalpha_feature_fail "$repo: neither v${version:-?} nor origin/master found"; return 1; }
+    return 0
+  fi
   case "$repo" in
     shared-js)
       for api in "${ipalpha_ms_order[@]}"; do
@@ -246,6 +268,7 @@ ipalpha_feature_new() {
   echo "  cd features/$slug && ./run        # mongo :$ipalpha_port_mongo · web :$ipalpha_port_mordomia_webapp"
   echo "  ./publish --feature $slug         # preview:"
   for host in $(ipalpha_feature_hosts "$slug"); do echo "    https://$host"; done
+  for host in $(ipalpha_feature_app_hosts "$slug"); do echo "    https://$host   (when its app changes)"; done
 }
 
 ipalpha_feature_new_into() {
@@ -254,6 +277,10 @@ ipalpha_feature_new_into() {
   echo "$(ipalpha_msg feature_creating) $slug ($(node -p 'JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).release' "$baseline"))"
   ipalpha_feature_fetch_all "$main"
   for repo in $(ipalpha_all_repos); do
+    if ipalpha_is_app_repo "$repo" && ! ipalpha_is_git_repo "$(ipalpha_repo_path "$main" "$repo")"; then
+      echo "  $repo: not cloned here (optional app) — skipped"
+      continue
+    fi
     base="$(ipalpha_feature_base_commit "$main" "$baseline" "$repo")" || return 1
     dest="$(ipalpha_repo_path "$froot" "$repo")"
     src="$(ipalpha_repo_path "$main" "$repo")"

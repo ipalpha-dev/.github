@@ -8,6 +8,11 @@ ipalpha_ms_order=(projects-api persons-api organizations-api notifications-api a
 # Standalone web apps: cloned, deps installed, image published, no .env, run with Vite.
 ipalpha_web_repos=(auth-webapp forms-webapp mordomia-webapp)
 ipalpha_root_repos=(deployment)
+# Apps outside core with their own repositories, registry path and TeamCity project (Acampa Kids): GitHub
+# ipalpha-dev/<repo>, local apps/<app>/<repo without the app prefix> (acampa-kids-backend → apps/acampa-kids/
+# backend). Optional: cloned when the account can read them (a failure only warns), skipped when absent.
+# Not run by ./run and never part of a core release; feature previews include them when they change.
+ipalpha_app_repos=(acampa-kids-backend acampa-kids-frontend)
 ipalpha_tooling_repo=".github"
 # Compose project / container prefix; feature workspaces use ipalpha-<slug> so they run side by side.
 ipalpha_infra_name="${ipalpha_infra_name:-ipalpha}"
@@ -60,6 +65,24 @@ ipalpha_settings_file() {
 ipalpha_app_of() {
   case "$1" in
     forms-api|forms-webapp) echo forms ;;
+    acampa-kids-backend|acampa-kids-frontend) echo acampa-kids ;;
+    *) return 1 ;;
+  esac
+}
+
+# Optional app repositories (ipalpha_app_repos): their own registry and Deploy, cloned best effort.
+ipalpha_is_app_repo() {
+  case " ${ipalpha_app_repos[*]} " in
+    *" $1 "*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# Image name in registry.kevyn.com.br/ip-alpha/apps/<app>/<name> of an app repository (scripts/build-app-image.sh).
+ipalpha_app_image() {
+  case "$1" in
+    acampa-kids-backend) echo backend ;;
+    acampa-kids-frontend) echo frontend ;;
     *) return 1 ;;
   esac
 }
@@ -71,7 +94,8 @@ ipalpha_repo_rel() {
     *" $repo "*) echo "$repo"; return 0 ;;
   esac
   if app="$(ipalpha_app_of "$repo")"; then
-    echo "apps/$app/$repo"
+    # Optional app repos (<app>-<component>) live in apps/<app>/<component>; forms-api keeps its name.
+    if ipalpha_is_app_repo "$repo"; then echo "apps/$app/${repo#"$app"-}"; else echo "apps/$app/$repo"; fi
   else
     echo "core/$repo"
   fi
@@ -112,7 +136,7 @@ ipalpha_is_image_repo() {
 
 ipalpha_all_repos() {
   local repo
-  for repo in "${ipalpha_root_repos[@]}" "${ipalpha_ms_repos[@]}" "${ipalpha_web_repos[@]}"; do
+  for repo in "${ipalpha_root_repos[@]}" "${ipalpha_ms_repos[@]}" "${ipalpha_web_repos[@]}" "${ipalpha_app_repos[@]}"; do
     echo "$repo"
   done
 }

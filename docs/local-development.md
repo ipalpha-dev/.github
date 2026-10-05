@@ -147,6 +147,12 @@ own namespace in production (`ipalpha-forms`, own Mongo/Redis, events to core ov
 They still depend on `../../../core/shared-js` / `shared-ui`. `./pull` moves an older workspace's
 `core/forms-*` (and its feature worktrees) to `apps/forms/` automatically.
 
+**Acampa Kids** (`apps/acampa-kids/{backend,frontend}`, GitHub `ipalpha-dev/acampa-kids-backend` /
+`acampa-kids-frontend`) is an app outside core with its own repos, registry path and TeamCity project
+(namespace `ipalpha-acampa-kids`). It does not depend on core packages and `./run` does not start it.
+Its repos are optional: setup/`./pull` clone them when your account can read them (otherwise one warning)
+and `./feature` skips them when absent.
+
 In a feature environment every core service always runs; an app joins only when one of its own
 repos changed — a forms change never deploys other apps.
 
@@ -178,11 +184,23 @@ After a successful publish you get:
 | `https://forms-ipalpha-<slug>.kevyn.com.br` | IPAlpha Formulários |
 | `https://auth-ipalpha-<slug>.kevyn.com.br` | sign-in popup |
 | `https://ipalpha-<slug>.kevyn.com.br/mailbox` | captured e-mail/SMS: your login codes (shared `previews` account) |
+| `https://acampa-ipalpha-<slug>.kevyn.com.br` | Acampa Kids — only when an `acampa-kids-*` repo changed in this feature |
 
-Sign in with a fixture account (all fictional — `deployment/fixtures/1/README.md`):
+Acampa in a preview: `./feature new` pins `apps/acampa-kids/<repo>` at the tag `v<version>` of the image
+its production manifest names in the baseline's deployment commit (e.g. backend `0.19.0` → `v0.19.0`;
+origin/master with a warning when that tag is missing). Publishing a change to one of them builds it
+(`<version>-<slug>-<buildId>`); the other runs its production image. The pipeline registers Acampa in the
+preview's core through IPAlpha Developers (request → approval → owner secret → app-bound client → yearly
+edition) and turns "Entrar com IPAlpha" on; the camp, team and families are synthetic (fixture v2). The
+preview needs the per-repo layout of `base/apps/acampa-kids/` in your `feat/<slug>` branch of
+`deployment` (a baseline deployed after it, or rebase that branch on master).
+
+Sign in with a fixture account (all fictional — `deployment/fixtures/2/README.md`):
 `ana.superuser@example.test` (superuser), `bruno.cuidado@example.test` (steward), `carla@example.test`,
 `gabi.presbi@example.test`. Codes never reach a real phone or mailbox; read them in `/mailbox`.
-`ci.preview@example.test` is reserved for the pipeline's own sign-in check.
+`ci.preview@example.test` is reserved for the pipeline's own sign-in check; the pipeline also signs in
+as `rafael.acampa@example.test` (owner of the Acampa app) while it provisions Acampa. Acampa people sign in
+by phone (`+55 11 90000-0011` admin, `-0012` team, `-0013` care team, `-0014` and `carla` families).
 
 - Slug: `^[a-z0-9-]{3,30}$`, no hyphen at either end.
 - Your main checkouts are never touched: `features/<slug>/core/<repo>` are `git worktree`s. Inside a
