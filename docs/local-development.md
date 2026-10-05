@@ -196,14 +196,19 @@ After a successful publish you get:
 | `https://ipalpha-<slug>.kevyn.com.br/mailbox` | captured e-mail/SMS: your login codes (shared `previews` account) |
 | `https://acampa-ipalpha-<slug>.kevyn.com.br` | Acampa Kids — only when an `acampa-kids-*` repo changed in this feature |
 
+In previews the Developers portal lets an app owner edit their app's project message templates (production after a
+reviewed audience change).
+
 Acampa in a preview: `./feature new` pins `apps/acampa-kids/<repo>` at the tag `v<version>` of the image
 its production manifest names in the baseline's deployment commit (e.g. backend `0.19.0` → `v0.19.0`;
 origin/master with a warning when that tag is missing). Publishing a change to one of them builds it
 (`<version>-<slug>-<buildId>`); the others run their production images (the face service included; the
-import worker is not in previews). The pipeline registers Acampa in the preview's core through IPAlpha
+import worker too when Kevyn stored the shared, budget-capped preview OpenRouter key — otherwise CI notes that it
+left the worker out). The pipeline registers Acampa in the preview's core through IPAlpha
 Developers (request → approval → owner secret → app-bound client) and sets up its project as a steward
 would (roles, editions, memberships, message templates); people, families and roles live in core and are
-synthetic (fixture v2). Such a preview reserves the raised quota: about one at a time. The
+synthetic (fixture v2). Its quota is the core-only budget (1200m / 2560Mi) plus Acampa's increment (+ the
+worker's when it runs): core-only previews reserve only the core budget. The
 preview needs the per-repo layout of `base/apps/acampa-kids/` in your `feat/<slug>` branch of
 `deployment` (a baseline deployed after it, or rebase that branch on master).
 
