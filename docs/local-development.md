@@ -51,13 +51,15 @@ keeps it). `./pull` re-downloads `.github` into a temp folder to refresh
 | `.github` | org profile page + this tooling (not cloned into the workspace) |
 | `shared-js` | npm library `@ipalpha/shared-js` on npmjs.com (helpers only) |
 | `shared-ui` | React component library `@ipalpha/shared-ui`, consumed by every webapp via `file:../shared-ui`; built by `install-deps` before them (not published) |
-| `auth-api`, `persons-api`, `organizations-api`, `projects-api`, `notifications-api`, `forms-api`, `dispatch-api` | NestJS + TypeScript backends, **no frontend of their own** |
+| `auth-api`, `persons-api`, `organizations-api`, `projects-api`, `notifications-api`, `forms-api`, `dispatch-api`, `ai-api`, `developers-api` | NestJS + TypeScript backends, **no frontend of their own** |
 | `mordomia-webapp` | standalone Vite app (port 5110): Mordomia, the one UI for superuser + stewards over every core API (persons, projects, org chart, notifications, access, my data), live through dispatch-api |
 | `auth-webapp` | standalone Vite app (port 5100): the sign-in popup (account chooser + consent) |
 | `forms-webapp` | standalone Vite app (port 5106): IPAlpha Formulários |
+| `developers-webapp` | standalone Vite app (port 5111): IPAlpha Developers, the public developer portal (docs, app directory, requests); its /api proxy reaches developers-api, auth-api, projects-api and dispatch-api |
 
 Every webapp is served at `/` and reaches the APIs same-origin at `/api/<name>` (`/api/auth`,
-`/api/projects`, `/api/persons`, `/api/organizations`, `/api/notifications`, `/api/forms`;
+`/api/projects`, `/api/persons`, `/api/organizations`, `/api/notifications`, `/api/forms`, `/api/ai`,
+`/api/developers`;
 sockets at `/api/dispatch/socket.io`): the Vite proxy locally, the ingress in production. No CORS.
 | `deployment` | k8s manifests under `core/<ms>/`, namespace `ipalpha-core` |
 
@@ -129,7 +131,14 @@ Dev-only release (no prod rollout):
 | organizations-api | 3003 |
 | notifications-api | 3004 |
 | auth-api | 3005 |
+| forms-api | 3006 |
+| dispatch-api | 3007 |
+| ai-api | 3008 |
+| developers-api | 3009 |
 | auth-webapp (Vite) | 5100 |
+| forms-webapp (Vite) | 5106 |
+| mordomia-webapp (Vite) | 5110 |
+| developers-webapp (Vite) | 5111 |
 | MongoDB | 27017 |
 | Redis | 6379 |
 | RabbitMQ | 5672 |
@@ -146,6 +155,12 @@ ai, developers, shared-js, shared-ui) and the core UIs (Mordomia, the auth popup
 own namespace in production (`ipalpha-forms`, own Mongo/Redis, events to core over HTTP webhooks).
 They still depend on `../../../core/shared-js` / `shared-ui`. `./pull` moves an older workspace's
 `core/forms-*` (and its feature worktrees) to `apps/forms/` automatically.
+
+**Acampa Kids** (`apps/acampa-kids/{backend,frontend,face-service}`, GitHub `ipalpha-dev/acampa-kids-backend` /
+`acampa-kids-frontend` / `acampa-kids-face-service`) is an app outside core with its own repos, registry path and TeamCity project
+(namespace `ipalpha-acampa-kids`). It does not depend on core packages and `./run` does not start it.
+Its repos are optional: setup/`./pull` clone them when your account can read them (otherwise one warning)
+and `./feature` skips them when absent.
 
 In a feature environment every core service always runs; an app joins only when one of its own
 repos changed — a forms change never deploys other apps.
@@ -177,12 +192,34 @@ After a successful publish you get:
 | `https://ipalpha-<slug>.kevyn.com.br` | Mordomia (with the `preview · <slug> · expires in Nh` badge) |
 | `https://forms-ipalpha-<slug>.kevyn.com.br` | IPAlpha Formulários |
 | `https://auth-ipalpha-<slug>.kevyn.com.br` | sign-in popup |
+| `https://developers-ipalpha-<slug>.kevyn.com.br` | IPAlpha Developers — when the baseline includes developers-webapp |
 | `https://ipalpha-<slug>.kevyn.com.br/mailbox` | captured e-mail/SMS: your login codes (shared `previews` account) |
+| `https://acampa-ipalpha-<slug>.kevyn.com.br` | Acampa Kids — only when an `acampa-kids-*` repo changed in this feature |
 
-Sign in with a fixture account (all fictional — `deployment/fixtures/1/README.md`):
+In previews the Developers portal lets an app owner edit their app's project message templates (production after a
+reviewed audience change).
+
+Acampa in a preview: `./feature new` pins `apps/acampa-kids/<repo>` at the tag `v<version>` of the image
+its production manifest names in the baseline's deployment commit (e.g. backend `0.19.0` → `v0.19.0`;
+origin/master with a warning when that tag is missing). Publishing a change to one of them builds it
+(`<version>-<slug>-<buildId>`); the others run their production images (the face service included; the
+import worker too when Kevyn stored the shared, budget-capped preview OpenRouter key — otherwise CI notes that it
+left the worker out). The pipeline registers Acampa in the preview's core through IPAlpha
+Developers (request → approval → owner secret → app-bound client) and sets up its project as a steward
+would (roles, editions, memberships, message templates); people, families and roles live in core and are
+synthetic (fixture v2). Its quota is the core-only budget (1200m / 2560Mi) plus Acampa's increment (+ the
+worker's when it runs): core-only previews reserve only the core budget. The
+preview needs the per-repo layout of `base/apps/acampa-kids/` in your `feat/<slug>` branch of
+`deployment` (a baseline deployed after it, or rebase that branch on master).
+
+Sign in with a fixture account (all fictional — `deployment/fixtures/2/README.md`):
 `ana.superuser@example.test` (superuser), `bruno.cuidado@example.test` (steward), `carla@example.test`,
 `gabi.presbi@example.test`. Codes never reach a real phone or mailbox; read them in `/mailbox`.
-`ci.preview@example.test` is reserved for the pipeline's own sign-in check.
+`ci.preview@example.test` is reserved for the pipeline's own sign-in check; the pipeline also signs in
+as `rafael.acampa@example.test` (owner of the Acampa app) while it provisions Acampa. Acampa people sign in
+by phone or "Entrar com IPAlpha" (`+55 11 90000-0011` coordenação, `-0012` team + bus check-in, `-0013`
+team + saúde, `-0014`/`-0015`/`-0017` responsáveis, `-0003` responsável + team, `-0018` last year only →
+"não encontramos seu cadastro"); every role per person is in that README.
 
 - Slug: `^[a-z0-9-]{3,30}$`, no hyphen at either end.
 - Your main checkouts are never touched: `features/<slug>/core/<repo>` are `git worktree`s. Inside a

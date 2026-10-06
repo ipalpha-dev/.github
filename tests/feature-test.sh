@@ -17,11 +17,13 @@ export GIT_AUTHOR_NAME=test GIT_AUTHOR_EMAIL=test@example.invalid
 export GIT_COMMITTER_NAME=test GIT_COMMITTER_EMAIL=test@example.invalid
 
 ipalpha_fail() { echo "FAIL: $1" >&2; exit 1; }
-rel() { case "$1" in deployment) echo deployment ;; forms-api|forms-webapp) echo "apps/forms/$1" ;; *) echo "core/$1" ;; esac; }
+rel() { case "$1" in deployment) echo deployment ;; forms-api|forms-webapp) echo "apps/forms/$1" ;;
+  acampa-kids-*) echo "apps/acampa-kids/${1#acampa-kids-}" ;; *) echo "core/$1" ;; esac; }
 
 repos=(deployment shared-js shared-ui projects-api persons-api organizations-api notifications-api auth-api
-  forms-api dispatch-api auth-webapp forms-webapp mordomia-webapp)
-apis=(projects-api persons-api organizations-api notifications-api auth-api forms-api dispatch-api)
+  forms-api ai-api developers-api dispatch-api auth-webapp forms-webapp mordomia-webapp developers-webapp
+  acampa-kids-backend acampa-kids-frontend acampa-kids-face-service)
+apis=(projects-api persons-api organizations-api notifications-api auth-api forms-api ai-api developers-api dispatch-api)
 
 echo "== origins"
 seed="$ipalpha_tmp/seed"
@@ -37,20 +39,36 @@ for repo in "${repos[@]}"; do
       printf '{"packages":{"node_modules/@ipalpha/shared-js":{"version":"1.0.0"}}}\n' >"$seed/$repo/package-lock.json"
       ;;
     shared-js) printf '{"name":"@ipalpha/shared-js","version":"1.0.0"}\n' >"$seed/$repo/package.json" ;;
+    acampa-kids-backend) printf '{"name":"camping-backend","version":"0.19.0"}\n' >"$seed/$repo/package.json" ;;
+    acampa-kids-frontend) printf '{"name":"camping-frontend","version":"0.27.0"}\n' >"$seed/$repo/package.json" ;;
+    deployment)   # production manifests of the app outside core: their image tags name the baseline version tags
+      mkdir -p "$seed/$repo/base/apps/acampa-kids/acampa-kids-backend" "$seed/$repo/base/apps/acampa-kids/acampa-kids-frontend" \
+        "$seed/$repo/base/apps/acampa-kids/acampa-kids-face-service"
+      printf '        - image: registry.kevyn.com.br/ip-alpha/apps/acampa-kids/backend:0.19.0\n' >"$seed/$repo/base/apps/acampa-kids/acampa-kids-backend/backend.yaml"
+      printf '        - image: registry.kevyn.com.br/ip-alpha/apps/acampa-kids/frontend:0.27.0\n' >"$seed/$repo/base/apps/acampa-kids/acampa-kids-frontend/frontend.yaml"
+      printf '        - image: registry.kevyn.com.br/ip-alpha/apps/acampa-kids/face:0.1.0\n' >"$seed/$repo/base/apps/acampa-kids/acampa-kids-face-service/face.yaml"
+      ;;
   esac
   git -C "$seed/$repo" add -A
   git -C "$seed/$repo" commit -q -m init
   [[ "$repo" != shared-js ]] || git -C "$seed/$repo" tag v1.0.0
+  # backend v0.19.0 is tagged (deployed); frontend's v0.27.0 tag is missing → origin/master with a warning
+  [[ "$repo" != acampa-kids-backend ]] || git -C "$seed/$repo" tag v0.19.0
   git -C "$seed/$repo" push -q --tags origin master
 done
+for repo in acampa-kids-backend acampa-kids-frontend; do   # app masters move on after the deployed version
+  echo later >>"$seed/$repo/README.md"
+  git -C "$seed/$repo" commit -qam "after the deployed version" && git -C "$seed/$repo" push -q origin master
+done
+acampa_backend_base="$(git -C "$seed/acampa-kids-backend" rev-parse v0.19.0)"
+acampa_frontend_master="$(git -C "$seed/acampa-kids-frontend" rev-parse HEAD)"
 # Baseline pins the init commits; master moves on afterwards, the feature must not follow it.
 node -e '
   const [seed, ...apis] = process.argv.slice(1), cp = require("child_process");
   const head = r => cp.execSync(`git -C ${seed}/${r} rev-parse HEAD`).toString().trim();
   const services = {};
-  for (const r of [...apis, "auth-webapp", "forms-webapp", "mordomia-webapp", "ai-api"])
-    services[r] = { image: `registry.kevyn.com.br/ip-alpha/core/${r}@sha256:${"a".repeat(64)}`,
-      sourceCommit: r === "ai-api" ? "0".repeat(40) : head(r) };
+  for (const r of [...apis, "auth-webapp", "forms-webapp", "mordomia-webapp", "developers-webapp"])
+    services[r] = { image: `registry.kevyn.com.br/ip-alpha/core/${r}@sha256:${"a".repeat(64)}`, sourceCommit: head(r) };
   require("fs").mkdirSync(`${seed}/deployment/releases`, { recursive: true });
   require("fs").writeFileSync(`${seed}/deployment/releases/core-latest.json`, JSON.stringify({
     schemaVersion: 1, release: "core-deploy-1", services, deployment: { commit: head("deployment") },
@@ -90,6 +108,29 @@ done
 [[ "$(git -C "$froot/deployment" rev-parse HEAD)" == "$deployment_base" ]] || ipalpha_fail "deployment not pinned to the baseline deploy commit"
 [[ "$(git -C "$froot/core/shared-js" rev-parse HEAD)" == "$(git -C "$root/core/shared-js" rev-parse v1.0.0)" ]] \
   || ipalpha_fail "shared-js not pinned to the locked version tag"
+[[ "$(git -C "$froot/apps/acampa-kids/backend" rev-parse HEAD)" == "$acampa_backend_base" ]] \
+  || ipalpha_fail "acampa-kids-backend not pinned to v<production manifest version>"
+[[ "$(git -C "$froot/apps/acampa-kids/frontend" rev-parse HEAD)" == "$acampa_frontend_master" ]] \
+  || ipalpha_fail "acampa-kids-frontend without its version tag must start at origin/master"
+grep -q 'acampa-kids-frontend: no tag v0.27.0' <<<"$out" || ipalpha_fail "missing version tag not warned: $out"
+git -C "$froot/apps/acampa-kids/face-service" rev-parse --git-dir >/dev/null 2>&1 \
+  || ipalpha_fail "acampa-kids-face-service worktree missing (the face service is part of Acampa previews)"
+grep -q 'acampa-kids-face-service: no tag v0.1.0' <<<"$out" || ipalpha_fail "face service tag not resolved from face:0.1.0: $out"
+grep -q 'https://acampa-ipalpha-hello-test.kevyn.com.br' <<<"$out" || ipalpha_fail "app host not listed: $out"
+grep -q 'https://developers-ipalpha-hello-test.kevyn.com.br' <<<"$out" || ipalpha_fail "developers host not listed: $out"
+for repo in ai-api developers-api developers-webapp; do
+  [[ "$(git -C "$froot/core/$repo" rev-parse HEAD)" == "$(git -C "$root/core/$repo" rev-parse HEAD)" ]] \
+    || ipalpha_fail "$repo not pinned to its baseline sourceCommit"
+done
+grep -q '^ai-api_port=3108$' "$froot/.ipalpha/settings" || ipalpha_fail "feature ai-api port not offset"
+grep -q '^developers-api_port=3109$' "$froot/.ipalpha/settings" || ipalpha_fail "feature developers-api port not offset"
+grep -q '^developers-webapp_port=5211$' "$froot/.ipalpha/settings" || ipalpha_fail "feature developers-webapp port not offset"
+grep -q '^PORT=3109$' "$froot/core/developers-api/.env" || ipalpha_fail "feature developers-api .env PORT not rewritten"
+grep -q '^AUTH_API_URL=http://127.0.0.1:3105$' "$froot/core/developers-api/.env" || ipalpha_fail "feature developers-api peer URL not rewritten"
+grep -q '^DEVELOPERS_API_URL=http://127.0.0.1:3109$' "$froot/core/dispatch-api/.env" || ipalpha_fail "feature dispatch-api DEVELOPERS_API_URL not rewritten"
+grep -q '^SOCKET_ALLOWED_ORIGINS=.*http://localhost:5211' "$froot/core/dispatch-api/.env" || ipalpha_fail "feature developers-webapp origin not rewritten"
+grep -q '^PORT=3108$' "$froot/core/ai-api/.env" || ipalpha_fail "feature ai-api .env PORT not rewritten"
+[[ -z "$(git -C "$froot/core/ai-api" status --porcelain)" ]] || ipalpha_fail "ai-api worktree .env is not excluded"
 [[ -z "$(git -C "$root/core/auth-api" status --porcelain)" ]] || ipalpha_fail "main checkout touched"
 [[ -f "$froot/core/persons-api/.env" && -z "$(git -C "$froot/core/persons-api" status --porcelain)" ]] \
   || ipalpha_fail "worktree .env is not excluded"
@@ -107,7 +148,11 @@ node -e '
   const ok = r.schemaVersion === 1 && r.feature === "hello-test" && r.namespace === "ipalpha-feat-hello-test"
     && r.generation === 0 && r.expiresAt === null && r.baselineRelease.id === "core-deploy-1"
     && r.hosts.join(" ") === "ipalpha-hello-test.kevyn.com.br forms-ipalpha-hello-test.kevyn.com.br auth-ipalpha-hello-test.kevyn.com.br"
-    && Object.values(r.repositories).every(x => x.baseCommit === x.featureCommit && x.baseRef === "master");
+    && Object.values(r.repositories).every(x => x.baseCommit === x.featureCommit && x.baseRef === "master")
+    && r.repositories["acampa-kids-backend"].url === "git@github.com:ipalpha-dev/acampa-kids-backend.git"
+    && r.repositories["acampa-kids-frontend"] !== undefined
+    && ["ai-api", "developers-api", "developers-webapp"].every(k => r.repositories[k]
+      && r.repositories[k].url === `git@github.com:ipalpha-dev/${k}.git`);
   if (!ok) { console.error(JSON.stringify(r, null, 2)); process.exit(1); }
 ' "$froot/.ipalpha/release.json" || ipalpha_fail "draft release.json wrong"
 
@@ -120,6 +165,7 @@ node -e '
 git -C "$seed/deployment" commit -qam "[core-release] core-deploy-2" && git -C "$seed/deployment" push -q origin master
 out="$(cd "$root" && ./feature new pinned-old --baseline "$old_baseline" 2>&1)" || ipalpha_fail "--baseline failed: $out"
 grep -q 'core-deploy-1' <<<"$out" || ipalpha_fail "--baseline did not use the older record: $out"
+grep -q 'ai-api: not in this baseline' <<<"$out" && ipalpha_fail "ai-api is in core-deploy-1: $out"
 [[ "$(git -C "$root/features/pinned-old/core/auth-api" rev-parse HEAD)" == "$auth_base" ]] || ipalpha_fail "--baseline auth-api pin"
 out="$(cd "$root" && ./feature new pinned-new 2>&1)" || ipalpha_fail "default baseline failed: $out"
 grep -q 'core-deploy-2' <<<"$out" || ipalpha_fail "default did not use the newest record"
@@ -130,6 +176,21 @@ echo "== second feature gets another port block"
 (cd "$root" && ./feature new second-one >/dev/null 2>&1) || ipalpha_fail "second feature failed"
 grep -q '^mongo_port=27417$' "$root/features/second-one/.ipalpha/settings" || ipalpha_fail "second feature port block"
 (cd "$root" && ./feature new second-one >/dev/null 2>&1) && ipalpha_fail "duplicate feature accepted"
+
+echo "== an earlier baseline without a core repo skips it (developers-webapp)"
+git -C "$seed/deployment" pull -q --rebase origin master
+latest="$seed/deployment/releases/core-latest.json"; cp "$latest" "$ipalpha_tmp/core-latest.json"
+node -e 'const fs=require("fs"), f=process.argv[1], r=JSON.parse(fs.readFileSync(f));
+  r.release="core-deploy-0"; delete r.services["developers-webapp"]; fs.writeFileSync(f, JSON.stringify(r, null, 2));' "$latest"
+git -C "$seed/deployment" commit -qam "[core-release] core-deploy-0" && git -C "$seed/deployment" push -q origin master
+no_dev="$(git -C "$seed/deployment" rev-parse HEAD)"
+cp "$ipalpha_tmp/core-latest.json" "$latest"
+git -C "$seed/deployment" commit -qam "[core-release] core-deploy-2" && git -C "$seed/deployment" push -q origin master
+out="$(cd "$root" && ./feature new no-devweb --baseline "$no_dev" 2>&1)" || ipalpha_fail "baseline without developers-webapp failed: $out"
+grep -q 'developers-webapp: not in this baseline — skipped' <<<"$out" || ipalpha_fail "missing repo not reported: $out"
+[[ ! -e "$root/features/no-devweb/core/developers-webapp" ]] || ipalpha_fail "worktree created for a repo outside the baseline"
+node -e 'const r=require(process.argv[1]); process.exit(!("developers-webapp" in r.repositories) && "developers-api" in r.repositories ? 0 : 1)' \
+  "$root/features/no-devweb/.ipalpha/release.json" || ipalpha_fail "record lists a repo outside the baseline"
 
 echo "== failed new rolls back"
 git -C "$root/core/mordomia-webapp" checkout -q -b feat/rollback-me
@@ -176,9 +237,25 @@ record="$(git -C "$IPALPHA_TEST_ORIGINS/deployment.git" show master:previews/hel
 node -e '
   const r = JSON.parse(process.argv[1]);
   // shared-js → core APIs only; forms-api (apps/forms) is not pulled in, forms-webapp is there because it changed.
-  const need = ["auth-api","dispatch-api","notifications-api","organizations-api","persons-api","projects-api","forms-webapp"];
-  if (r.generation !== 2 || !need.every(s => s in r.images) || "auth-webapp" in r.images || "forms-api" in r.images) { console.error(r); process.exit(1); }
+  const need = ["auth-api","dispatch-api","notifications-api","organizations-api","persons-api","projects-api","ai-api","developers-api","forms-webapp"];
+  if (r.generation !== 2 || !need.every(s => s in r.images) || "auth-webapp" in r.images || "developers-webapp" in r.images
+      || "forms-api" in r.images) { console.error(r); process.exit(1); }
 ' "$record" || ipalpha_fail "shared-js closure wrong"
+
+echo "== an app outside core with its own repos (Acampa Kids)"
+echo "change" >>"$froot/apps/acampa-kids/backend/README.md"
+out="$(cd "$froot" && ./publish --feature hello-test --no-wait </dev/null 2>&1)" || ipalpha_fail "acampa publish failed: $out"
+git -C "$IPALPHA_TEST_ORIGINS/acampa-kids-backend.git" rev-parse -q --verify refs/heads/feat/hello-test >/dev/null \
+  || ipalpha_fail "feat/hello-test not pushed for acampa-kids-backend"
+git -C "$IPALPHA_TEST_ORIGINS/acampa-kids-frontend.git" rev-parse -q --verify refs/heads/feat/hello-test >/dev/null \
+  && ipalpha_fail "unchanged acampa-kids-frontend branch pushed"
+record="$(git -C "$IPALPHA_TEST_ORIGINS/deployment.git" show master:previews/hello-test/release.json)"
+node -e '
+  const r = JSON.parse(process.argv[1]), b = r.repositories["acampa-kids-backend"], f = r.repositories["acampa-kids-frontend"];
+  if (!(b.featureCommit !== b.baseCommit && f.featureCommit === f.baseCommit && "acampa-kids-backend" in r.images
+        && !("acampa-kids-frontend" in r.images) && r.generation === 3)) { console.error(r); process.exit(1); }
+' "$record" || ipalpha_fail "acampa record wrong"
+[[ "$(node -p 'require(process.argv[1]).version' "$froot/apps/acampa-kids/backend/package.json")" == 0.19.0 ]] || ipalpha_fail "acampa version bumped"
 
 echo "== CI fields on master survive the next publish"
 ci="$ipalpha_tmp/ci"; git clone -q "$IPALPHA_TEST_ORIGINS/deployment.git" "$ci"
@@ -192,7 +269,7 @@ git -C "$ci" commit -qam "[preview] hello-test gen 2" && git -C "$ci" push -q or
 record="$(git -C "$IPALPHA_TEST_ORIGINS/deployment.git" show master:previews/hello-test/release.json)"
 node -e '
   const r = JSON.parse(process.argv[1]);
-  if (r.action !== "extend" || r.expiresAt !== "2099-01-01T00:00:00Z" || r.images["auth-webapp"].digest !== "sha256:ci" || r.generation !== 2)
+  if (r.action !== "extend" || r.expiresAt !== "2099-01-01T00:00:00Z" || r.images["auth-webapp"].digest !== "sha256:ci" || r.generation !== 3)
     { console.error(r); process.exit(1); }
 ' "$record" || ipalpha_fail "extend lost CI fields"
 
@@ -251,6 +328,8 @@ out="$(cd "$root" && echo hello-test | ./feature destroy hello-test --no-wait 2>
 [[ ! -e "$froot" ]] || ipalpha_fail "feature folder still there"
 git -C "$root/apps/forms/forms-webapp" rev-parse -q --verify refs/heads/feat/hello-test >/dev/null || ipalpha_fail "branch deleted"
 [[ -z "$(git -C "$root/apps/forms/forms-webapp" worktree list | grep hello-test)" ]] || ipalpha_fail "worktree still registered"
+[[ -z "$(git -C "$root/apps/acampa-kids/backend" worktree list | grep hello-test)" ]] || ipalpha_fail "acampa worktree still registered"
+git -C "$root/apps/acampa-kids/backend" rev-parse -q --verify refs/heads/feat/hello-test >/dev/null || ipalpha_fail "acampa branch deleted"
 record="$(git -C "$IPALPHA_TEST_ORIGINS/deployment.git" show master:previews/hello-test/release.json)"
 node -e '
   const r = JSON.parse(process.argv[1]);
@@ -277,5 +356,22 @@ echo wip >"$root/features/hello-test/core/forms-api/wip.txt"
 [[ -f "$legacy/.git" && -f "$legacy/wip.txt" && ! -e "$root/features/hello-test/core/forms-api" ]] || ipalpha_fail "feature worktree not moved"
 [[ "$(git -C "$legacy" symbolic-ref --short HEAD)" == feat/hello-test ]] || ipalpha_fail "moved worktree lost its branch"
 git -C "$root/apps/forms/forms-api" worktree list | grep -q "$legacy" || ipalpha_fail "worktree not registered at the new path"
+
+echo "== rebase keeps the app pin rule (moves to the new production tag)"
+echo "x" >>"$seed/acampa-kids-backend/README.md"
+git -C "$seed/acampa-kids-backend" commit -qam "0.20.0" && git -C "$seed/acampa-kids-backend" tag v0.20.0 \
+  && git -C "$seed/acampa-kids-backend" push -q --tags origin master
+git -C "$seed/deployment" pull -q --rebase origin master   # publishes and the CI simulation pushed records meanwhile
+sed -i.bak 's/backend:0.19.0/backend:0.20.0/' "$seed/deployment/base/apps/acampa-kids/acampa-kids-backend/backend.yaml" && rm -f "$seed/deployment/base/apps/acampa-kids/acampa-kids-backend/backend.yaml.bak"
+git -C "$seed/deployment" commit -qam "acampa 0.20.0 manifest" && git -C "$seed/deployment" push -q origin master
+node -e '
+  const fs=require("fs"), f=process.argv[1], r=JSON.parse(fs.readFileSync(f));
+  r.release="core-deploy-3"; r.deployment.commit=process.argv[2];
+  fs.writeFileSync(f, JSON.stringify(r, null, 2));' "$seed/deployment/releases/core-latest.json" "$(git -C "$seed/deployment" rev-parse HEAD)"
+git -C "$seed/deployment" commit -qam "[core-release] core-deploy-3" && git -C "$seed/deployment" push -q origin master
+git -C "$root/apps/acampa-kids/backend" fetch -q --tags origin
+out="$(cd "$root" && ./feature rebase second-one 2>&1)" || ipalpha_fail "rebase failed: $out"
+[[ "$(git -C "$root/features/second-one/apps/acampa-kids/backend" merge-base HEAD "$(git -C "$seed/acampa-kids-backend" rev-parse v0.20.0)")" \
+   == "$(git -C "$seed/acampa-kids-backend" rev-parse v0.20.0)" ]] || ipalpha_fail "acampa backend not rebased onto v0.20.0: $out"
 
 echo "feature-test: all assertions passed"

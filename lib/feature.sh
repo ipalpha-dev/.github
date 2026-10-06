@@ -16,13 +16,26 @@ ipalpha_feature_hosts() {
   echo "ipalpha-$slug.$ipalpha_feature_domain forms-ipalpha-$slug.$ipalpha_feature_domain auth-ipalpha-$slug.$ipalpha_feature_domain"
 }
 
+# IPAlpha Developers (developers-webapp) has its own host, served when the baseline includes it. CI writes
+# the hosts actually served into the record, so the draft keeps the 3 spec hosts.
+ipalpha_feature_developers_host() {
+  local slug="$1"
+  echo "developers-ipalpha-$slug.$ipalpha_feature_domain"
+}
+
+# Hosts of apps outside core with their own host, served only when the app is in the preview (it changed).
+ipalpha_feature_app_hosts() {
+  local slug="$1"
+  echo "acampa-ipalpha-$slug.$ipalpha_feature_domain"
+}
+
 ipalpha_feature_validate_slug() {
   local slug="$1" host
   [[ "$slug" =~ ^[a-z0-9-]{3,30}$ ]] || { ipalpha_feature_fail "$(ipalpha_msg feature_bad_slug): $slug"; return 1; }
   # DNS labels cannot start or end with a hyphen.
   [[ "$slug" != -* && "$slug" != *- ]] || { ipalpha_feature_fail "$(ipalpha_msg feature_bad_slug): $slug"; return 1; }
   # Spec rule: every whole host ≤ 63 chars (stricter than the per-label DNS limit).
-  for host in $(ipalpha_feature_hosts "$slug"); do
+  for host in $(ipalpha_feature_hosts "$slug") $(ipalpha_feature_developers_host "$slug") $(ipalpha_feature_app_hosts "$slug"); do
     (( ${#host} <= 63 )) || { ipalpha_feature_fail "host longer than 63 chars: $host"; return 1; }
   done
 }
@@ -62,10 +75,26 @@ ipalpha_feature_read_baseline() {
 # Commit the baseline pins for a repository. shared-js is consumed from npm, so its commit is the
 # release tag of the version locked by the APIs. deployment starts at the commit whose base/ the
 # baseline images were deployed with (core-latest.json deployment.commit): previews render base/
-# from feat/<slug>, so manifests always match the images (Kevyn).
+# from feat/<slug>, so manifests always match the images (Kevyn). Apps with their own registry
+# (ipalpha_app_repos) are not in the core baseline: their tag v<version> where <version> is the image tag
+# of their production manifest in that deployment commit (tags mark what runs in production, Kevyn);
+# origin/master with a warning when that tag is missing.
 ipalpha_feature_base_commit() {
   local main="$1" baseline="$2" repo="$3"
-  local commit version="" api api_commit
+  local commit version="" api api_commit app image deploy_commit dir
+  if ipalpha_is_app_repo "$repo"; then
+    app="$(ipalpha_app_of "$repo")"; image="$(ipalpha_app_image "$repo")"; dir="$(ipalpha_repo_path "$main" "$repo")"
+    deploy_commit="$(node -p 'JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).deployment.commit' "$baseline")"
+    version="$(git -C "$main/deployment" grep -h -o -E "ip-alpha/apps/$app/$image:[0-9]+\.[0-9]+\.[0-9]+" \
+      "$deploy_commit" -- base/apps 2>/dev/null | head -n1 | sed 's/.*://')"
+    if [[ -n "$version" ]] && commit="$(git -C "$dir" rev-parse --verify -q "v$version^{commit}")"; then
+      echo "$commit"; return 0
+    fi
+    echo "  warning: $repo: no tag v${version:-?} for the production manifest's image tag — starting at origin/master" >&2
+    git -C "$dir" rev-parse --verify -q "origin/master^{commit}" \
+      || { ipalpha_feature_fail "$repo: neither v${version:-?} nor origin/master found"; return 1; }
+    return 0
+  fi
   case "$repo" in
     shared-js)
       for api in "${ipalpha_ms_order[@]}"; do
@@ -89,6 +118,17 @@ ipalpha_feature_base_commit() {
   ' "$baseline" "$repo")"
   [[ -n "$commit" ]] || { ipalpha_feature_fail "baseline has no commit for $repo"; return 1; }
   echo "$commit"
+}
+
+# Whether an earlier recorded baseline (--baseline) predates a core repository (e.g. ai-api, developers-*):
+# such a repo gets no worktree and its preview runs without it, like production did then.
+ipalpha_feature_in_baseline() {
+  local baseline="$1" repo="$2"
+  case "$repo" in deployment|shared-js) return 0 ;; esac
+  node -e '
+    const b = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")), r = process.argv[2];
+    process.exit(((b.services || {})[r] || (b.libraries || {})[r]) ? 0 : 1);
+  ' "$baseline" "$repo"
 }
 
 # Fetch every main clone in parallel (baseline commits/tags must be local before resolving).
@@ -246,6 +286,8 @@ ipalpha_feature_new() {
   echo "  cd features/$slug && ./run        # mongo :$ipalpha_port_mongo · web :$ipalpha_port_mordomia_webapp"
   echo "  ./publish --feature $slug         # preview:"
   for host in $(ipalpha_feature_hosts "$slug"); do echo "    https://$host"; done
+  echo "    https://$(ipalpha_feature_developers_host "$slug")   (IPAlpha Developers, when the baseline has it)"
+  for host in $(ipalpha_feature_app_hosts "$slug"); do echo "    https://$host   (when its app changes)"; done
 }
 
 ipalpha_feature_new_into() {
@@ -254,6 +296,14 @@ ipalpha_feature_new_into() {
   echo "$(ipalpha_msg feature_creating) $slug ($(node -p 'JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).release' "$baseline"))"
   ipalpha_feature_fetch_all "$main"
   for repo in $(ipalpha_all_repos); do
+    if ipalpha_is_app_repo "$repo" && ! ipalpha_is_git_repo "$(ipalpha_repo_path "$main" "$repo")"; then
+      echo "  $repo: not cloned here (optional app) — skipped"
+      continue
+    fi
+    if ! ipalpha_is_app_repo "$repo" && ! ipalpha_feature_in_baseline "$baseline" "$repo"; then
+      echo "  $repo: not in this baseline — skipped"
+      continue
+    fi
     base="$(ipalpha_feature_base_commit "$main" "$baseline" "$repo")" || return 1
     dest="$(ipalpha_repo_path "$froot" "$repo")"
     src="$(ipalpha_repo_path "$main" "$repo")"
@@ -275,6 +325,7 @@ ipalpha_feature_new_into() {
   ipalpha_feature_assign_ports "$main" || return 1
   for repo in "${ipalpha_ms_repos[@]}"; do
     dest="$(ipalpha_repo_path "$froot" "$repo")"
+    [[ -d "$dest" ]] || continue   # not in this baseline
     if [[ -f "$(ipalpha_repo_path "$main" "$repo")/.env" ]]; then
       cp "$(ipalpha_repo_path "$main" "$repo")/.env" "$dest/.env"
     else
@@ -289,9 +340,9 @@ ipalpha_feature_new_into() {
 }
 
 # Changed = featureCommit != baseCommit, plus the dependency closure (decision 9):
-# shared-js → every core *-api, shared-ui → every core *-webapp. Apps outside core (apps/<app>) join a
-# preview only when one of their own repos changed (Kevyn). ai-api is not cloned locally; CI applies
-# the same closure to it.
+# shared-js → every core *-api (ai-api and developers-api included, they are worktrees like the others),
+# shared-ui → every core *-webapp (developers-webapp included). Apps outside core (apps/<app>) join a
+# preview only when one of their own repos changed (Kevyn).
 ipalpha_feature_changed_services() {
   local record="$1"
   ipalpha_feature_json "$record" '
