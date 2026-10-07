@@ -813,6 +813,9 @@ ipalpha_materialize_workspace() {
 
   echo "$(ipalpha_msg writing_workspace)"
   mkdir -p "$dir/bin" "$dir/lib"
+  if [[ "${ipalpha_infra_name:-ipalpha}" == ipalpha && ! -f "$dir/settings" ]]; then
+    ipalpha_infra_name="$(ipalpha_workspace_infra_name "$target_root")"
+  fi
 
   for lib in "$setup_root"/lib/*.sh; do
     [[ -f "$lib" ]] || continue

@@ -70,9 +70,14 @@ follow `ghcr.io/<org>/<ms>`.
 
 1. Starts infrastructure in containers and waits for health:
    MongoDB, Redis, RabbitMQ (+ management UI on 15672), and Mailpit. Apple `container` runs
-   the services directly (network `ipalpha`, named volumes `ipalpha-*-data`);
-   Docker uses `docker compose --wait`.
-2. Installs missing npm dependencies per service (`@ipalpha/shared-js` comes from npm; the `core/shared-js` clone is only for changing the library).
+   the services directly (network and named volumes prefixed by `infra_name`);
+   Docker uses `docker compose --wait`. Each workspace has its own infra: setup derives
+   `infra_name` in `.ipalpha/settings` from the folder (`IpAlpha` → `ipalpha`, `ipalpha-2` →
+   `ipalpha-2`), so a second workspace never reuses another's database or client secrets.
+   They share ports, so run one workspace at a time.
+2. Installs missing npm dependencies in parallel: shared-js/shared-ui are installed and built
+   first (consumers copy them), then every other project. A failure prints npm's last lines and
+   the full log path under `.ipalpha/.state/install-deps/`.
 3. Starts every API and the remembered web apps at once — nothing waits for a peer. Each core MS
    exposes `GET /live` (process up) and `GET /ready` (200 only when Mongo, Redis,
    RabbitMQ and the projects cache are all good; 503 `{ready:false, checks}` otherwise).

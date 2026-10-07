@@ -155,7 +155,7 @@ ipalpha_seed_local_clients() {
       ? text.replace(/^SEED_CLIENTS_JSON=.*$/m, () => line)
       : text.replace(/\n?$/, "\n") + line + "\n");
     fs.chmodSync(authEnv, 0o600);
-  ' "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  ' "$(dirname "${BASH_SOURCE[0]}")"
 }
 
 ipalpha_prepare_local_envs() {

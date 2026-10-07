@@ -21,6 +21,14 @@ ipalpha_tooling_repo=".github"
 # Compose project / container prefix; feature workspaces use ipalpha-<slug> so they run side by side.
 ipalpha_infra_name="${ipalpha_infra_name:-ipalpha}"
 
+# Each workspace gets its own containers/volumes (IpAlpha → ipalpha, ipalpha-2 → ipalpha-2).
+ipalpha_workspace_infra_name() {
+  local slug
+  slug="$(basename "$1" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//')"
+  [[ "$slug" == ipalpha* ]] || slug="ipalpha-${slug:-local}"
+  echo "${slug:0:40}"
+}
+
 ipalpha_default_mongo_port=27017
 ipalpha_default_redis_port=6379
 ipalpha_default_rabbitmq_port=5672
