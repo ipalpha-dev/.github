@@ -46,13 +46,22 @@ try {
   assert.equal(readEnv(path.join(root, '.ipalpha/ports.env')).MAILPIT_HOST_PORT, '8026');
   assert.equal(readEnv(path.join(root, '.ipalpha/settings')).mailpit_port, '8026');
 
-  // Existing explicit delivery choices and credentials are never overwritten.
-  fs.writeFileSync(file, 'MAIL_PROVIDER=sendgrid\nSMS_PROVIDER=smsbarato\nSENDGRID_API_KEY=operator-value\nMAILPIT_URL=http://127.0.0.1:8999\n');
+  // The repo's .env.example names the paid providers with empty keys: local sends go to Mailpit.
+  fs.writeFileSync(file, 'MAIL_PROVIDER=sendgrid\nSENDGRID_API_KEY=\nSMS_PROVIDER=smsbarato\nSMSBARATO_KEY=\nDEPLOYMENT_ENVIRONMENT=production\n');
+  completeLocalEnv(repo, 'notifications-api', fallback);
+  const example = readEnv(file);
+  assert.equal(example.MAIL_PROVIDER, 'mailpit');
+  assert.equal(example.SMS_PROVIDER, 'mailpit');
+  assert.equal(example.DEPLOYMENT_ENVIRONMENT, 'development');
+
+  // Explicit delivery choices backed by credentials are never overwritten.
+  fs.writeFileSync(file, 'MAIL_PROVIDER=sendgrid\nSMS_PROVIDER=smsbarato\nSENDGRID_API_KEY=operator-value\nSMSBARATO_KEY=operator-sms\nMAILPIT_URL=http://127.0.0.1:8999\n');
   completeLocalEnv(repo, 'notifications-api', fallback);
   const custom = readEnv(file);
   assert.equal(custom.MAIL_PROVIDER, 'sendgrid');
   assert.equal(custom.SMS_PROVIDER, 'smsbarato');
   assert.equal(custom.SENDGRID_API_KEY, 'operator-value');
+  assert.equal(custom.SMSBARATO_KEY, 'operator-sms');
   assert.equal(custom.MAILPIT_URL, 'http://127.0.0.1:8999');
 
   for (const name of ['infra-up', 'infra-down', 'infra-logs']) {
