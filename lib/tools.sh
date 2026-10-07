@@ -7,12 +7,25 @@ ipalpha_has_brew() {
 ipalpha_brew_install() {
   local formula="$1"
   ipalpha_has_brew || return 1
-  brew install "$formula" >/dev/null 2>&1 || brew upgrade "$formula" >/dev/null 2>&1 || return 1
+  if [[ "${ipalpha_ui_active:-false}" == true ]]; then
+    ipalpha_ui_run "$formula" brew install "$formula" || ipalpha_ui_run "$formula" brew upgrade "$formula" || return 1
+  else
+    brew install "$formula" >/dev/null 2>&1 || brew upgrade "$formula" >/dev/null 2>&1 || return 1
+  fi
 }
 
 ipalpha_tool_menu() {
   local name="$1" hint="$2"
   local choice
+  if [[ "${ipalpha_ui_active:-false}" == true ]]; then
+    ipalpha_ui_select "$(ipalpha_msg tool_missing): $name" "$hint" \
+      "$(ipalpha_msg tool_opt_auto)" "$(ipalpha_msg tool_opt_manual)" "$(ipalpha_msg tool_opt_quit)" || exit 130
+    case "$ipalpha_ui_answer" in
+      1) return 0 ;;
+      2) return 2 ;;
+      *) return 3 ;;
+    esac
+  fi
   while true; do
     echo
     echo "  $(ipalpha_msg tool_missing): $name"
@@ -33,6 +46,7 @@ ipalpha_tool_menu() {
 ipalpha_ensure_tool() {
   local name="$1" check="$2" hint="$3" formula="$4"
   local mode
+  if [[ "${ipalpha_ui_active:-false}" == true ]]; then ipalpha_ui_progress "$(ipalpha_msg checking_tools): $name"; fi
   while true; do
     if $check >/dev/null 2>&1; then
       echo "  $name: $(ipalpha_msg tool_ok)"
@@ -89,6 +103,7 @@ ipalpha_detect_runtime() {
 
 ipalpha_ensure_runtime() {
   local mode choice
+  if [[ "${ipalpha_ui_active:-false}" == true ]]; then ipalpha_ui_progress "$(ipalpha_msg checking_tools): container-runtime"; fi
   while true; do
     ipalpha_detect_runtime
     if [[ -n "$ipalpha_runtime" ]]; then

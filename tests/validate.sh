@@ -71,6 +71,13 @@ fi
 echo "== setup fixture test"
 "$ipalpha_repo_root/tests/setup-test.sh"
 
+echo "== setup terminal UI test"
+if command -v python3 >/dev/null 2>&1; then
+  python3 "$ipalpha_repo_root/tests/setup-ui-test.py"
+else
+  echo "SKIP: python3 not installed"
+fi
+
 echo "== feature workspace test"
 "$ipalpha_repo_root/tests/feature-test.sh"
 

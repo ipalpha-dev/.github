@@ -16,6 +16,12 @@ ipalpha_msg() {
   case "$ipalpha_lang:$key" in
     pt-BR:choose_lang) echo "Idioma / Language: [1] Português (padrão)  [2] English" ;;
     en-US:choose_lang) echo "Language / Idioma: [1] Português (default)  [2] English" ;;
+    pt-BR:setup_keys) echo "↑/↓ escolher   Enter confirmar   Esc sair" ;;
+    en-US:setup_keys) echo "↑/↓ choose   Enter confirm   Esc quit" ;;
+    pt-BR:setup_input_keys) echo "Enter confirmar   Ctrl+C sair" ;;
+    en-US:setup_input_keys) echo "Enter confirm   Ctrl+C quit" ;;
+    pt-BR:setup_configuring) echo "Configurando o workspace" ;;
+    en-US:setup_configuring) echo "Configuring the workspace" ;;
     pt-BR:invalid_choice) echo "Opção inválida." ;;
     en-US:invalid_choice) echo "Invalid choice." ;;
     pt-BR:target_folder) echo "Pasta raiz do workspace" ;;
@@ -276,6 +282,11 @@ Flags: -y/--yes (no confirmation), --no-wait (do not wait for TeamCity), --force
 
 ipalpha_prompt_language() {
   local picked
+  if [[ "${ipalpha_ui_active:-false}" == true ]]; then
+    ipalpha_ui_select "Idioma / Language" "Idioma / Language" "Português" "English" || exit 130
+    if [[ "$ipalpha_ui_answer" == 2 ]]; then ipalpha_i18n_init en-US; else ipalpha_i18n_init pt-BR; fi
+    return 0
+  fi
   printf '\033[?25h' >/dev/tty 2>/dev/null || true
   echo "$(ipalpha_msg choose_lang)"
   read -r picked </dev/tty 2>/dev/null || picked=""

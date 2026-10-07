@@ -19,6 +19,8 @@ source "$ipalpha_setup_root/lib/ports.sh"
 source "$ipalpha_setup_root/lib/settings.sh"
 # shellcheck source=lib/generate.sh
 source "$ipalpha_setup_root/lib/generate.sh"
+# shellcheck source=lib/setup-ui.sh
+source "$ipalpha_setup_root/lib/setup-ui.sh"
 
 ipalpha_skip_tools=false
 ipalpha_keep_setup=false
@@ -36,6 +38,11 @@ for arg in "$@"; do
   esac
 done
 
+ipalpha_ui_start
+trap ipalpha_ui_cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
 if [[ -n "${IPALPHA_LANG:-}" ]]; then
   ipalpha_i18n_init "$IPALPHA_LANG"
 else
@@ -46,17 +53,23 @@ if [[ -n "${IPALPHA_TARGET_DIR:-}" ]]; then
   ipalpha_target_root="$IPALPHA_TARGET_DIR"
 else
   default_root="${IPALPHA_DEFAULT_ROOT:-$PWD/IpAlpha}"
-  echo
-  echo "$(ipalpha_msg target_folder)"
-  echo "  $(ipalpha_msg target_prompt): $default_root"
-  read -r answer </dev/tty 2>/dev/null || answer=""
-  ipalpha_target_root="${answer:-$default_root}"
+  if [[ "$ipalpha_ui_active" == true ]]; then
+    ipalpha_ui_input "$(ipalpha_msg target_folder)" "$(ipalpha_msg target_folder)" "$default_root" || exit 130
+    ipalpha_target_root="$ipalpha_ui_answer"
+  else
+    echo
+    echo "$(ipalpha_msg target_folder)"
+    echo "  $(ipalpha_msg target_prompt): $default_root"
+    read -r answer </dev/tty 2>/dev/null || answer=""
+    ipalpha_target_root="${answer:-$default_root}"
+  fi
 fi
 mkdir -p "$ipalpha_target_root"
 ipalpha_target_root="$(cd "$ipalpha_target_root" && pwd)"
 echo "  → $ipalpha_target_root"
 
 if [[ "$ipalpha_skip_tools" != true ]]; then
+  if [[ "$ipalpha_ui_active" == true ]]; then ipalpha_ui_progress "$(ipalpha_msg checking_tools)"; fi
   ipalpha_ensure_tools
 else
   ipalpha_detect_runtime
@@ -83,28 +96,29 @@ if [[ -z "$ipalpha_ai_cli" ]]; then
 fi
 echo "  $(ipalpha_msg ai_selected): $ipalpha_ai_cli${ipalpha_ai_model:+ / $ipalpha_ai_model}"
 
-ipalpha_clone_org_repos "$ipalpha_target_root"
+ipalpha_ui_run "$(ipalpha_msg cloning)" ipalpha_clone_org_repos "$ipalpha_target_root"
 
 ipalpha_fallback_env="$ipalpha_setup_root/templates/env-fallback"
 for repo in "${ipalpha_ms_repos[@]}"; do
-  ipalpha_install_repo_env "$(ipalpha_repo_path "$ipalpha_target_root" "$repo")" "$repo" "$ipalpha_fallback_env"
+  ipalpha_ui_run "$(ipalpha_msg setup_configuring)" ipalpha_install_repo_env "$(ipalpha_repo_path "$ipalpha_target_root" "$repo")" "$repo" "$ipalpha_fallback_env"
 done
 
-ipalpha_resolve_ports
-ipalpha_apply_port_rewrites "$ipalpha_target_root"
-ipalpha_seed_local_clients "$ipalpha_target_root"
+ipalpha_ui_run "$(ipalpha_msg setup_configuring)" ipalpha_resolve_ports
+ipalpha_ui_run "$(ipalpha_msg setup_configuring)" ipalpha_apply_port_rewrites "$ipalpha_target_root"
+ipalpha_ui_run "$(ipalpha_msg setup_configuring)" ipalpha_seed_local_clients "$ipalpha_target_root"
 
 if [[ "${IPALPHA_SKIP_INSTALL:-}" != "1" ]]; then
   for repo in "${ipalpha_ms_repos[@]}"; do
     dir="$(ipalpha_repo_path "$ipalpha_target_root" "$repo")"
     if [[ -f "$dir/package.json" ]]; then
       echo "  $(ipalpha_msg app_deps): $repo"
-      (cd "$dir" && npm install --no-audit --no-fund --silent) || true
+      ipalpha_install_dependencies() { (cd "$dir" && npm install --no-audit --no-fund --silent); }
+      ipalpha_ui_run "$(ipalpha_msg app_deps): $repo" ipalpha_install_dependencies || true
     fi
   done
 fi
 
-ipalpha_materialize_workspace "$ipalpha_setup_root" "$ipalpha_target_root"
+ipalpha_ui_run "$(ipalpha_msg setup_configuring)" ipalpha_materialize_workspace "$ipalpha_setup_root" "$ipalpha_target_root"
 cp "$ipalpha_setup_root/set-keys" "$ipalpha_target_root/set-keys" && chmod +x "$ipalpha_target_root/set-keys"
 
 if [[ "$ipalpha_keep_setup" != true && "$(basename "$ipalpha_setup_root")" == "$ipalpha_tooling_repo" \
@@ -113,6 +127,8 @@ if [[ "$ipalpha_keep_setup" != true && "$(basename "$ipalpha_setup_root")" == "$
   rm -rf "$ipalpha_setup_root"
 fi
 
+ipalpha_ui_stop
+ipalpha_ui_cleanup
 echo
 echo "$(ipalpha_msg done)"
 echo "  $(ipalpha_msg done_in): $ipalpha_target_root"

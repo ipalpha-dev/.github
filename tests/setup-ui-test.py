@@ -1,0 +1,202 @@
+#!/usr/bin/env python3
+"""Exercise the real Bash setup UI in a controlling terminal, without installs."""
+import errno
+import fcntl
+import os
+from pathlib import Path
+import pty
+import select
+import signal
+import struct
+import subprocess
+import tempfile
+import termios
+import time
+import unittest
+
+
+ROOT = str(Path(__file__).resolve().parent.parent)
+PRELUDE = """
+set -euo pipefail
+source lib/i18n.sh
+source lib/setup-ui.sh
+ipalpha_ui_start
+trap ipalpha_ui_cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+"""
+
+
+class Terminal:
+    def __init__(self, script, rows=24, cols=80, plain=False):
+        self.pid, self.fd = pty.fork()
+        if self.pid == 0:
+            os.chdir(ROOT)
+            os.environ["TERM"] = "xterm-256color"
+            os.environ["IPALPHA_PLAIN"] = "1" if plain else "0"
+            os.execv("/bin/bash", ["bash", "-c", script])
+        fcntl.ioctl(self.fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
+        self.initial_attrs = termios.tcgetattr(self.fd)
+        self.output = b""
+        self.status = None
+
+    def until(self, marker, timeout=8):
+        deadline = time.monotonic() + timeout
+        while marker not in self.output and time.monotonic() < deadline:
+            if select.select([self.fd], [], [], 0.1)[0]:
+                try:
+                    chunk = os.read(self.fd, 65536)
+                except OSError as error:
+                    if error.errno == errno.EIO:
+                        break
+                    raise
+                if not chunk:
+                    break
+                self.output += chunk
+        if marker not in self.output:
+            raise AssertionError(f"Missing {marker!r} in {self.output!r}")
+
+    def send(self, value):
+        os.write(self.fd, value)
+
+    def finish(self, expected=0):
+        self.until(b"\x1b[?1049l")
+        deadline = time.monotonic() + 8
+        while time.monotonic() < deadline:
+            # macOS can defer terminal-process exit until queued output is drained.
+            if select.select([self.fd], [], [], 0.05)[0]:
+                try:
+                    self.output += os.read(self.fd, 65536)
+                except OSError as error:
+                    if error.errno != errno.EIO:
+                        raise
+            pid, status = os.waitpid(self.pid, os.WNOHANG)
+            if pid:
+                self.status = status
+                break
+            time.sleep(0.05)
+        if self.status is None:
+            raise AssertionError("UI did not exit")
+        actual = os.waitstatus_to_exitcode(self.status)
+        if actual != expected:
+            raise AssertionError(f"Exit {actual}, expected {expected}: {self.output!r}")
+        if termios.tcgetattr(self.fd) != self.initial_attrs:
+            raise AssertionError("Terminal settings were not restored")
+
+    def close(self):
+        os.close(self.fd)
+        if self.status is None:
+            try:
+                os.kill(self.pid, signal.SIGKILL)
+                os.waitpid(self.pid, 0)
+            except ProcessLookupError:
+                pass
+
+
+class SetupUI(unittest.TestCase):
+    def terminal(self, script, **kwargs):
+        terminal = Terminal(PRELUDE + script, **kwargs)
+        self.addCleanup(terminal.close)
+        return terminal
+
+    def test_blue_fullscreen_and_language_arrows(self):
+        terminal = self.terminal("""
+ipalpha_prompt_language
+[[ "$ipalpha_lang" == en-US ]]
+ipalpha_ui_stop
+""")
+        terminal.until(b"English")
+        self.assertIn(b"\x1b[97;44m", terminal.output)
+        for row in range(1, 25):
+            self.assertIn(f"\x1b[{row};1H".encode() + b" " * 80, terminal.output)
+        terminal.send(b"\x1b[B\r")
+        terminal.finish()
+
+    def test_numeric_selection_and_default_input(self):
+        terminal = self.terminal("""
+ipalpha_ui_select Test Choice First Second Third
+[[ "$ipalpha_ui_answer" == 3 ]]
+ipalpha_ui_input Folder Path '/tmp/workspace with spaces'
+[[ "$ipalpha_ui_answer" == '/tmp/workspace with spaces' ]]
+ipalpha_ui_stop
+""")
+        terminal.until(b"Third")
+        terminal.send(b"3")
+        terminal.until(b"/tmp/workspace with spaces")
+        terminal.send(b"\r")
+        terminal.finish()
+
+    def test_input_custom_path(self):
+        terminal = self.terminal("""
+ipalpha_ui_input Folder Path /tmp/default
+[[ "$ipalpha_ui_answer" == '/tmp/custom path' ]]
+ipalpha_ui_stop
+""")
+        terminal.until(b"Ctrl+C")
+        terminal.send(b"/tmp/custom path\r")
+        terminal.finish()
+
+    def test_escape_cancel_restores_terminal(self):
+        terminal = self.terminal("ipalpha_prompt_language")
+        terminal.until(b"English")
+        terminal.send(b"\x1b")
+        terminal.finish(expected=130)
+
+    def test_ctrl_c_restores_terminal(self):
+        terminal = self.terminal("ipalpha_ui_input Folder Path /tmp/default")
+        terminal.until(b"Ctrl+C")
+        terminal.send(b"\x03")
+        terminal.finish(expected=130)
+
+    def test_progress_keeps_function_state_and_stops_on_failure(self):
+        terminal = self.terminal("""
+update_state() { ipalpha_test_state=changed; echo 'Task output'; }
+ipalpha_ui_run Progress update_state
+[[ "$ipalpha_test_state" == changed ]]
+fail_task() { echo 'Expected failure'; false; echo 'MUST NOT RUN'; }
+ipalpha_ui_run Failure fail_task
+""")
+        terminal.finish(expected=1)
+        self.assertNotIn(b"MUST NOT RUN", terminal.output)
+
+    def test_wide_screen(self):
+        terminal = self.terminal("ipalpha_prompt_language", rows=40, cols=140)
+        terminal.until(b"English")
+        self.assertIn(b"\x1b[40;1H" + b" " * 140, terminal.output)
+        terminal.send(b"\r")
+        terminal.finish()
+
+    def test_complete_interactive_setup_without_installing_tools(self):
+        with tempfile.TemporaryDirectory(prefix="ipalpha-ui-test-") as fixture:
+            terminal = self.terminal("""
+ipalpha_ui_stop
+ipalpha_ui_cleanup
+export IPALPHA_TEST_NO_PORT_PROBE=1
+export IPALPHA_CLONE_COMMAND="$PWD/tests/fake-clone"
+export IPALPHA_SKIP_INSTALL=1 IPALPHA_NO_SHELL=1
+unset IPALPHA_LANG IPALPHA_TARGET_DIR
+exec ./setup --skip-tools --keep-setup
+""")
+            terminal.until(b"English")
+            terminal.send(b"2")
+            terminal.until(b"Ctrl+C quit")
+            target = fixture + "/workspace with spaces"
+            terminal.send(target.encode() + b"\r")
+            terminal.until(b"Setup complete", timeout=30)
+            terminal.finish()
+            self.assertTrue(Path(target, ".ipalpha/settings").is_file())
+            self.assertTrue(Path(target, "run").is_file())
+
+    def test_redirected_and_plain_mode_have_no_screen_controls(self):
+        for plain in ("0", "1"):
+            result = subprocess.run(
+                ["/bin/bash", "-c", PRELUDE + "ipalpha_ui_run Test echo ordinary-output"],
+                cwd=ROOT, env={**os.environ, "TERM": "xterm", "IPALPHA_PLAIN": plain},
+                capture_output=True, check=True,
+            )
+            self.assertEqual(result.stdout, b"ordinary-output\n")
+            self.assertEqual(result.stderr, b"")
+
+
+if __name__ == "__main__":
+    unittest.main()
