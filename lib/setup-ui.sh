@@ -56,6 +56,8 @@ ipalpha_ui_line() {
 ipalpha_ui_frame() {
   local title="$1" height="${2:-16}" row border
   ipalpha_ui_size
+  # A menu/input owns the screen now; the next progress view must rebuild it.
+  ipalpha_ui_progress_signature=''
   # Match Cross's setup: full-screen application, compact rounded blue panel.
   # The terminal keeps its normal background; blue belongs to the border/title.
   ipalpha_ui_box_width=$((ipalpha_ui_cols < 80 ? ipalpha_ui_cols : 80))
@@ -164,15 +166,37 @@ ipalpha_ui_input() {
 }
 
 ipalpha_ui_progress() {
-  local title="$1" row line
-  ipalpha_ui_frame "$title" 20
+  local title="$1" row line snapshot signature fresh=false index=0 capacity
+  ipalpha_ui_size
+  signature="$title:$ipalpha_ui_cols:$ipalpha_ui_rows"
+  if [[ "${ipalpha_ui_progress_signature:-}" != "$signature" ]]; then
+    ipalpha_ui_frame "$title" 20
+    ipalpha_ui_progress_signature="$signature"
+    ipalpha_ui_progress_rows=()
+    ipalpha_ui_progress_snapshot=''
+    fresh=true
+  fi
+  capacity=$((ipalpha_ui_box_height > 10 ? ipalpha_ui_box_height - 10 : 1))
+  snapshot="$(tail -n "$capacity" "$ipalpha_ui_log" | LC_ALL=C tr -d '\000-\010\013-\037\177')"
+  # Idle work should write NOTHING to the terminal. Clearing and rebuilding the
+  # full screen on every 300ms tick was the source of the continuous blinking.
+  if [[ "$fresh" != true && "$snapshot" == "${ipalpha_ui_progress_snapshot:-}" ]]; then return 0; fi
+  ipalpha_ui_progress_snapshot="$snapshot"
   row=7
-  while IFS= read -r line; do
-    # Tool output is text, not terminal control (npm/git may include ANSI codes).
-    line="$(printf '%s' "$line" | LC_ALL=C tr -d '\000-\010\013-\037\177')"
-    ipalpha_ui_line "$row" "$line"
-    row=$((row + 1))
-  done < <(tail -n "$((ipalpha_ui_box_height > 10 ? ipalpha_ui_box_height - 10 : 1))" "$ipalpha_ui_log")
+  if [[ -n "$snapshot" ]]; then
+    while IFS= read -r line; do
+      if [[ "$fresh" == true || "$line" != "${ipalpha_ui_progress_rows[$index]-}" ]]; then
+        ipalpha_ui_line "$row" "$line"
+      fi
+      ipalpha_ui_progress_rows[$index]="$line"
+      index=$((index + 1)); row=$((row + 1))
+    done <<<"$snapshot"
+  fi
+  while ((index < capacity)); do
+    if [[ -n "${ipalpha_ui_progress_rows[$index]-}" ]]; then ipalpha_ui_line "$row" ''; fi
+    ipalpha_ui_progress_rows[$index]=''
+    index=$((index + 1)); row=$((row + 1))
+  done
 }
 
 ipalpha_ui_run() {
@@ -194,5 +218,11 @@ ipalpha_ui_run() {
   kill "$ipalpha_ui_painter" 2>/dev/null || true
   wait "$ipalpha_ui_painter" 2>/dev/null || true
   ipalpha_ui_painter=''
+  # The background painter's cache lives in a subshell. Reconcile its final
+  # content in-place so the next stage can reuse the same panel without a clear.
+  ipalpha_ui_progress_snapshot=$'\001'
+  local row
+  for ((row=0; row<ipalpha_ui_box_height; row++)); do ipalpha_ui_progress_rows[$row]=$'\001'; done
+  ipalpha_ui_progress "$title"
   return "$status"
 }

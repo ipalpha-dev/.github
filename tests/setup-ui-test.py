@@ -174,6 +174,56 @@ ipalpha_ui_run Failure fail_task
         terminal.finish(expected=1)
         self.assertNotIn(b"MUST NOT RUN", terminal.output)
 
+    def test_progress_updates_without_clearing_or_repainting_idle_content(self):
+        terminal = self.terminal("""
+echo FIRST-LINE
+ipalpha_ui_progress Cloning
+ipalpha_ui_progress Cloning
+ipalpha_ui_progress Cloning
+echo SECOND-LINE
+ipalpha_ui_progress Cloning
+ipalpha_ui_progress Cloning
+ipalpha_ui_stop
+""")
+        terminal.finish()
+        self.assertEqual(terminal.output.count(b"\x1b[2J"), 1)
+        self.assertEqual(terminal.output.count(b"FIRST-LINE"), 1)
+        self.assertEqual(terminal.output.count(b"SECOND-LINE"), 1)
+
+    def test_background_progress_does_not_clear_on_every_tick(self):
+        terminal = self.terminal("""
+slow_work() { echo START; sleep 1; echo FINISH; }
+ipalpha_ui_run Cloning slow_work
+ipalpha_ui_stop
+""")
+        terminal.finish()
+        self.assertEqual(terminal.output.count(b"\x1b[2J"), 1)
+        self.assertIn(b"FINISH", terminal.output)
+
+    def test_repeated_progress_stage_reuses_the_panel(self):
+        terminal = self.terminal("""
+first_work() { echo FIRST-STAGE; }
+second_work() { echo SECOND-STAGE; }
+ipalpha_ui_run Configuring first_work
+ipalpha_ui_run Configuring second_work
+ipalpha_ui_stop
+""")
+        terminal.finish()
+        self.assertEqual(terminal.output.count(b"\x1b[2J"), 1)
+        self.assertIn(b"SECOND-STAGE", terminal.output)
+
+    def test_parallel_clone_cancel_restores_terminal(self):
+        terminal = self.terminal("""
+source lib/common.sh
+source lib/clone.sh
+ipalpha_all_repos() { printf '%s\\n' alpha beta; }
+ipalpha_clone_repo() { sleep 30; }
+ipalpha_ui_run Cloning ipalpha_clone_org_repos /tmp/unused-qa-target
+""")
+        terminal.until(b"beta")
+        terminal.send(b"\x03")
+        terminal.finish(expected=130)
+
     def test_wide_screen(self):
         terminal = self.terminal("ipalpha_prompt_language", rows=40, cols=140)
         terminal.until(b"English")

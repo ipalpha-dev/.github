@@ -74,6 +74,9 @@ echo "== setup fixture test"
 echo "== local environment completion test"
 node "$ipalpha_repo_root/tests/local-env-test.mjs"
 
+echo "== parallel repository clone test"
+node "$ipalpha_repo_root/tests/clone-test.mjs"
+
 echo "== setup terminal UI test"
 if command -v python3 >/dev/null 2>&1; then
   python3 "$ipalpha_repo_root/tests/setup-ui-test.py"
