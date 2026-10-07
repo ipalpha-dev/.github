@@ -92,8 +92,8 @@ Runner override: `runner=` in `.ipalpha/settings` or `IPALPHA_RUNNER=` —
 
 ### Browser pages
 
-`./run` opens the remembered local pages once their servers respond. By default every
-web app and Mailpit start and open. Auth Webapp starts but never opens its own tab: other
+`./run` opens the remembered local pages once their servers respond. By default Auth Webapp,
+Mordomia and Mailpit start and open; start any other web app with `s` and it is remembered. Auth Webapp starts but never opens its own tab: other
 apps open it as the sign-in popup (`o` still opens it manually). The same selection controls which standalone
 web apps start and which pages open. It is remembered in `browser_apps` in `.ipalpha/settings`, including
 an empty selection. Setup and `./pull` preserve it; URLs always use current ports.
@@ -115,7 +115,7 @@ Background and mprocs reuse the saved choices. Manage them without starting serv
 ./run apps                             # list remembered apps/pages (browsers is an alias)
 ./run apps set mordomia-webapp mailpit auth-webapp
 ./run apps set                         # start no web apps and open no pages
-./run apps defaults                    # restore every web app + Mailpit
+./run apps defaults                    # restore Auth Webapp, Mordomia and Mailpit
 IPALPHA_OPEN_BROWSERS=0 ./run           # skip opening this time, keep preferences
 ```
 

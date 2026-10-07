@@ -9,7 +9,7 @@ ipalpha_ms_repos=(shared-js shared-ui projects-api persons-api organizations-api
 ipalpha_ms_order=(projects-api persons-api organizations-api notifications-api auth-api forms-api ai-api developers-api dispatch-api)
 # Standalone web apps: cloned, deps installed, image published, no .env, run with Vite.
 ipalpha_web_repos=(auth-webapp forms-webapp mordomia-webapp developers-webapp)
-ipalpha_default_browser_apps="${ipalpha_web_repos[*]} mailpit"
+ipalpha_default_browser_apps="auth-webapp mordomia-webapp mailpit"
 ipalpha_root_repos=(deployment)
 # Apps outside core with their own repositories, registry path and TeamCity project (Acampa Kids): GitHub
 # ipalpha-dev/<repo>, local apps/<app>/<repo without the app prefix> (acampa-kids-backend → apps/acampa-kids/

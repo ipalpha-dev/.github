@@ -11,7 +11,7 @@ import (
 
 // Browser preferences are workspace settings, not application/member data.
 func browserSelection(ipalphaDir string) map[string]bool {
-	ids := "auth-webapp forms-webapp mordomia-webapp developers-webapp mailpit"
+	ids := "auth-webapp mordomia-webapp mailpit"
 	if data, err := os.ReadFile(filepath.Join(ipalphaDir, "settings")); err == nil {
 		for _, line := range strings.Split(string(data), "\n") {
 			if strings.HasPrefix(line, "browser_apps=") {

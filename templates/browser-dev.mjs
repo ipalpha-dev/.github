@@ -5,7 +5,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { pathToFileURL } from 'node:url';
 
-export const defaultBrowsers = ['auth-webapp', 'forms-webapp', 'mordomia-webapp', 'developers-webapp', 'mailpit'];
+export const defaultBrowsers = ['auth-webapp', 'mordomia-webapp', 'mailpit'];
 // Auth is a sign-in popup that other apps open; it still starts, but never gets its own tab.
 export const neverAutoOpen = new Set(['auth-webapp']);
 const exec = promisify(execFile);

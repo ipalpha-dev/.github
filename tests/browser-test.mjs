@@ -43,7 +43,7 @@ try {
   fs.appendFileSync(path.join(dir, 'settings'), 'CUSTOM_VALUE=preserved\n');
 
   const projects = [];
-  for (const name of [...defaultBrowsers, 'extra-webapp']) {
+  for (const name of [...defaultBrowsers, 'forms-webapp', 'extra-webapp']) {
     let attempts = 0;
     const server = http.createServer((req, res) => {
       attempts += 1;
@@ -74,7 +74,7 @@ try {
   assert.equal(new Set(opened).size, autoOpened.length, 'only one tab per selected page');
   assert.ok(!opened.includes(projects[0].frontend), 'auth-webapp is never opened automatically');
   assert.deepEqual(result.pending, []);
-  assert.ok(!opened.includes(projects[5].frontend));
+  for (const page of projects.slice(defaultBrowsers.length)) assert.ok(!opened.includes(page.frontend));
 
   // An unavailable page does not open, a failed opener is not retried, and cancellation stops work.
   let opens = 0;
@@ -145,14 +145,14 @@ try {
     throw new Error(`browser launcher timed out: ${runnerOutput}\n${fs.existsSync(browserLog) ? fs.readFileSync(browserLog, 'utf8') : 'no browser log'}\n${fs.existsSync(openLog) ? fs.readFileSync(openLog, 'utf8') : 'no opener log'}`);
   };
   saveBrowsers(dir, defaultBrowsers);
-  const first = await launchAndWait(4);
-  assert.deepEqual(new Set(first), new Set(projects.slice(1, 5).map(p => p.frontend)));
+  const first = await launchAndWait(autoOpened.length);
+  assert.deepEqual(new Set(first), new Set(projects.filter(p => autoOpened.includes(p.name)).map(p => p.frontend)));
   for (const [command, id] of [['enable', 'extra-webapp'], ['disable', 'mordomia-webapp'], ['disable', 'auth-webapp']]) {
     execFileSync(process.execPath, [path.join(bin, 'browser-dev.mjs'), dir, command, id]);
   }
-  const remembered = ['forms-webapp', 'developers-webapp', 'mailpit', 'extra-webapp'];
-  const second = await launchAndWait(8);
-  assert.deepEqual(new Set(second.slice(4)), new Set(projects.filter(p => remembered.includes(p.name)).map(p => p.frontend)));
+  const remembered = ['mailpit', 'extra-webapp'];
+  const second = await launchAndWait(autoOpened.length + remembered.length);
+  assert.deepEqual(new Set(second.slice(autoOpened.length)), new Set(projects.filter(p => remembered.includes(p.name)).map(p => p.frontend)));
   assert.deepEqual(selectedBrowsers(dir), remembered);
   const listed = JSON.parse(execFileSync(path.join(root, 'run'), ['browsers'], {encoding: 'utf8'}));
   assert.deepEqual(listed, remembered);
@@ -169,7 +169,7 @@ try {
   }
   await promisify(execFile)(process.execPath, [path.join(bin, 'browser-dev.mjs'), dir, 'open', 'extra-webapp'], {env: desktopEnv, timeout: 2000});
   assert.ok(selectedBrowsers(dir).includes('extra-webapp'), 'manual opening must be remembered');
-  assert.ok(fs.readFileSync(openLog, 'utf8').includes(projects[5].frontend));
+  assert.ok(fs.readFileSync(openLog, 'utf8').includes(projects.find(p => p.name === 'extra-webapp').frontend));
 
   write(path.join(root, 'core/auth-webapp/package.json'), '{}');
   write(path.join(root, 'core/mordomia-webapp/package.json'), '{}');

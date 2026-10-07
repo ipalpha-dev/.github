@@ -86,7 +86,7 @@ grep -q '^org=ipalpha' "$ipalpha_tmp/IpAlpha/.ipalpha/settings" || ipalpha_fail 
 grep -q '^ai_cli=pi' "$ipalpha_tmp/IpAlpha/.ipalpha/settings" || ipalpha_fail "settings ai_cli wrong"
 grep -q '^ai_model=cpamc/muse-spark-1.3-contributor' "$ipalpha_tmp/IpAlpha/.ipalpha/settings" || ipalpha_fail "settings ai_model wrong"
 grep -q '^runner=auto$' "$ipalpha_tmp/IpAlpha/.ipalpha/settings" || ipalpha_fail "settings runner must default to auto"
-grep -q '^browser_apps=auth-webapp forms-webapp mordomia-webapp developers-webapp mailpit$' "$ipalpha_tmp/IpAlpha/.ipalpha/settings" || ipalpha_fail "default browser selection wrong"
+grep -q '^browser_apps=auth-webapp mordomia-webapp mailpit$' "$ipalpha_tmp/IpAlpha/.ipalpha/settings" || ipalpha_fail "default browser selection wrong"
 [[ -f "$ipalpha_tmp/IpAlpha/.ipalpha/bin/browser-dev.mjs" ]] || ipalpha_fail "browser helper missing"
 grep -q 'browser-dev.mjs.*watch' "$ipalpha_tmp/IpAlpha/run" || ipalpha_fail "run must open selected browsers"
 grep -q 'IPALPHA_RUNNER:-${ipalpha_runner:-auto}' "$ipalpha_tmp/IpAlpha/run" || ipalpha_fail "./run must default to auto"
