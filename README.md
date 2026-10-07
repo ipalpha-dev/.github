@@ -48,6 +48,18 @@ IpAlpha/
 
 `./run --help`, `./publish --help`, `./pull --help` mostram o uso completo.
 
+## Caixa de desenvolvimento (Mailpit)
+
+E-mails e SMS capturados no ambiente compartilhado de desenvolvimento/teste ficam em
+[https://mailbox-ipalpha.kevyn.com.br](https://mailbox-ipalpha.kevyn.com.br).
+As credenciais e as instruções de acesso estão no
+[README privado do notifications-api](https://github.com/ipalpha-dev/notifications-api/blob/master/README.md#developer-inbox-connect-and-sign-in)
+(requer acesso ao repositório).
+
+Use apenas dados fictícios: a caixa compartilhada inclui mensagens e códigos de verificação.
+Este repositório é público; nunca publique aqui senhas da caixa ou credenciais de envio,
+nem as inclua em URLs ou aplicações. Esta caixa é exclusiva de desenvolvimento/teste.
+
 ## Manter estas ferramentas
 
 Edite aqui, rode `tests/validate.sh`, faça push. Os desenvolvedores recebem as
