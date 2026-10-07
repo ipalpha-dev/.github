@@ -438,18 +438,25 @@ needs_build() {
   [[ -f "$1/package.json" ]] && [[ ! -d "$1/dist" || -n "$(find "$1/src" -newer "$1/dist" -type f 2>/dev/null | head -n1)" ]]
 }
 
+log_dir="$ipalpha_dir/.state/install-deps"
+mkdir -p "$log_dir"
+
 run_tasks() {
   (( $# )) || return 0
-  printf '%s\0' "$@" | xargs -0 -n1 -P "$jobs" bash -c '
-    task="${1%% *}" dir="${1#* }" name="$(basename "${1#* }")"
+  printf '%s\0' "$@" | IPALPHA_ROOT="$ipalpha_root" LOG_DIR="$log_dir" xargs -0 -n1 -P "$jobs" bash -c '
+    task="${1%% *}" dir="${1#* }"
+    name="${dir#"$IPALPHA_ROOT"/}"
+    log="$LOG_DIR/${name//\//_}.log"
+    echo "install-deps: $task $name"
     if [[ "$task" == install ]]; then
-      echo "install-deps: $name"
-      (cd "$dir" && npm install --no-audit --no-fund --silent && touch node_modules)
+      (cd "$dir" && npm install --no-audit --no-fund && touch node_modules) >"$log" 2>&1
     else
-      echo "install-deps: build $name"
-      (cd "$dir" && npm run build --silent)
-    fi || { echo "install-deps: $task $name failed" >&2; exit 1; }
-  ' _
+      (cd "$dir" && npm run build) >"$log" 2>&1
+    fi && exit 0
+    printf "\ninstall-deps: %s %s FAILED\n%s\n  full log: %s\n\n" "$task" "$name" \
+      "$(grep -v "^npm error *$" "$log" | tail -n 25 | sed "s/^/  │ /")" "$log" >&2
+    exit 1
+  ' _ || { echo "install-deps: stopped — fix the error above and run ./run again." >&2; exit 1; }
 }
 
 # Shared node_modules settle first; consumers link them with file: and install alongside the shared builds.
