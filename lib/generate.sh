@@ -431,7 +431,13 @@ jobs="${IPALPHA_INSTALL_JOBS:-6}"
 shared=("$ipalpha_root/core/shared-js" "$ipalpha_root/core/shared-ui")
 
 needs_install() {
-  [[ -f "$1/package.json" ]] && [[ ! -d "$1/node_modules" || "$1/package-lock.json" -nt "$1/node_modules" ]]
+  [[ -f "$1/package.json" ]] || return 1
+  [[ ! -d "$1/node_modules" || "$1/package-lock.json" -nt "$1/node_modules" ]] && return 0
+  local lib
+  for lib in shared-js shared-ui; do
+    [[ -d "$1/node_modules/@ipalpha/$lib" && ! -d "$1/node_modules/@ipalpha/$lib/dist" ]] && return 0
+  done
+  return 1
 }
 
 needs_build() {
@@ -449,6 +455,7 @@ run_tasks() {
     log="$LOG_DIR/${name//\//_}.log"
     echo "install-deps: $task $name"
     if [[ "$task" == install ]]; then
+      rm -rf "$dir/node_modules/@ipalpha/shared-js" "$dir/node_modules/@ipalpha/shared-ui"
       (cd "$dir" && npm install --no-audit --no-fund && touch node_modules) >"$log" 2>&1
     else
       (cd "$dir" && npm run build) >"$log" 2>&1
@@ -459,7 +466,7 @@ run_tasks() {
   ' _ || { echo "install-deps: stopped — fix the error above and run ./run again." >&2; exit 1; }
 }
 
-# Shared node_modules settle first; consumers link them with file: and install alongside the shared builds.
+# Consumers copy shared-js/shared-ui (install-links=true), so both must be built before any consumer installs.
 tasks=()
 for dir in "${shared[@]}"; do
   if needs_install "$dir"; then tasks+=("install $dir"); fi
@@ -470,6 +477,9 @@ tasks=()
 for dir in "${shared[@]}"; do
   if needs_build "$dir"; then tasks+=("build $dir"); fi
 done
+run_tasks ${tasks[@]+"${tasks[@]}"}
+
+tasks=()
 for dir in "$ipalpha_root"/core/*/ "$ipalpha_root"/apps/*/*/; do
   dir="${dir%/}"
   [[ "$dir" == "${shared[0]}" || "$dir" == "${shared[1]}" ]] && continue
