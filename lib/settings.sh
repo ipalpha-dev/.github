@@ -2,8 +2,13 @@
 
 ipalpha_write_settings() {
   local root="$1"
-  local dest repo var
+  local dest repo var browsers
   dest="$(ipalpha_settings_file "$root")"
+  browsers="${ipalpha_browser_apps-$ipalpha_default_browser_apps}"
+  # Preserve the last run's selection, including an explicitly empty selection.
+  if [[ ! ${ipalpha_browser_apps+x} && -f "$dest" ]] && grep -q '^browser_apps=' "$dest"; then
+    browsers="$(sed -n 's/^browser_apps=//p' "$dest" | head -n1)"
+  fi
   mkdir -p "$(dirname "$dest")"
   {
     echo "# IPAlpha local workspace settings (created by setup; used by ./run ./publish ./pull)"
@@ -13,11 +18,13 @@ ipalpha_write_settings() {
     echo "ai_cli=${ipalpha_ai_cli:-pi}"
     echo "ai_model=${ipalpha_ai_model:-cpamc/muse-spark-1.3-contributor}"
     echo "runner=${ipalpha_runner:-auto}"
+    echo "browser_apps=$browsers"
     echo "infra_name=${ipalpha_infra_name:-ipalpha}"
     echo "mongo_port=${ipalpha_port_mongo:-$ipalpha_default_mongo_port}"
     echo "redis_port=${ipalpha_port_redis:-$ipalpha_default_redis_port}"
     echo "rabbitmq_port=${ipalpha_port_rabbitmq:-$ipalpha_default_rabbitmq_port}"
     echo "rabbitmq_mgmt_port=${ipalpha_port_rabbitmq_mgmt:-$ipalpha_default_rabbitmq_mgmt_port}"
+    echo "mailpit_port=${ipalpha_port_mailpit:-$ipalpha_default_mailpit_port}"
     for repo in "${ipalpha_ms_order[@]}"; do
       var="ipalpha_port_${repo//-/_}"
       echo "${repo}_port=${!var:-$(ipalpha_default_ms_port "$repo")}"
@@ -28,6 +35,15 @@ ipalpha_write_settings() {
     done
   } >"$dest"
   chmod 600 "$dest"
+}
+
+ipalpha_app_selected() {
+  local selected="${ipalpha_browser_apps-$ipalpha_default_browser_apps}"
+  local file="${2:-}/.ipalpha/settings"
+  if [[ ! ${ipalpha_browser_apps+x} && -f "$file" ]] && grep -q '^browser_apps=' "$file"; then
+    selected="$(sed -n 's/^browser_apps=//p' "$file" | head -n1)"
+  fi
+  [[ " $selected " == *" $1 "* ]]
 }
 
 ipalpha_settings_web_port() {
@@ -66,11 +82,13 @@ ipalpha_load_settings() {
       ai_cli) ipalpha_ai_cli="$val" ;;
       ai_model) ipalpha_ai_model="$val" ;;
       runner) ipalpha_runner="$val" ;;
+      browser_apps) ipalpha_browser_apps="$val" ;;
       infra_name) ipalpha_infra_name="$val" ;;
       mongo_port) ipalpha_port_mongo="$val" ;;
       redis_port) ipalpha_port_redis="$val" ;;
       rabbitmq_port) ipalpha_port_rabbitmq="$val" ;;
       rabbitmq_mgmt_port) ipalpha_port_rabbitmq_mgmt="$val" ;;
+      mailpit_port) ipalpha_port_mailpit="$val" ;;
       *) 
         case "$key" in
           *_port)

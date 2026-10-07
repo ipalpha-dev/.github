@@ -42,7 +42,7 @@ ipalpha_owns_port() {
       let input = "";
       process.stdin.on("data", chunk => input += chunk).on("end", () => {
         try {
-          const names = ["mongo", "redis", "rabbitmq"].map(kind => `${process.argv[1]}-${kind}`);
+          const names = ["mongo", "redis", "rabbitmq", "mailpit"].map(kind => `${process.argv[1]}-${kind}`);
           const ours = JSON.parse(input).some(c => names.includes(c.configuration?.id)
             && (c.configuration?.publishedPorts || []).some(p => Number(p.hostPort) === Number(process.argv[2])));
           process.exitCode = ours ? 0 : 1;
@@ -104,6 +104,7 @@ ipalpha_port_vars() {
   echo "ipalpha_port_redis $ipalpha_default_redis_port"
   echo "ipalpha_port_rabbitmq $ipalpha_default_rabbitmq_port"
   echo "ipalpha_port_rabbitmq_mgmt $ipalpha_default_rabbitmq_mgmt_port"
+  echo "ipalpha_port_mailpit $ipalpha_default_mailpit_port"
   for repo in "${ipalpha_ms_order[@]}"; do echo "ipalpha_port_${repo//-/_} $(ipalpha_default_ms_port "$repo")"; done
   for repo in "${ipalpha_web_repos[@]}"; do echo "ipalpha_port_${repo//-/_} $(ipalpha_default_web_port "$repo")"; done
 }
@@ -155,6 +156,7 @@ ipalpha_rewrites_from_settings() {
     "$ipalpha_default_mongo_port:${ipalpha_port_mongo:-$ipalpha_default_mongo_port}"
     "$ipalpha_default_redis_port:${ipalpha_port_redis:-$ipalpha_default_redis_port}"
     "$ipalpha_default_rabbitmq_port:${ipalpha_port_rabbitmq:-$ipalpha_default_rabbitmq_port}"
+    "$ipalpha_default_mailpit_port:${ipalpha_port_mailpit:-$ipalpha_default_mailpit_port}"
   )
   local repo old new
   for repo in "${ipalpha_ms_order[@]}"; do

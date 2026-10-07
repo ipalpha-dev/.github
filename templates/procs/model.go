@@ -79,7 +79,10 @@ func (m model) startAutostart() tea.Cmd {
 			}
 		}
 		for _, p := range m.procs {
-			if !p.autostart {
+			p.mu.Lock()
+			autostart := p.autostart
+			p.mu.Unlock()
+			if !autostart {
 				continue
 			}
 			if p.kind == "infrastructure" {
@@ -134,6 +137,39 @@ func (m model) layout() (listW, logW, listH, vpW, vpH int) {
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case browserActionMsg:
+		for _, p := range m.procs {
+			if p.id == msg.id {
+				p.browserBusy = false
+			}
+		}
+		if msg.err != nil {
+			m.status = tr("browser_failed")
+			return m, nil
+		}
+		for _, p := range m.procs {
+			if p.id == msg.id {
+				if p.kind == "app" {
+					p.mu.Lock()
+					p.autostart = msg.enabled
+					p.mu.Unlock()
+					switch msg.runAction {
+					case "start":
+						go p.startAfterDeps(m.events, m.depPorts())
+					case "stop":
+						go p.stop()
+					case "restart":
+						go p.restartWithDeps(m.events, m.depPorts())
+					}
+				}
+				label := tr("browser_off")
+				if msg.enabled {
+					label = tr("browser_on")
+				}
+				m.status = p.name + " · " + label
+			}
+		}
+		return m, nil
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
@@ -283,15 +319,32 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case "r":
-			if p := m.selectedProc(); p != nil {
+			if p := m.selectedProc(); p != nil && p.kind != "browser" {
+				if p.kind == "app" && p.frontend != "" {
+					if p.browserBusy {
+						return m, nil
+					}
+					p.browserBusy = true
+					return m, browserAction(m.ipalphaDir, p.id, "enable", "restart")
+				}
 				m.status = tr("restart") + " " + p.name
 				ports := m.depPorts()
 				go p.restartWithDeps(m.events, ports)
 			}
 			return m, nil
 		case "s":
-			if p := m.selectedProc(); p != nil {
+			if p := m.selectedProc(); p != nil && p.kind != "browser" {
 				st, _, _ := p.snapshot()
+				if p.kind == "app" && p.frontend != "" {
+					if p.browserBusy {
+						return m, nil
+					}
+					p.browserBusy = true
+					if st == stateRunning || st == stateStarting || st == stateWaiting {
+						return m, browserAction(m.ipalphaDir, p.id, "disable", "stop")
+					}
+					return m, browserAction(m.ipalphaDir, p.id, "enable", "start")
+				}
 				if st == stateRunning || st == stateStarting || st == stateWaiting {
 					m.status = tr("stop") + " " + p.name
 					go p.stop()
@@ -304,6 +357,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "x":
 			if p := m.selectedProc(); p != nil {
+				if p.frontend != "" {
+					if p.browserBusy {
+						return m, nil
+					}
+					p.browserBusy = true
+					return m, browserAction(m.ipalphaDir, p.id, "disable", "stop")
+				}
 				m.status = tr("stop") + " " + p.name
 				go p.stop()
 			}
@@ -335,11 +395,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "o":
 			if p := m.selectedProc(); p != nil {
+				if p.browserBusy {
+					return m, nil
+				}
 				if p.frontend == "" {
 					m.status = tr("no_frontend")
 				} else {
 					m.status = tr("open") + " " + p.frontend
-					go openURL(p.frontend)
+					p.browserBusy = true
+					return m, browserAction(m.ipalphaDir, p.id, "open")
 				}
 			}
 			return m, nil
@@ -461,14 +525,6 @@ func listWidth(total int) int {
 		w = 22
 	}
 	return w
-}
-
-func openURL(u string) {
-	name := "xdg-open"
-	if runtime.GOOS == "darwin" {
-		name = "open"
-	}
-	_ = exec.Command(name, u).Start()
 }
 
 var reANSI = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]`)

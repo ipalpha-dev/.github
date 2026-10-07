@@ -42,20 +42,21 @@ func (s procState) String() string {
 }
 
 type proc struct {
-	id        string
-	name      string
-	kind      string
-	cwd       string
-	port      string
-	frontend  string
-	parent    string
-	deps      []string
-	softDeps  []string
-	shell     bool
-	cmd       string
-	stopCmd   string
-	args      []string
-	autostart bool
+	id          string
+	name        string
+	kind        string
+	cwd         string
+	port        string
+	frontend    string
+	parent      string
+	deps        []string
+	softDeps    []string
+	shell       bool
+	cmd         string
+	stopCmd     string
+	args        []string
+	autostart   bool
+	browserBusy bool
 
 	mu     sync.Mutex
 	state  procState
@@ -373,6 +374,9 @@ func (p *proc) statusLabel() string {
 }
 
 func (p *proc) statusText() string {
+	if p.kind == "browser" {
+		return p.frontend
+	}
 	st, code, _ := p.snapshot()
 	switch st {
 	case stateRunning:

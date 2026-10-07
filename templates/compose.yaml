@@ -59,6 +59,27 @@ services:
       retries: 12
       start_period: 10s
 
+  # Developer-only capture inbox. Credentials and SMTP are not needed locally.
+  mailpit:
+    image: axllent/mailpit:v1.31.3
+    container_name: ${IPALPHA_INFRA_NAME:-ipalpha}-mailpit
+    ports:
+      - "127.0.0.1:${MAILPIT_HOST_PORT:-8025}:8025"
+    environment:
+      MP_MAX_MESSAGES: '200'
+      MP_MAX_AGE: 24h
+      MP_MAX_MESSAGE_SIZE: '1'
+      MP_DISABLE_VERSION_CHECK: 'true'
+      MP_SMTP_DISABLE_RDNS: 'true'
+    cpus: 1
+    mem_limit: 128m
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+
 networks:
   default:
     name: ${IPALPHA_INFRA_NAME:-ipalpha}

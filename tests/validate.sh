@@ -69,6 +69,8 @@ if grep -HE '^(SMSBARATO_KEY|COMTELE_TOKEN|AUTH_CLIENT_ID|AUTH_CLIENT_SECRET|SUP
 fi
 
 echo "== setup fixture test"
+node "$ipalpha_repo_root/tests/browser-test.mjs"
+node "$ipalpha_repo_root/tests/mailpit-test.mjs"
 "$ipalpha_repo_root/tests/setup-test.sh"
 
 echo "== local environment completion test"

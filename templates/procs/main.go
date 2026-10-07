@@ -86,6 +86,7 @@ func main() {
 
 func buildProcs(ipalphaDir, root string, cfg projectJSON) []*proc {
 	specs := cfg.Projects
+	selectedApps := browserSelection(ipalphaDir)
 	depsMap := discoverEnvDeps(root, specs)
 
 	names := make([]string, 0, len(specs))
@@ -134,6 +135,10 @@ func buildProcs(ipalphaDir, root string, cfg projectJSON) []*proc {
 			softDeps:  soft,
 			autostart: s.Autostart,
 		}
+		// Starting an app and reopening its page share the same saved selection.
+		if kind == "app" && s.Frontend != "" {
+			p.autostart = selectedApps[s.Name]
+		}
 		if s.Cmd != "" {
 			p.shell = true
 			p.cmd = s.Cmd
@@ -157,7 +162,7 @@ func groupAttached(procs []*proc) []*proc {
 	for _, p := range procs {
 		switch {
 		case p.kind == "attached" && p.parent != "":
-		case p.kind == "app":
+		case p.kind == "app" || p.kind == "browser":
 			apps = append(apps, p)
 		default:
 			out = append(out, p)

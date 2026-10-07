@@ -16,13 +16,6 @@ bash <(curl -fsSL https://raw.githubusercontent.com/ipalpha-dev/.github/master/b
 Precisa de [chave SSH no GitHub](https://docs.github.com/pt/authentication/connecting-to-github-with-ssh) e ser membro da organização.
 Depois: `cd IpAlpha && ./run`.
 
-## Caixa de desenvolvimento (Mailpit)
-
-E-mails e SMS de teste: [https://mailbox-ipalpha.kevyn.com.br](https://mailbox-ipalpha.kevyn.com.br).
-Credenciais e instruções: [README privado do notifications-api](https://github.com/ipalpha-dev/notifications-api/blob/master/README.md#developer-inbox-connect-and-sign-in)
-(requer acesso ao repositório). Use apenas dados fictícios; a caixa inclui códigos de
-verificação. Nunca publique as credenciais nem use esta caixa em produção.
-
 ## Repositórios
 
 | Repositório | Para quê |

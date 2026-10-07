@@ -69,11 +69,11 @@ follow `ghcr.io/<org>/<ms>`.
 ## Day-to-day: `./run`
 
 1. Starts infrastructure in containers and waits for health:
-   MongoDB, Redis, RabbitMQ (+ management UI on 15672). Apple `container` runs
+   MongoDB, Redis, RabbitMQ (+ management UI on 15672), and Mailpit. Apple `container` runs
    the services directly (network `ipalpha`, named volumes `ipalpha-*-data`);
    Docker uses `docker compose --wait`.
 2. Installs missing npm dependencies per service (`@ipalpha/shared-js` comes from npm; the `core/shared-js` clone is only for changing the library).
-3. Starts every API and web app at once — nothing waits for a peer. Each core MS
+3. Starts every API and the remembered web apps at once — nothing waits for a peer. Each core MS
    exposes `GET /live` (process up) and `GET /ready` (200 only when Mongo, Redis,
    RabbitMQ and the projects cache are all good; 503 `{ready:false, checks}` otherwise).
    The panel polls `/ready` and shows ● ready / ◐ up-but-not-ready per row; k8s uses the
@@ -84,6 +84,42 @@ Stop: Ctrl+C, then `.ipalpha/bin/infra-down`.
 
 Runner override: `runner=` in `.ipalpha/settings` or `IPALPHA_RUNNER=` —
 `background` (default, embedded), `mprocs` (opt-in; needs `mprocs` installed).
+
+### Browser pages
+
+`./run` opens the remembered local pages once their servers respond. By default every
+web app and Mailpit start and open. Auth Webapp starts but never opens its own tab: other
+apps open it as the sign-in popup (`o` still opens it manually). The same selection controls which standalone
+web apps start and which pages open. It is remembered in `browser_apps` in `.ipalpha/settings`, including
+an empty selection. Setup and `./pull` preserve it; URLs always use current ports.
+
+In the process panel, starting/restarting an app (`s`/`r`) remembers it; explicitly
+stopping an app (`s`/`x`) removes it. Next `./run` starts the remembered apps and
+automatically opens their pages after they respond. Quitting the whole runner
+does not clear your choices; a startup failure does not clear them either.
+Press `o` to open a page and remember it. Mailpit has its
+own browser-only row: it is started by infrastructure, not as a second process.
+The launcher cannot detect which tabs you later close in your browser; use `x`
+to stop reopening a page.
+
+APIs and shared infrastructure keep starting normally. Mailpit's selection controls
+only its inbox tab, not the capture container needed by notifications-api.
+Background and mprocs reuse the saved choices. Manage them without starting services:
+
+```sh
+./run apps                             # list remembered apps/pages (browsers is an alias)
+./run apps set mordomia-webapp mailpit auth-webapp
+./run apps set                         # start no web apps and open no pages
+./run apps defaults                    # restore every web app + Mailpit
+IPALPHA_OPEN_BROWSERS=0 ./run           # skip opening this time, keep preferences
+```
+
+Only loopback HTTP URLs from the generated workspace manifest are opened. Failed
+or slow servers do not delay boot; automatic opening retries for at most two
+minutes and exits if the runner exits. CI never opens browsers. The helper uses
+the default system browser (`open` on macOS, `xdg-open` on Linux, `wslview` in WSL)
+and records opener errors in `.ipalpha/.state/browser.log`. No application database,
+member data, extra container, or paid service is involved.
 
 ## Day-to-day: `./publish`
 
@@ -143,9 +179,28 @@ Dev-only release (no prod rollout):
 | Redis | 6379 |
 | RabbitMQ | 5672 |
 | RabbitMQ management | 15672 |
+| Mailpit inbox + Send API (loopback only) | 8025 |
 
 Busy ports are remapped at setup; the mapping lives in `.ipalpha/settings` and
 `.ipalpha/ports.env`.
+
+### Local notifications
+
+New notifications-api `.env` files select `MAIL_PROVIDER=mailpit`, `SMS_PROVIDER=mailpit`,
+`DEPLOYMENT_ENVIRONMENT=development`, and `MAILPIT_URL=http://127.0.0.1:8025`.
+`./run` starts the inbox automatically. Open that URL to read captured email and SMS
+(SMS appears as an `[SMS]` email). A busy port is remapped along with the URL.
+Existing `.env` values are preserved; remove or update the notifications `.env` to opt in.
+No SendGrid, SMS Barato, Comtele, or Mailpit credentials are required; failed capture
+never falls back to real delivery. Production manifests and runtime defaults are unchanged.
+
+The inbox is a local development dependency, not a church application or production asset.
+It binds only to loopback; use synthetic recipients and codes, never real member data.
+Mailpit keeps at most 200 messages for 24 hours in ephemeral container storage, with a
+1 MiB message limit, no persistent volume, and a 128 MiB Docker limit (256 MiB with
+Apple `container`, whose VM requires at least 200 MiB). This avoids
+delivery charges and extra persistent disk cost. Container replacement clears the inbox.
+Do not add SMTP relay settings.
 
 ## Core and apps
 

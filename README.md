@@ -40,25 +40,13 @@ IpAlpha/
 
 | Comando | Faz |
 | --- | --- |
-| `./run` | Infra (MongoDB, Redis, RabbitMQ) → instala dependências npm que faltam → os 5 serviços em background (runner embutido; use `IPALPHA_RUNNER=mprocs ./run` se preferir o painel) |
+| `./run` | Infra (MongoDB, Redis, RabbitMQ, Mailpit) → dependências npm → APIs e webapps. Abre Mordomia, Mailpit e Auth por padrão; lembra as páginas escolhidas (`b` no painel, `o` abre e lembra). |
 | `./pull` | Atualiza todos os repositórios, clona os novos, adiciona chaves novas nos `.env` e atualiza `.ipalpha/` a partir deste repositório |
 | `./publish` | Repositórios alterados → IA escolhe versão + mensagem → commit/push → imagem `ghcr.io/ipalpha-dev/<ms>` (ou npm, para o shared-js) → atualiza `deployment/` |
 | `./feature new <slug>` | Ambiente de feature isolado: `features/<slug>/` com worktrees em `feat/<slug>` a partir do último Core Deploy verde. Dentro dela, `./publish` publica um preview em `https://ipalpha-<slug>.kevyn.com.br` (+ `forms-`/`auth-ipalpha-<slug>`, caixa de códigos em `/mailbox`), válido por 72 h. `./feature list\|extend\|rebase\|reset\|destroy`. Guia: [docs/local-development.md](docs/local-development.md#feature-environments-feature) |
 | `./set-keys` | Pergunta as chaves (SMS Barato, Comtele, superusuário) e grava nos `.env` locais |
 
 `./run --help`, `./publish --help`, `./pull --help` mostram o uso completo.
-
-## Caixa de desenvolvimento (Mailpit)
-
-E-mails e SMS capturados no ambiente compartilhado de desenvolvimento/teste ficam em
-[https://mailbox-ipalpha.kevyn.com.br](https://mailbox-ipalpha.kevyn.com.br).
-As credenciais e as instruções de acesso estão no
-[README privado do notifications-api](https://github.com/ipalpha-dev/notifications-api/blob/master/README.md#developer-inbox-connect-and-sign-in)
-(requer acesso ao repositório).
-
-Use apenas dados fictícios: a caixa compartilhada inclui mensagens e códigos de verificação.
-Este repositório é público; nunca publique aqui senhas da caixa ou credenciais de envio,
-nem as inclua em URLs ou aplicações. Esta caixa é exclusiva de desenvolvimento/teste.
 
 ## Manter estas ferramentas
 

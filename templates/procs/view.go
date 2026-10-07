@@ -45,6 +45,9 @@ func (m model) View() string {
 	prevKind := ""
 	for i, p := range m.procs {
 		section := p.kind
+		if section == "browser" {
+			section = "app"
+		}
 		if section == "attached" {
 			section = "service"
 		}
@@ -83,6 +86,9 @@ func (m model) View() string {
 			dotS = stopStyle.Render("○")
 		}
 
+		if p.kind == "browser" {
+			dotS = muted.Render("↗")
+		}
 		label := p.name
 		indent := ""
 		if p.kind == "attached" {

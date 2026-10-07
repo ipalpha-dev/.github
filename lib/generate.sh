@@ -7,6 +7,7 @@ MONGO_HOST_PORT=${ipalpha_port_mongo:-$ipalpha_default_mongo_port}
 REDIS_HOST_PORT=${ipalpha_port_redis:-$ipalpha_default_redis_port}
 RABBITMQ_HOST_PORT=${ipalpha_port_rabbitmq:-$ipalpha_default_rabbitmq_port}
 RABBITMQ_MGMT_HOST_PORT=${ipalpha_port_rabbitmq_mgmt:-$ipalpha_default_rabbitmq_mgmt_port}
+MAILPIT_HOST_PORT=${ipalpha_port_mailpit:-$ipalpha_default_mailpit_port}
 IPALPHA_INFRA_NAME=${ipalpha_infra_name:-ipalpha}
 EOF
 }
@@ -121,11 +122,24 @@ infra_up_container() {
     --volume "$infra-rabbitmq-data":/var/lib/rabbitmq \
     rabbitmq:4-management || return 1
 
+  # Local capture only: HTTP Send API + inbox, no published SMTP or relay.
+  ensure_container "$infra-mailpit" \
+    --network "$infra" \
+    --publish "127.0.0.1:${MAILPIT_HOST_PORT:-8025}:8025" \
+    --cpus 1 --memory 256M \
+    --env MP_MAX_MESSAGES=200 \
+    --env MP_MAX_AGE=24h \
+    --env MP_MAX_MESSAGE_SIZE=1 \
+    --env MP_DISABLE_VERSION_CHECK=true \
+    --env MP_SMTP_DISABLE_RDNS=true \
+    axllent/mailpit:v1.31.3 || return 1
+
   wait_ready "$infra-mongo" mongosh --quiet \
     --username "${MONGO_USERNAME:-ipalpha}" --password "${MONGO_PASSWORD:-ipalpha}" \
     --authenticationDatabase admin --eval 'db.adminCommand({ ping: 1 })'
   wait_ready "$infra-redis" redis-cli ping
   wait_ready "$infra-rabbitmq" rabbitmq-diagnostics -q ping
+  wait_ready "$infra-mailpit" /mailpit readyz
 }
 
 compose() {
@@ -149,7 +163,7 @@ if [[ "$runtime" == "container" ]] && command -v container >/dev/null 2>&1; then
   fi
   if command -v docker >/dev/null 2>&1; then
     echo "warning: Apple container failed — falling back to Docker" >&2
-    for name in "$infra-mongo" "$infra-redis" "$infra-rabbitmq"; do
+    for name in "$infra-mongo" "$infra-redis" "$infra-rabbitmq" "$infra-mailpit"; do
       container stop "$name" >/dev/null 2>&1 || true
     done
   else
@@ -183,7 +197,7 @@ runtime="$(cat "$ipalpha_dir/.state/runtime" 2>/dev/null || echo docker)"
 if [[ "$runtime" == "container" ]]; then
   pids=()
   trap 'kill "${pids[@]}" 2>/dev/null || true' EXIT INT TERM
-  for name in "$infra-mongo" "$infra-redis" "$infra-rabbitmq"; do
+  for name in "$infra-mongo" "$infra-redis" "$infra-rabbitmq" "$infra-mailpit"; do
     container logs --follow -n 100 "$name" 2>&1 | sed -u "s/^/$(printf '%-17s' "$name")| /" &
     pids+=("$!")
   done
@@ -226,7 +240,7 @@ if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1 && [[ -f "$i
 fi
 
 if command -v container >/dev/null 2>&1; then
-  for name in "$infra-mongo" "$infra-redis" "$infra-rabbitmq"; do
+  for name in "$infra-mongo" "$infra-redis" "$infra-rabbitmq" "$infra-mailpit"; do
     container stop "$name" >/dev/null 2>&1 || true
     if [[ "$purge" == true ]]; then
       container delete --force "$name" >/dev/null 2>&1 || true
@@ -297,6 +311,11 @@ ipalpha_write_mprocs_yaml() {
       echo "  \"Web · $repo\":"
       echo "    cwd: \"$(ipalpha_repo_path "$root" "$repo")\""
       echo "    shell: \"$root/.ipalpha/bin/web-dev $repo\""
+      if ipalpha_app_selected "$repo" "$root"; then
+        echo "    autostart: true"
+      else
+        echo "    autostart: false"
+      fi
     done
   } >"$dest"
 }
@@ -408,31 +427,48 @@ set -euo pipefail
 
 ipalpha_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ipalpha_root="$(cd "$ipalpha_dir/.." && pwd)"
+jobs="${IPALPHA_INSTALL_JOBS:-6}"
+shared=("$ipalpha_root/core/shared-js" "$ipalpha_root/core/shared-ui")
 
-# Build both local file dependencies before their consumers. No npm release is needed.
-for shared in shared-js shared-ui; do
-  ui="$ipalpha_root/core/$shared"
-  [[ -f "$ui/package.json" ]] || continue
-  if [[ ! -d "$ui/node_modules" || "$ui/package-lock.json" -nt "$ui/node_modules" ]]; then
-    echo "install-deps: $shared"
-    (cd "$ui" && npm install --no-audit --no-fund --silent && touch node_modules)
-  fi
-  if [[ ! -d "$ui/dist" || -n "$(find "$ui/src" -newer "$ui/dist" -type f 2>/dev/null | head -n1)" ]]; then
-    echo "install-deps: build $shared"
-    (cd "$ui" && npm run build --silent)
-  fi
+needs_install() {
+  [[ -f "$1/package.json" ]] && [[ ! -d "$1/node_modules" || "$1/package-lock.json" -nt "$1/node_modules" ]]
+}
+
+needs_build() {
+  [[ -f "$1/package.json" ]] && [[ ! -d "$1/dist" || -n "$(find "$1/src" -newer "$1/dist" -type f 2>/dev/null | head -n1)" ]]
+}
+
+run_tasks() {
+  (( $# )) || return 0
+  printf '%s\0' "$@" | xargs -0 -n1 -P "$jobs" bash -c '
+    task="${1%% *}" dir="${1#* }" name="$(basename "${1#* }")"
+    if [[ "$task" == install ]]; then
+      echo "install-deps: $name"
+      (cd "$dir" && npm install --no-audit --no-fund --silent && touch node_modules)
+    else
+      echo "install-deps: build $name"
+      (cd "$dir" && npm run build --silent)
+    fi || { echo "install-deps: $task $name failed" >&2; exit 1; }
+  ' _
+}
+
+# Shared node_modules settle first; consumers link them with file: and install alongside the shared builds.
+tasks=()
+for dir in "${shared[@]}"; do
+  if needs_install "$dir"; then tasks+=("install $dir"); fi
 done
+run_tasks ${tasks[@]+"${tasks[@]}"}
 
+tasks=()
+for dir in "${shared[@]}"; do
+  if needs_build "$dir"; then tasks+=("build $dir"); fi
+done
 for dir in "$ipalpha_root"/core/*/ "$ipalpha_root"/apps/*/*/; do
-  [[ -d "$dir" ]] || continue
   dir="${dir%/}"
-  [[ -f "$dir/package.json" ]] || continue
-  [[ "$dir" == "$ipalpha_root/core/shared-js" || "$dir" == "$ipalpha_root/core/shared-ui" ]] && continue
-  if [[ ! -d "$dir/node_modules" || "$dir/package-lock.json" -nt "$dir/node_modules" ]]; then
-    echo "install-deps: $(basename "$dir")"
-    (cd "$dir" && npm install --no-audit --no-fund --silent && touch node_modules)
-  fi
+  [[ "$dir" == "${shared[0]}" || "$dir" == "${shared[1]}" ]] && continue
+  if needs_install "$dir"; then tasks+=("install $dir"); fi
 done
+run_tasks ${tasks[@]+"${tasks[@]}"}
 SCRIPT
   chmod +x "$dest"
 }
@@ -484,7 +520,12 @@ for repo in "${ipalpha_ms_order[@]}"; do
 done
 
 
+selected_apps="$(setting browser_apps)"
+if ! grep -q '^browser_apps=' "$ipalpha_dir/settings"; then
+  selected_apps="$ipalpha_default_browser_apps"
+fi
 for repo in "${ipalpha_web_repos[@]}"; do
+  [[ " $selected_apps " == *" $repo "* ]] || continue
   [[ -f "$(ipalpha_repo_path "$ipalpha_dir/.." "$repo")/package.json" ]] || continue
   web_port="$(setting "${repo}_port")"
   (exec "$ipalpha_dir/bin/web-dev" "$repo") >"$log_dir/$repo.log" 2>&1 &
@@ -503,7 +544,7 @@ SCRIPT
 
 ipalpha_write_projects_json() {
   local root="$1" dest="$2"
-  local repo first=true display port
+  local repo first=true display port autostart
   {
     echo "{"
     echo "  \"root\": \"$root\","
@@ -528,9 +569,14 @@ ipalpha_write_projects_json() {
       display="${repo%-webapp}"
       display="$(tr '[:lower:]' '[:upper:]' <<<"${display:0:1}")${display:1} Web"
       port="$(ipalpha_settings_web_port "$repo")"
+      autostart=false
+      if ipalpha_app_selected "$repo" "$root"; then autostart=true; fi
       echo "    ,"
-      echo "    {\"name\": \"$repo\", \"kind\": \"app\", \"path\": \"$(ipalpha_repo_rel "$repo")\", \"display\": \"$display\", \"port\": \"$port\", \"autostart\": true, \"cmd\": \"$root/.ipalpha/bin/web-dev $repo\", \"frontend\": \"http://localhost:$port/\"}"
+      echo "    {\"name\": \"$repo\", \"kind\": \"app\", \"path\": \"$(ipalpha_repo_rel "$repo")\", \"display\": \"$display\", \"port\": \"$port\", \"autostart\": $autostart, \"cmd\": \"$root/.ipalpha/bin/web-dev $repo\", \"frontend\": \"http://localhost:$port/\"}"
     done
+    echo "    ,"
+    port="${ipalpha_port_mailpit:-$ipalpha_default_mailpit_port}"
+    echo "    {\"name\": \"mailpit\", \"kind\": \"browser\", \"display\": \"Mailpit\", \"port\": \"$port\", \"autostart\": false, \"frontend\": \"http://127.0.0.1:$port/\"}"
     echo "  ]"
     echo "}"
   } >"$dest"
@@ -598,6 +644,9 @@ case "${1:-}" in
   stop)
     exec "$ipalpha_dir/bin/infra-down" "${@:2}"
     ;;
+  apps|browsers)
+    exec node "$ipalpha_dir/bin/browser-dev.mjs" "$ipalpha_dir" "${@:2}"
+    ;;
 esac
 
 runtime="${ipalpha_runtime:-container}"
@@ -613,6 +662,10 @@ echo "$(ipalpha_msg run_infra)"
 ipalpha_prepare_local_envs "$ipalpha_root" "$ipalpha_dir/env-fallback"
 "$ipalpha_dir/bin/auth-keys-bootstrap"
 
+# Browser readiness is independent of service boot and works with every runner.
+# The bounded helper exits if this launcher (exec'd runner) exits.
+node "$ipalpha_dir/bin/browser-dev.mjs" "$ipalpha_dir" watch >"$ipalpha_dir/.state/browser.log" 2>&1 &
+
 runner="${IPALPHA_RUNNER:-${ipalpha_runner:-auto}}"
 case "$runner" in
   auto|panel)
@@ -622,6 +675,9 @@ case "$runner" in
     ;;
   mprocs)
     if command -v mprocs >/dev/null 2>&1; then
+      # Refresh remembered app autostart flags on every run, not just setup/pull.
+      source "$ipalpha_dir/lib/generate.sh"
+      ipalpha_write_mprocs_yaml "$ipalpha_root" "$ipalpha_dir/mprocs.yaml"
       exec mprocs --config "$ipalpha_dir/mprocs.yaml"
     fi
     ;;
@@ -768,6 +824,7 @@ ipalpha_materialize_workspace() {
   rm -f "$dir/bin/vite-dev" "$dir/vite.dev.mjs"
   ipalpha_write_bin_web_dev "$dir/bin/web-dev"
   cp "$setup_root/templates/web-dev.mjs" "$dir/bin/web-dev.mjs"
+  cp "$setup_root/templates/browser-dev.mjs" "$dir/bin/browser-dev.mjs"
   cp "$setup_root/templates/auth-keys-bootstrap" "$dir/bin/auth-keys-bootstrap"
   chmod +x "$dir/bin/auth-keys-bootstrap"
   ipalpha_write_bin_install_deps "$dir/bin/install-deps"

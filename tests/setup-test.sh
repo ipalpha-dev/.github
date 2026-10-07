@@ -64,6 +64,10 @@ grep -q '^BUILTIN_DEVELOPERS_ORIGINS=http://localhost:5111$' "$ipalpha_tmp/IpAlp
 grep -q '^SUPERUSER_NAME=Joao Silva Costa$' "$ipalpha_tmp/IpAlpha/core/auth-api/.env" || ipalpha_fail "default superuser name missing"
 grep -q '^SUPERUSER_PHONE=+5599900000000$' "$ipalpha_tmp/IpAlpha/core/auth-api/.env" || ipalpha_fail "superuser phone must be normalized"
 grep -q '^SMSBARATO_KEY=$' "$ipalpha_tmp/IpAlpha/core/notifications-api/.env" || ipalpha_fail "notifications-api env missing SMSBARATO_KEY"
+grep -q '^MAIL_PROVIDER=mailpit$' "$ipalpha_tmp/IpAlpha/core/notifications-api/.env" || ipalpha_fail "local email must use Mailpit"
+grep -q '^SMS_PROVIDER=mailpit$' "$ipalpha_tmp/IpAlpha/core/notifications-api/.env" || ipalpha_fail "local SMS must use Mailpit"
+grep -q '^DEPLOYMENT_ENVIRONMENT=development$' "$ipalpha_tmp/IpAlpha/core/notifications-api/.env" || ipalpha_fail "Mailpit needs development environment"
+grep -q '^MAILPIT_URL=http://127.0.0.1:8025$' "$ipalpha_tmp/IpAlpha/core/notifications-api/.env" || ipalpha_fail "local inbox URL missing"
 grep -q '^PORT=3001$' "$ipalpha_tmp/IpAlpha/core/projects-api/.env" || ipalpha_fail "projects-api env wrong PORT"
 grep -q '^AUTH_API_URL=http://127.0.0.1:3005$' "$ipalpha_tmp/IpAlpha/core/persons-api/.env" || ipalpha_fail "persons-api env wrong AUTH_API_URL"
 [[ ! -f "$ipalpha_tmp/IpAlpha/core/shared-js/.env" ]] || ipalpha_fail "shared-js must not get an env"
@@ -82,6 +86,9 @@ grep -q '^org=ipalpha' "$ipalpha_tmp/IpAlpha/.ipalpha/settings" || ipalpha_fail 
 grep -q '^ai_cli=pi' "$ipalpha_tmp/IpAlpha/.ipalpha/settings" || ipalpha_fail "settings ai_cli wrong"
 grep -q '^ai_model=cpamc/muse-spark-1.3-contributor' "$ipalpha_tmp/IpAlpha/.ipalpha/settings" || ipalpha_fail "settings ai_model wrong"
 grep -q '^runner=auto$' "$ipalpha_tmp/IpAlpha/.ipalpha/settings" || ipalpha_fail "settings runner must default to auto"
+grep -q '^browser_apps=auth-webapp forms-webapp mordomia-webapp developers-webapp mailpit$' "$ipalpha_tmp/IpAlpha/.ipalpha/settings" || ipalpha_fail "default browser selection wrong"
+[[ -f "$ipalpha_tmp/IpAlpha/.ipalpha/bin/browser-dev.mjs" ]] || ipalpha_fail "browser helper missing"
+grep -q 'browser-dev.mjs.*watch' "$ipalpha_tmp/IpAlpha/run" || ipalpha_fail "run must open selected browsers"
 grep -q 'IPALPHA_RUNNER:-${ipalpha_runner:-auto}' "$ipalpha_tmp/IpAlpha/run" || ipalpha_fail "./run must default to auto"
 
 echo "== port-busy check ignores our own containers"
@@ -111,6 +118,13 @@ PATH="$ipalpha_fakebin:$PATH" ipalpha_owns_port 5432   && ipalpha_fail "ipalpha_
 rm -rf "$ipalpha_fakebin"
 
 [[ -f "$ipalpha_tmp/IpAlpha/.ipalpha/compose.yaml" ]] || ipalpha_fail "compose.yaml missing"
+grep -q 'axllent/mailpit:v1.31.3' "$ipalpha_tmp/IpAlpha/.ipalpha/compose.yaml" || ipalpha_fail "Compose inbox missing"
+grep -q '127.0.0.1:${MAILPIT_HOST_PORT:-8025}:8025' "$ipalpha_tmp/IpAlpha/.ipalpha/compose.yaml" || ipalpha_fail "inbox must be loopback-only"
+grep -q '^MAILPIT_HOST_PORT=8025$' "$ipalpha_tmp/IpAlpha/.ipalpha/ports.env" || ipalpha_fail "inbox port missing"
+grep -q '^mailpit_port=8025$' "$ipalpha_tmp/IpAlpha/.ipalpha/settings" || ipalpha_fail "inbox setting missing"
+for script in infra-up infra-down infra-logs; do
+  grep -q '\$infra-mailpit' "$ipalpha_tmp/IpAlpha/.ipalpha/bin/$script" || ipalpha_fail "$script omits Mailpit"
+done
 [[ -f "$ipalpha_tmp/IpAlpha/.ipalpha/ports.env" ]] || ipalpha_fail "ports.env missing"
 [[ -f "$ipalpha_tmp/IpAlpha/.ipalpha/mprocs.yaml" ]] || ipalpha_fail "mprocs.yaml missing"
 [[ -d "$ipalpha_tmp/IpAlpha/.ipalpha/lib" ]] || ipalpha_fail ".ipalpha/lib missing"

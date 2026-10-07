@@ -38,7 +38,7 @@ func discoverEnvDeps(root string, specs []projectSpec) map[string][]string {
 			continue
 		}
 		nameSet[s.Name] = true
-		if s.Kind == "app" || s.Kind == "attached" {
+		if s.Kind == "app" || s.Kind == "attached" || s.Kind == "browser" {
 			consumerOnly[s.Name] = true
 		}
 		m := meta{name: s.Name, path: s.Path, port: strings.TrimSpace(s.Port)}
