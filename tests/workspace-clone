@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -euo pipefail
+name="$(basename "${1:?clone URL}" .git)"
+root="${IPALPHA_TEST_WORKSPACE:?test workspace source}"
+case "$name" in
+  deployment) source_dir="$root/deployment" ;;
+  forms-api|forms-webapp) source_dir="$root/apps/forms/$name" ;;
+  acampa-kids-*) exit 1 ;; # legacy apps are not part of core cold-start verification
+  *) source_dir="$root/core/$name" ;;
+esac
+git clone --quiet --local "$source_dir" "${2:?clone destination}"

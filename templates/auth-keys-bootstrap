@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ipalpha_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+auth_dir="$ipalpha_dir/../core/auth-api"
+[[ -f "$auth_dir/package.json" ]] || exit 0
+cd "$auth_dir"
+node -e 'if (!require("./package.json").scripts?.["keys:bootstrap"]) process.exit(1)' || exit 0
+# Load dotenv as data, not shell code. Key maintenance has no peer dependencies.
+while IFS= read -r line || [[ -n "$line" ]]; do
+  [[ "$line" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]] || continue
+  key="${line%%=*}"; value="${line#*=}"
+  if [[ "$value" =~ ^\'(.*)\'$ || "$value" =~ ^\"(.*)\"$ ]]; then value="${BASH_REMATCH[1]}"; fi
+  export "$key=$value"
+done <.env
+# Compile without deleting dist: a developer may already have a watcher running.
+if [[ ! -f dist/key-maintenance.main.js || -n "$(find src -type f -newer dist/key-maintenance.main.js -print -quit 2>/dev/null)" ]]; then
+  ./node_modules/.bin/tsc -p tsconfig.build.json
+fi
+# bootstrap is insert-if-absent. Every run checks the DATABASE, not a local stamp,
+# so a new/restored Mongo volume also works and existing keys are never replaced.
+npm run --silent keys:bootstrap

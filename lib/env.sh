@@ -52,25 +52,29 @@ ipalpha_install_repo_env() {
   if [[ ! -f "$repo_dir/.env" ]]; then
     cp "$source" "$repo_dir/.env"
     echo "  $(ipalpha_msg env_install): $repo_dir/.env"
-    return 0
-  fi
-
-  missing="$(ipalpha_env_missing_keys "$repo_dir/.env" "$source")"
-  if [[ -n "$missing" ]]; then
-    {
-      [[ -n "$(tail -c1 "$repo_dir/.env" 2>/dev/null)" ]] && echo
-      echo "$missing"
-    } >>"$repo_dir/.env"
-    echo "  $(ipalpha_msg env_merge): $repo_dir/.env"
   else
-    echo "  $(ipalpha_msg env_keep): $repo_dir/.env"
+    missing="$(ipalpha_env_missing_keys "$repo_dir/.env" "$source")"
+    if [[ -n "$missing" ]]; then
+      {
+        [[ -n "$(tail -c1 "$repo_dir/.env" 2>/dev/null)" ]] && echo
+        echo "$missing"
+      } >>"$repo_dir/.env"
+      echo "  $(ipalpha_msg env_merge): $repo_dir/.env"
+    else
+      echo "  $(ipalpha_msg env_keep): $repo_dir/.env"
+    fi
   fi
+  local helper="$fallback_dir/../lib/local-env.mjs"
+  [[ -f "$helper" ]] || helper="$(dirname "${BASH_SOURCE[0]}")/local-env.mjs"
+  node "$helper" "$repo_dir" "$name" "$fallback_dir/$name.env"
 }
 
 ipalpha_env_get() {
-  local file="$1" key="$2"
+  local file="$1" key="$2" value
   [[ -f "$file" ]] || return 1
-  sed -n "s/^${key}=//p" "$file" | head -n1 | tr -d '\r'
+  value="$(sed -n "s/^${key}=//p" "$file" | head -n1 | tr -d '\r')"
+  if [[ "$value" =~ ^\'(.*)\'$ || "$value" =~ ^\"(.*)\"$ ]]; then value="${BASH_REMATCH[1]}"; fi
+  printf '%s\n' "$value"
 }
 
 ipalpha_env_set_key() {
@@ -111,7 +115,7 @@ ipalpha_seed_local_clients() {
     [[ -f "$env_file" ]] || continue
     [[ -n "$(ipalpha_env_get "$env_file" AUTH_CLIENT_ID)" ]] || ipalpha_env_set_key "$env_file" AUTH_CLIENT_ID "$repo"
     if [[ -z "$(ipalpha_env_get "$env_file" AUTH_CLIENT_SECRET)" ]]; then
-      secret="$(openssl rand -hex 24 2>/dev/null || LC_ALL=C tr -dc 'a-f0-9' </dev/urandom | head -c 48)"
+      secret="$(node -e 'process.stdout.write(require("crypto").randomBytes(24).toString("hex"))')"
       ipalpha_env_set_key "$env_file" AUTH_CLIENT_SECRET "$secret"
     fi
   done
@@ -121,6 +125,11 @@ ipalpha_seed_local_clients() {
     const fs = require("fs");
     const path = require("path");
     const root = process.env.IPALPHA_ROOT;
+    const manifest = [path.join(root, "deployment/base/core/auth-api/system-clients.json"),
+      path.join(root, ".ipalpha/system-clients.json"),
+      path.join(process.argv[1], "../templates/system-clients.json")].find(f => fs.existsSync(f));
+    if (!manifest) throw new Error("Missing local system-client scope manifest");
+    const approved = JSON.parse(fs.readFileSync(manifest, "utf8")).clients;
     const read = f => Object.fromEntries(fs.readFileSync(f, "utf8").split("\n")
       .filter(l => /^[A-Za-z_][A-Za-z0-9_]*=/.test(l))
       .map(l => [l.slice(0, l.indexOf("=")), l.slice(l.indexOf("=") + 1).replace(/^["\x27]|["\x27]$/g, "")]));
@@ -129,18 +138,34 @@ ipalpha_seed_local_clients() {
       const f = path.join(root, rel, ".env");
       if (!fs.existsSync(f)) return null;
       const e = read(f);
-      return e.AUTH_CLIENT_ID && e.AUTH_CLIENT_SECRET ? { clientId: e.AUTH_CLIENT_ID, secret: e.AUTH_CLIENT_SECRET, ms } : null;
+      return e.AUTH_CLIENT_ID && e.AUTH_CLIENT_SECRET ? { clientId: e.AUTH_CLIENT_ID, secret: e.AUTH_CLIENT_SECRET, serviceId: ms, scopes: approved[ms] || [] } : null;
     }).filter(Boolean);
     const authEnv = path.join(root, "core", "auth-api", ".env");
     let current = [];
-    try { current = JSON.parse(read(authEnv).SEED_CLIENTS_JSON || "[]"); } catch {}
+    try { current = JSON.parse(read(authEnv).SEED_CLIENTS_JSON || "[]"); } catch { throw new Error("Invalid local SEED_CLIENTS_JSON; refusing to replace operator clients"); }
+    if (!Array.isArray(current)) throw new Error("Local SEED_CLIENTS_JSON must be an array");
     const ids = new Set(ours.map(c => c.clientId));
-    const merged = [...current.filter(c => !ids.has(c.clientId)), ...ours];
+    const merged = [...current.filter(c => !ids.has(c.clientId)), ...ours.map(c => {
+      const previous = current.find(p => p.clientId === c.clientId);
+      return { ...c, scopes: [...new Set([...(Array.isArray(previous?.scopes) ? previous.scopes : []), ...c.scopes])] };
+    })];
     const text = fs.readFileSync(authEnv, "utf8");
     const line = "SEED_CLIENTS_JSON=\x27" + JSON.stringify(merged) + "\x27";
     fs.writeFileSync(authEnv, /^SEED_CLIENTS_JSON=.*$/m.test(text)
       ? text.replace(/^SEED_CLIENTS_JSON=.*$/m, () => line)
       : text.replace(/\n?$/, "\n") + line + "\n");
     fs.chmodSync(authEnv, 0o600);
-  '
+  ' "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+}
+
+ipalpha_prepare_local_envs() {
+  local root="$1" fallback="$2" repo dir
+  for repo in "${ipalpha_ms_repos[@]}"; do
+    dir="$(ipalpha_repo_path "$root" "$repo")"
+    [[ -d "$dir" ]] || continue
+    ipalpha_install_repo_env "$dir" "$repo" "$fallback"
+  done
+  ipalpha_rewrites_from_settings
+  ipalpha_apply_port_rewrites "$root"
+  ipalpha_seed_local_clients "$root"
 }

@@ -22,7 +22,7 @@ ipalpha_tcp_listening() {
 # The port-busy check consults this so ./pull while the infra is already
 # up doesn't keep remapping to ever-higher host ports.
 ipalpha_owns_port() {
-  local port="$1" cid entry hp name
+  local port="$1" cid entry hp
   # Docker compose project name comes from the dir holding compose.yaml (.ipalpha/).
   if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
     while IFS= read -r cid; do
@@ -37,18 +37,18 @@ ipalpha_owns_port() {
   fi
   # Apple container: well-known infra names defined in lib/generate.sh.
   if command -v container >/dev/null 2>&1; then
-    while IFS= read -r name; do
-      [[ -z "$name" ]] && continue
-      case "$name" in
-        "${ipalpha_infra_name:-ipalpha}"-mongo|"${ipalpha_infra_name:-ipalpha}"-redis|"${ipalpha_infra_name:-ipalpha}"-rabbitmq) ;;
-        *) continue ;;
-      esac
-      while IFS= read -r entry; do
-        [[ -z "$entry" ]] && continue
-        hp="${entry##*:}"
-        [[ "$hp" == "$port" ]] && return 0
-      done < <(container inspect "$name"                 --format "{{range \$k, \$v := .NetworkSettings.Ports}}{{range \$v}}HostPort={{.HostPort}};{{end}}{{end}}"                 2>/dev/null | tr ';' "\n" | grep -oE "HostPort=[0-9]+" | sed "s/.*=//")
-    done < <(container ls --format "{{.Names}}" 2>/dev/null)
+    # Apple's CLI supports JSON, not Docker's Go-template --format syntax.
+    if container ls --format json 2>/dev/null | node -e '
+      let input = "";
+      process.stdin.on("data", chunk => input += chunk).on("end", () => {
+        try {
+          const names = ["mongo", "redis", "rabbitmq"].map(kind => `${process.argv[1]}-${kind}`);
+          const ours = JSON.parse(input).some(c => names.includes(c.configuration?.id)
+            && (c.configuration?.publishedPorts || []).some(p => Number(p.hostPort) === Number(process.argv[2])));
+          process.exitCode = ours ? 0 : 1;
+        } catch { process.exitCode = 1; }
+      });
+    ' "${ipalpha_infra_name:-ipalpha}" "$port"; then return 0; fi
   fi
   return 1
 }
@@ -72,15 +72,29 @@ ipalpha_find_free_port() {
 ipalpha_resolve_port() {
   local var="$1" default="$2"
   local port="$default"
-  if ipalpha_port_busy "$port"; then
+  if ipalpha_port_busy "$port" || ipalpha_port_reserved "$port"; then
     echo "  $(ipalpha_msg ports_remap): $default"
-    port="$(ipalpha_find_free_port $((default + 1)))"
+    port=$((default + 1))
+    while ipalpha_port_busy "$port" || ipalpha_port_reserved "$port" || ipalpha_port_default "$port"; do port=$((port + 1)); done
   fi
+  ipalpha_reserved_ports+=("$port")
   printf -v "$var" '%s' "$port"
   if [[ "$port" != "$default" ]]; then
     ipalpha_remap_from+=("$default")
     ipalpha_remap_to+=("$port")
   fi
+}
+
+ipalpha_port_reserved() {
+  local candidate="$1" port
+  for port in "${ipalpha_reserved_ports[@]:-}"; do [[ "$port" != "$candidate" ]] || return 0; done
+  return 1
+}
+
+ipalpha_port_default() {
+  local candidate="$1" port
+  for port in "${ipalpha_known_default_ports[@]:-}"; do [[ "$port" != "$candidate" ]] || return 0; done
+  return 1
 }
 
 # Every port variable a workspace owns, with its default ("var default" per line).
@@ -98,7 +112,12 @@ ipalpha_resolve_ports() {
   echo "$(ipalpha_msg ports_check)"
   ipalpha_remap_from=()
   ipalpha_remap_to=()
+  ipalpha_reserved_ports=()
+  ipalpha_known_default_ports=()
   local var default
+  # Replacement ports stay outside the default set, avoiding chained/idempotency
+  # ambiguities when a later pull rewrites newly added env values.
+  while read -r var default; do ipalpha_known_default_ports+=("$default"); done < <(ipalpha_port_vars)
   while read -r var default; do
     ipalpha_resolve_port "$var" "$default"
   done < <(ipalpha_port_vars)
@@ -109,14 +128,23 @@ ipalpha_apply_port_rewrites() {
   if [[ ${#ipalpha_remap_from[@]} -eq 0 ]]; then
     return 0
   fi
-  local i old new repo env_file
+  local i repo env_file mappings=""
   for i in "${!ipalpha_remap_from[@]}"; do
-    old="${ipalpha_remap_from[$i]}"
-    new="${ipalpha_remap_to[$i]}"
-    for repo in $(ipalpha_all_repos); do
-      env_file="$(ipalpha_repo_path "$root" "$repo")/.env"
-      ipalpha_rewrite_port_in_file "$env_file" "$old" "$new"
-    done
+    mappings+="${ipalpha_remap_from[$i]}:${ipalpha_remap_to[$i]} "
+  done
+  for repo in $(ipalpha_all_repos); do
+    env_file="$(ipalpha_repo_path "$root" "$repo")/.env"
+    [[ -f "$env_file" ]] || continue
+    # One pass: 3001→3002 and 3002→3003 must not turn both APIs into 3003.
+    node -e '
+      const fs = require("fs"), file = process.argv[1];
+      const ports = Object.fromEntries(process.argv[2].trim().split(" ").map(p => p.split(":")));
+      const original = fs.readFileSync(file, "utf8");
+      const updated = original.replace(/(localhost|127\.0\.0\.1):(\d+)(?=[/\s?\x22\x27,]|$)/g,
+        (all, host, port) => ports[port] ? `${host}:${ports[port]}` : all)
+        .replace(/^PORT=(\d+)$/m, (all, port) => ports[port] ? `PORT=${ports[port]}` : all);
+      if (original !== updated) fs.writeFileSync(file, updated, { mode: 0o600 });
+    ' "$env_file" "$mappings"
   done
 }
 
@@ -132,6 +160,11 @@ ipalpha_rewrites_from_settings() {
   for repo in "${ipalpha_ms_order[@]}"; do
     old="$(ipalpha_default_ms_port "$repo")"
     new="$(ipalpha_settings_ms_port "$repo")"
+    pairs+=("$old:$new")
+  done
+  for repo in "${ipalpha_web_repos[@]}"; do
+    old="$(ipalpha_default_web_port "$repo")"
+    new="$(ipalpha_settings_web_port "$repo")"
     pairs+=("$old:$new")
   done
   local p

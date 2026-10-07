@@ -348,7 +348,7 @@ export ORGANIZATIONS_API_URL="$(ms_url organizations-api)" NOTIFICATIONS_API_URL
 export FORMS_API_URL="$(ms_url forms-api)" DISPATCH_API_URL="$(ms_url dispatch-api)"
 export AI_API_URL="$(ms_url ai-api)" DEVELOPERS_API_URL="$(ms_url developers-api)"
 [[ "$repo" != auth-webapp ]] || export AUTH_API_URL="http://127.0.0.1:$api_port"
-exec ./node_modules/.bin/vite --port "$web_port" --strictPort
+exec node "$ipalpha_dir/bin/web-dev.mjs" "$web_port" "${@:2}"
 SCRIPT
   chmod +x "$dest"
 }
@@ -409,25 +409,25 @@ set -euo pipefail
 ipalpha_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ipalpha_root="$(cd "$ipalpha_dir/.." && pwd)"
 
-# shared-ui is consumed by every standalone webapp (`file:../shared-ui` in core/, `file:../../../core/shared-ui`
-# in apps/), so it must be installed and built before them.
-ui="$ipalpha_root/core/shared-ui"
-if [[ -f "$ui/package.json" ]]; then
+# Build both local file dependencies before their consumers. No npm release is needed.
+for shared in shared-js shared-ui; do
+  ui="$ipalpha_root/core/$shared"
+  [[ -f "$ui/package.json" ]] || continue
   if [[ ! -d "$ui/node_modules" || "$ui/package-lock.json" -nt "$ui/node_modules" ]]; then
-    echo "install-deps: shared-ui"
+    echo "install-deps: $shared"
     (cd "$ui" && npm install --no-audit --no-fund --silent && touch node_modules)
   fi
   if [[ ! -d "$ui/dist" || -n "$(find "$ui/src" -newer "$ui/dist" -type f 2>/dev/null | head -n1)" ]]; then
-    echo "install-deps: build shared-ui"
+    echo "install-deps: build $shared"
     (cd "$ui" && npm run build --silent)
   fi
-fi
+done
 
 for dir in "$ipalpha_root"/core/*/ "$ipalpha_root"/apps/*/*/; do
   [[ -d "$dir" ]] || continue
   dir="${dir%/}"
   [[ -f "$dir/package.json" ]] || continue
-  [[ "$dir" == "$ui" ]] && continue
+  [[ "$dir" == "$ipalpha_root/core/shared-js" || "$dir" == "$ipalpha_root/core/shared-ui" ]] && continue
   if [[ ! -d "$dir/node_modules" || "$dir/package-lock.json" -nt "$dir/node_modules" ]]; then
     echo "install-deps: $(basename "$dir")"
     (cd "$dir" && npm install --no-audit --no-fund --silent && touch node_modules)
@@ -584,6 +584,10 @@ source "$ipalpha_dir/lib/i18n.sh"
 source "$ipalpha_dir/lib/common.sh"
 # shellcheck disable=SC1091
 source "$ipalpha_dir/lib/settings.sh"
+# shellcheck disable=SC1091
+source "$ipalpha_dir/lib/env.sh"
+# shellcheck disable=SC1091
+source "$ipalpha_dir/lib/ports.sh"
 ipalpha_load_settings "$ipalpha_root" 2>/dev/null || ipalpha_i18n_init pt-BR
 
 case "${1:-}" in
@@ -606,6 +610,8 @@ fi
 echo "$(ipalpha_msg run_infra)"
 "$ipalpha_dir/bin/infra-up"
 "$ipalpha_dir/bin/install-deps"
+ipalpha_prepare_local_envs "$ipalpha_root" "$ipalpha_dir/env-fallback"
+"$ipalpha_dir/bin/auth-keys-bootstrap"
 
 runner="${IPALPHA_RUNNER:-${ipalpha_runner:-auto}}"
 case "$runner" in
@@ -739,6 +745,7 @@ ipalpha_materialize_workspace() {
     [[ -f "$lib" ]] || continue
     cp "$lib" "$dir/lib/"
   done
+  cp "$setup_root/lib/local-env.mjs" "$dir/lib/local-env.mjs"
   for f in "$dir"/lib/*.sh; do
     [[ -f "$f" ]] || continue
     chmod +x "$f"
@@ -747,6 +754,7 @@ ipalpha_materialize_workspace() {
   rm -rf "$dir/env-fallback"
   cp -R "$setup_root/templates/env-fallback" "$dir/env-fallback"
   cp "$setup_root/templates/compose.yaml" "$dir/compose.yaml"
+  cp "$setup_root/templates/system-clients.json" "$dir/system-clients.json"
 
   [[ -f "$dir/.env" ]] || ipalpha_write_compose_env "$dir/.env"
   ipalpha_write_ports_env "$dir/ports.env"
@@ -758,6 +766,9 @@ ipalpha_materialize_workspace() {
   ipalpha_write_bin_node_dev "$dir/bin/node-dev"
   rm -f "$dir/bin/vite-dev" "$dir/vite.dev.mjs"
   ipalpha_write_bin_web_dev "$dir/bin/web-dev"
+  cp "$setup_root/templates/web-dev.mjs" "$dir/bin/web-dev.mjs"
+  cp "$setup_root/templates/auth-keys-bootstrap" "$dir/bin/auth-keys-bootstrap"
+  chmod +x "$dir/bin/auth-keys-bootstrap"
   ipalpha_write_bin_install_deps "$dir/bin/install-deps"
   rm -f "$dir/bin/build-shared-js"
   ipalpha_write_bin_fallback_run "$dir/bin/fallback-run"

@@ -44,6 +44,9 @@ ipalpha_update_refresh_libs() {
 # worktree of it, keeping local branches, .env files and uncommitted work.
 ipalpha_migrate_layout() {
   local root="$1" repo old new line wt rel_old rel_new
+  # Git reports physical worktree paths (/private/var on macOS), even when the
+  # workspace was opened via /var. Compare the same canonical prefix.
+  root="$(cd "$root" && pwd -P)"
   for repo in $(ipalpha_all_repos); do
     ipalpha_app_of "$repo" >/dev/null || continue
     old="$root/core/$repo"; new="$(ipalpha_repo_path "$root" "$repo")"
@@ -103,6 +106,9 @@ ipalpha_update() {
   done
   rm -rf "$out"
 
+  # Refresh BEFORE completing envs: old local tooling must not seed the legacy
+  # {ms} format or apply yesterday's fallback defaults for one extra ./pull.
+  ipalpha_update_refresh_libs "$root"
   local fallback_dir="$root/.ipalpha/env-fallback"
   for repo in "${ipalpha_ms_repos[@]}"; do
     dir="$(ipalpha_repo_path "$root" "$repo")"
@@ -115,7 +121,6 @@ ipalpha_update() {
   ipalpha_apply_port_rewrites "$root"
 
   ipalpha_seed_local_clients "$root"
-  ipalpha_update_refresh_libs "$root"
 
   echo "$(ipalpha_msg update_done)"
 }

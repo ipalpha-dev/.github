@@ -113,16 +113,54 @@ ipalpha_ui_select() {
 }
 
 ipalpha_ui_input() {
-  local title="$1" prompt="$2" default="$3"
+  local title="$1" prompt="$2" default="$3" cursor key suffix width start visible
   ipalpha_ui_frame "$title" 15
   if [[ "$prompt" != "$title" ]]; then ipalpha_ui_line 6 "$prompt"; fi
-  ipalpha_ui_line 7 "$default"
   ipalpha_ui_line 9 "$(ipalpha_msg target_prompt)"
   ipalpha_ui_line 13 "$(ipalpha_msg setup_input_keys)"
-  printf '\033[11;4H\033[?25h' >&9
-  IFS= read -r ipalpha_ui_answer <&9 || return 130
-  ipalpha_ui_answer="${ipalpha_ui_answer:-$default}"
-  printf '\033[?25l' >&9
+  # read -i is unavailable in macOS's Bash 3.2. Keep a small in-place editor
+  # rather than showing the default as a placeholder outside the input.
+  ipalpha_ui_answer="$default"
+  cursor=${#ipalpha_ui_answer}
+  width=$((ipalpha_ui_box_width - 8))
+  stty -echo -icanon min 1 time 0 <&9
+  while true; do
+    start=$((cursor >= width ? cursor - width + 1 : 0))
+    visible="${ipalpha_ui_answer:$start:$width}"
+    printf '\033[11;4H\033[0m%-*s\033[11;%sH\033[?25h' "$width" "$visible" "$((4 + cursor - start))" >&9
+    key=''
+    IFS= read -rsn1 key <&9 || return 130
+    case "$key" in
+      '') ipalpha_ui_answer="${ipalpha_ui_answer:-$default}"; stty "$ipalpha_ui_stty" <&9; printf '\033[?25l' >&9; return 0 ;;
+      $'\177'|$'\010')
+        if ((cursor > 0)); then
+          ipalpha_ui_answer="${ipalpha_ui_answer:0:cursor-1}${ipalpha_ui_answer:cursor}"
+          cursor=$((cursor - 1))
+        fi ;;
+      $'\001') cursor=0 ;; # Ctrl+A / Home
+      $'\005') cursor=${#ipalpha_ui_answer} ;; # Ctrl+E / End
+      $'\025') ipalpha_ui_answer=''; cursor=0 ;; # Ctrl+U
+      $'\033')
+        suffix=''
+        IFS= read -rsn2 -t 1 suffix <&9 || true
+        case "$suffix" in
+          '[D'|'OD') if ((cursor > 0)); then cursor=$((cursor - 1)); fi ;;
+          '[C'|'OC') if ((cursor < ${#ipalpha_ui_answer})); then cursor=$((cursor + 1)); fi ;;
+          '[H'|'OH') cursor=0 ;;
+          '[F'|'OF') cursor=${#ipalpha_ui_answer} ;;
+          '[3')
+            IFS= read -rsn1 -t 1 suffix <&9 || true
+            if [[ "$suffix" == '~' ]]; then
+              ipalpha_ui_answer="${ipalpha_ui_answer:0:cursor}${ipalpha_ui_answer:cursor+1}"
+            fi ;;
+          '') return 130 ;;
+        esac ;;
+      $'\t') ;; # never insert a tab into the filesystem path
+      *)
+        ipalpha_ui_answer="${ipalpha_ui_answer:0:cursor}$key${ipalpha_ui_answer:cursor}"
+        cursor=$((cursor + 1)) ;;
+    esac
+  done
 }
 
 ipalpha_ui_progress() {

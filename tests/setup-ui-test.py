@@ -137,8 +137,18 @@ ipalpha_ui_input Folder Path /tmp/default
 [[ "$ipalpha_ui_answer" == '/tmp/custom path' ]]
 ipalpha_ui_stop
 """)
-        terminal.until(b"Ctrl+C")
-        terminal.send(b"/tmp/custom path\r")
+        terminal.until(b"/tmp/default")
+        terminal.send(b"\x15/tmp/custom path\r")
+        terminal.finish()
+
+    def test_input_default_is_editable_in_place(self):
+        terminal = self.terminal("""
+ipalpha_ui_input Folder Path /tmp/default
+[[ "$ipalpha_ui_answer" == '/tmp/default-edited' ]]
+ipalpha_ui_stop
+""")
+        terminal.until(b"/tmp/default")
+        terminal.send(b"-editd\x1b[De\r")
         terminal.finish()
 
     def test_escape_cancel_restores_terminal(self):
@@ -149,7 +159,7 @@ ipalpha_ui_stop
 
     def test_ctrl_c_restores_terminal(self):
         terminal = self.terminal("ipalpha_ui_input Folder Path /tmp/default")
-        terminal.until(b"Ctrl+C")
+        terminal.until(b"/tmp/default")
         terminal.send(b"\x03")
         terminal.finish(expected=130)
 
@@ -186,9 +196,9 @@ exec ./setup --skip-tools --keep-setup
 """)
             terminal.until(b"English")
             terminal.send(b"2")
-            terminal.until(b"Ctrl+C quit")
+            terminal.until(b"\x1b[11;4H")
             target = fixture + "/workspace with spaces"
-            terminal.send(target.encode() + b"\r")
+            terminal.send(b"\x15" + target.encode() + b"\r")
             terminal.until(b"Setup complete", timeout=30)
             terminal.finish()
             self.assertTrue(Path(target, ".ipalpha/settings").is_file())
