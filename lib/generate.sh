@@ -813,7 +813,8 @@ ipalpha_materialize_workspace() {
 
   echo "$(ipalpha_msg writing_workspace)"
   mkdir -p "$dir/bin" "$dir/lib"
-  if [[ "${ipalpha_infra_name:-ipalpha}" == ipalpha && ! -f "$dir/settings" ]]; then
+  # Setup re-runs and pulls also replace the generic name, so two workspaces never share one database.
+  if [[ "${ipalpha_infra_name:-ipalpha}" == ipalpha ]]; then
     ipalpha_infra_name="$(ipalpha_workspace_infra_name "$target_root")"
   fi
 

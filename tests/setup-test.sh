@@ -268,5 +268,15 @@ IPALPHA_TARGET_DIR="$ipalpha_tmp/IpAlpha2" "$ipalpha_copy/setup" --skip-tools >/
   || ipalpha_fail "setup from a .github copy failed"
 [[ ! -e "$ipalpha_copy" ]] || ipalpha_fail "setup did not delete its .github clone"
 [[ -x "$ipalpha_tmp/IpAlpha2/run" ]] || ipalpha_fail "setup from copy did not generate ./run"
+grep -q '^infra_name=ipalpha$' "$ipalpha_tmp/IpAlpha/.ipalpha/settings" || ipalpha_fail "IpAlpha must keep infra_name=ipalpha"
+grep -q '^infra_name=ipalpha2$' "$ipalpha_tmp/IpAlpha2/.ipalpha/settings" || ipalpha_fail "a second workspace needs its own infra_name"
+
+echo "== re-running setup keeps a second workspace off the first one's infra"
+sed -i.bak 's/^infra_name=.*/infra_name=ipalpha/' "$ipalpha_tmp/IpAlpha2/.ipalpha/settings"
+mkdir -p "$ipalpha_tmp/copy" && cp -R "$ipalpha_repo_root" "$ipalpha_copy"
+IPALPHA_TARGET_DIR="$ipalpha_tmp/IpAlpha2" "$ipalpha_copy/setup" --skip-tools >/dev/null 2>&1 \
+  || ipalpha_fail "setup re-run failed"
+grep -q '^infra_name=ipalpha2$' "$ipalpha_tmp/IpAlpha2/.ipalpha/settings" || ipalpha_fail "setup re-run put the workspace back on the shared infra"
+grep -q '^IPALPHA_INFRA_NAME=ipalpha2$' "$ipalpha_tmp/IpAlpha2/.ipalpha/ports.env" || ipalpha_fail "ports.env infra name not updated"
 
 echo "setup-test: all assertions passed"
