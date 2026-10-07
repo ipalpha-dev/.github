@@ -40,9 +40,9 @@ class Terminal:
         self.output = b""
         self.status = None
 
-    def until(self, marker, timeout=8):
+    def until(self, marker, timeout=8, count=1):
         deadline = time.monotonic() + timeout
-        while marker not in self.output and time.monotonic() < deadline:
+        while self.output.count(marker) < count and time.monotonic() < deadline:
             if select.select([self.fd], [], [], 0.1)[0]:
                 try:
                     chunk = os.read(self.fd, 65536)
@@ -53,7 +53,7 @@ class Terminal:
                 if not chunk:
                     break
                 self.output += chunk
-        if marker not in self.output:
+        if self.output.count(marker) < count:
             raise AssertionError(f"Missing {marker!r} in {self.output!r}")
 
     def send(self, value):
@@ -163,6 +163,28 @@ ipalpha_ui_stop
         terminal.send(b"\x03")
         terminal.finish(expected=130)
 
+    def test_superuser_name_default_and_phone_validation(self):
+        terminal = self.terminal("""
+source lib/common.sh
+source lib/env.sh
+source lib/superuser.sh
+ipalpha_i18n_init en-US
+unset IPALPHA_SUPERUSER_NAME IPALPHA_SUPERUSER_PHONE
+ipalpha_prompt_superuser /tmp/unused-superuser-qa-root
+[[ "$ipalpha_superuser_name" == 'Joao Silva Costa' ]]
+[[ "$ipalpha_superuser_phone" == '+5599900000000' ]]
+ipalpha_ui_stop
+""")
+        terminal.until(b'Joao Silva Costa')
+        terminal.send(b'\r')
+        terminal.until(b'Your mobile number with area code')
+        terminal.until(b'\x1b[?25h', count=2)
+        terminal.send(b'123\r')
+        terminal.until(b'11 digits required')
+        terminal.until(b'\x1b[?25h', count=6)
+        terminal.send(b'\x1599900000000\r')
+        terminal.finish()
+
     def test_progress_keeps_function_state_and_stops_on_failure(self):
         terminal = self.terminal("""
 update_state() { ipalpha_test_state=changed; echo 'Task output'; }
@@ -241,6 +263,8 @@ ipalpha_ui_cleanup
 export IPALPHA_TEST_NO_PORT_PROBE=1
 export IPALPHA_CLONE_COMMAND="$PWD/tests/fake-clone"
 export IPALPHA_SKIP_INSTALL=1 IPALPHA_NO_SHELL=1
+export IPALPHA_SUPERUSER_NAME='QA Developer'
+export IPALPHA_SUPERUSER_PHONE=99900000000
 unset IPALPHA_LANG IPALPHA_TARGET_DIR
 exec ./setup --skip-tools --keep-setup
 """)

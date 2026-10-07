@@ -21,6 +21,8 @@ source "$ipalpha_setup_root/lib/settings.sh"
 source "$ipalpha_setup_root/lib/generate.sh"
 # shellcheck source=lib/setup-ui.sh
 source "$ipalpha_setup_root/lib/setup-ui.sh"
+# shellcheck source=lib/superuser.sh
+source "$ipalpha_setup_root/lib/superuser.sh"
 
 ipalpha_skip_tools=false
 ipalpha_keep_setup=false
@@ -77,6 +79,8 @@ else
   ipalpha_runner="${ipalpha_runner:-auto}"
 fi
 
+ipalpha_prompt_superuser "$ipalpha_target_root"
+
 ipalpha_ai_cli="${IPALPHA_AI_CLI:-}"
 ipalpha_ai_model="${IPALPHA_AI_MODEL:-}"
 if [[ -z "$ipalpha_ai_cli" ]]; then
@@ -102,6 +106,8 @@ ipalpha_fallback_env="$ipalpha_setup_root/templates/env-fallback"
 for repo in "${ipalpha_ms_repos[@]}"; do
   ipalpha_ui_run "$(ipalpha_msg setup_configuring)" ipalpha_install_repo_env "$(ipalpha_repo_path "$ipalpha_target_root" "$repo")" "$repo" "$ipalpha_fallback_env"
 done
+
+ipalpha_write_superuser "$ipalpha_target_root"
 
 ipalpha_ui_run "$(ipalpha_msg setup_configuring)" ipalpha_resolve_ports
 ipalpha_ui_run "$(ipalpha_msg setup_configuring)" ipalpha_apply_port_rewrites "$ipalpha_target_root"

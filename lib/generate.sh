@@ -746,6 +746,7 @@ ipalpha_materialize_workspace() {
     cp "$lib" "$dir/lib/"
   done
   cp "$setup_root/lib/local-env.mjs" "$dir/lib/local-env.mjs"
+  cp "$setup_root/lib/superuser.mjs" "$dir/lib/superuser.mjs"
   for f in "$dir"/lib/*.sh; do
     [[ -f "$f" ]] || continue
     chmod +x "$f"

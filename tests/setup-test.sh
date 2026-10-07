@@ -12,6 +12,7 @@ export IPALPHA_SKIP_TOOLS=1
 export IPALPHA_TARGET_DIR="$ipalpha_tmp/IpAlpha"
 export IPALPHA_SKIP_INSTALL=1
 export IPALPHA_NO_SHELL=1
+export IPALPHA_SUPERUSER_PHONE=99900000000
 
 ipalpha_fail() { echo "FAIL: $1" >&2; exit 1; }
 
@@ -60,7 +61,8 @@ grep -q '^SOCKET_ALLOWED_ORIGINS=.*http://localhost:5111' "$ipalpha_tmp/IpAlpha/
   || ipalpha_fail "dispatch-api must allow the local developers-webapp origin"
 grep -q '^BUILTIN_DEVELOPERS_ORIGINS=http://localhost:5111$' "$ipalpha_tmp/IpAlpha/core/auth-api/.env" \
   || ipalpha_fail "auth-api must allow the local developers-webapp origin"
-grep -q '^SUPERUSER_NAME=$' "$ipalpha_tmp/IpAlpha/core/auth-api/.env" || ipalpha_fail "auth-api env missing SUPERUSER_NAME"
+grep -q '^SUPERUSER_NAME=Joao Silva Costa$' "$ipalpha_tmp/IpAlpha/core/auth-api/.env" || ipalpha_fail "default superuser name missing"
+grep -q '^SUPERUSER_PHONE=+5599900000000$' "$ipalpha_tmp/IpAlpha/core/auth-api/.env" || ipalpha_fail "superuser phone must be normalized"
 grep -q '^SMSBARATO_KEY=$' "$ipalpha_tmp/IpAlpha/core/notifications-api/.env" || ipalpha_fail "notifications-api env missing SMSBARATO_KEY"
 grep -q '^PORT=3001$' "$ipalpha_tmp/IpAlpha/core/projects-api/.env" || ipalpha_fail "projects-api env wrong PORT"
 grep -q '^AUTH_API_URL=http://127.0.0.1:3005$' "$ipalpha_tmp/IpAlpha/core/persons-api/.env" || ipalpha_fail "persons-api env wrong AUTH_API_URL"

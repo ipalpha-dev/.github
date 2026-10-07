@@ -74,6 +74,9 @@ echo "== setup fixture test"
 echo "== local environment completion test"
 node "$ipalpha_repo_root/tests/local-env-test.mjs"
 
+echo "== initial superuser setup test"
+node "$ipalpha_repo_root/tests/superuser-test.mjs"
+
 echo "== parallel repository clone test"
 node "$ipalpha_repo_root/tests/clone-test.mjs"
 

@@ -116,9 +116,11 @@ ipalpha_ui_select() {
 
 ipalpha_ui_input() {
   local title="$1" prompt="$2" default="$3" cursor key suffix width start visible
+  local hint="${4:-$(ipalpha_msg target_prompt)}" error="${5:-}"
   ipalpha_ui_frame "$title" 15
   if [[ "$prompt" != "$title" ]]; then ipalpha_ui_line 6 "$prompt"; fi
-  ipalpha_ui_line 9 "$(ipalpha_msg target_prompt)"
+  if [[ -n "$error" ]]; then ipalpha_ui_line 7 "$error"; fi
+  ipalpha_ui_line 9 "$hint"
   ipalpha_ui_line 13 "$(ipalpha_msg setup_input_keys)"
   # read -i is unavailable in macOS's Bash 3.2. Keep a small in-place editor
   # rather than showing the default as a placeholder outside the input.

@@ -21,6 +21,8 @@ const repoPath = (workspace, name) => path.join(workspace, name.startsWith('form
 const environment = { ...process.env, IPALPHA_TEST_WORKSPACE: source,
   IPALPHA_CLONE_COMMAND: path.join(tooling, 'tests/workspace-clone'),
   IPALPHA_TARGET_DIR: root, IPALPHA_LANG: 'en-US', IPALPHA_SKIP_INSTALL: '1', IPALPHA_NO_SHELL: '1',
+  IPALPHA_SUPERUSER_PHONE: '99900000000',
+  IPALPHA_SUPERUSER_NAME: 'Joao Silva Costa',
   ipalpha_infra_name: infra, IPALPHA_RUNNER: 'background',
   // Existing dependency installs are reused; all source, dist, envs, caches and DBs are fresh.
   IPALPHA_PROCS_BINARY: path.join(source, '.ipalpha/bin/ipalpha-procs'),
@@ -36,6 +38,11 @@ try {
   const settings = readEnv(path.join(root, '.ipalpha/settings'), true);
   assert.equal(settings.infra_name, infra);
   assert.equal(new Set(apis.map(api => settings[`${api}_port`])).size, apis.length);
+  // This headless seed check must not open the developer's desktop browser tabs.
+  const settingsFile = path.join(root, '.ipalpha/settings');
+  const settingsText = fs.readFileSync(settingsFile, 'utf8');
+  fs.writeFileSync(settingsFile, /^browser_apps=.*$/m.test(settingsText)
+    ? settingsText.replace(/^browser_apps=.*$/m, 'browser_apps=') : settingsText + '\nbrowser_apps=\n');
   for (const name of ['shared-js', 'shared-ui', ...apis, 'auth-webapp', 'forms-webapp', 'mordomia-webapp', 'developers-webapp']) {
     const deps = path.join(repoPath(source, name), 'node_modules');
     assert.ok(fs.existsSync(deps), `${name} needs an installed source dependency tree`);
@@ -80,6 +87,27 @@ try {
     assert.equal(after.currentSigningKid, before.currentSigningKid);
     assert.equal(after.currentEncryptionKid, before.currentEncryptionKid);
     console.log('PASS: repeat key bootstrap preserves existing keys');
+    const personsEnv = readEnv(path.join(repoPath(root, 'persons-api'), '.env'));
+    const personsConnection = await createConnection(personsEnv.MONGO_URI, { dbName: 'persons' }).asPromise();
+    try {
+      let person;
+      let superuser;
+      const seedDeadline = Date.now() + 60_000;
+      while (Date.now() < seedDeadline) {
+        person = await personsConnection.db.collection('people').findOne({ 'phones.e164': '+5599900000000' });
+        if (person) superuser = await connection.db.collection('superusers').findOne({ personId: String(person._id) });
+        if (superuser) break;
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+      if (!superuser) {
+        const log = fs.readFileSync(path.join(fixture, 'ipalpha-run-logs/auth-api.log'), 'utf8');
+        const seedLogs = log.split('\n').filter(line => /superuser seed|person create failed|person lookup failed/.test(line));
+        throw new Error(`Initial superuser seed did not finish: ${seedLogs.slice(-6).join('\n')}`);
+      }
+      assert.equal(person.name, 'Joao Silva Costa');
+      assert.equal(await personsConnection.db.collection('people').countDocuments({ 'phones.e164': '+5599900000000' }), 1);
+      console.log('PASS: initial name/phone create one canonical person and grant the central superuser role');
+    } finally { await personsConnection.close(); }
   } finally { await connection.close(); }
 } finally {
   if (runner?.pid) {

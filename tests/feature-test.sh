@@ -13,6 +13,7 @@ export IPALPHA_LANG=en-US
 export IPALPHA_TARGET_DIR="$ipalpha_tmp/IpAlpha"
 export IPALPHA_SKIP_INSTALL=1
 export IPALPHA_NO_SHELL=1
+export IPALPHA_SUPERUSER_PHONE=99900000000
 export GIT_AUTHOR_NAME=test GIT_AUTHOR_EMAIL=test@example.invalid
 export GIT_COMMITTER_NAME=test GIT_COMMITTER_EMAIL=test@example.invalid
 
