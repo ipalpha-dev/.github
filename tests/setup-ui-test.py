@@ -99,16 +99,21 @@ class SetupUI(unittest.TestCase):
         self.addCleanup(terminal.close)
         return terminal
 
-    def test_blue_fullscreen_and_language_arrows(self):
+    def test_cross_style_panel_and_language_arrows(self):
         terminal = self.terminal("""
 ipalpha_prompt_language
 [[ "$ipalpha_lang" == en-US ]]
 ipalpha_ui_stop
 """)
         terminal.until(b"English")
-        self.assertIn(b"\x1b[97;44m", terminal.output)
-        for row in range(1, 25):
-            self.assertIn(f"\x1b[{row};1H".encode() + b" " * 80, terminal.output)
+        self.assertIn(b"\x1b[?1049h", terminal.output)
+        self.assertIn(b"\x1b[38;5;33m", terminal.output)
+        self.assertIn(b"\x1b[1;38;5;15;48;5;33m IPAlpha - Setup", terminal.output)
+        self.assertIn("╭".encode(), terminal.output)
+        self.assertIn("╰".encode(), terminal.output)
+        self.assertIn(b"\x1b[1;38;5;39m", terminal.output)
+        self.assertNotIn(b"\x1b[97;44m", terminal.output)
+        self.assertIn(b"\x1b[12;1H", terminal.output)
         terminal.send(b"\x1b[B\r")
         terminal.finish()
 
@@ -162,7 +167,9 @@ ipalpha_ui_run Failure fail_task
     def test_wide_screen(self):
         terminal = self.terminal("ipalpha_prompt_language", rows=40, cols=140)
         terminal.until(b"English")
-        self.assertIn(b"\x1b[40;1H" + b" " * 140, terminal.output)
+        # Cross keeps the wizard panel at 80 columns even in a wide terminal.
+        self.assertIn(b"\x1b[2;80H", terminal.output)
+        self.assertNotIn(b"\x1b[2;140H", terminal.output)
         terminal.send(b"\r")
         terminal.finish()
 

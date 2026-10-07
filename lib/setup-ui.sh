@@ -48,26 +48,28 @@ ipalpha_ui_size() {
 }
 
 ipalpha_ui_line() {
-  local row="$1" text="$2" width=$((ipalpha_ui_cols - 4))
+  local row="$1" text="$2" width=$((ipalpha_ui_box_width - 8))
   ((width > 0)) || return 0
-  printf '\033[%s;3H\033[97;44m%-*.*s' "$row" "$width" "$width" "$text" >&9
+  printf '\033[%s;4H\033[0m%-*.*s' "$row" "$width" "$width" "$text" >&9
 }
 
 ipalpha_ui_frame() {
-  local title="$1" row border
+  local title="$1" height="${2:-16}" row border
   ipalpha_ui_size
-  # Paint each row explicitly: erase-screen uses the terminal's default background
-  # on some emulators, which would leave the old black terminal around the dialog.
-  printf '\033[?25l\033[97;44m\033[H' >&9
-  for ((row=1; row<=ipalpha_ui_rows; row++)); do
-    printf '\033[%s;1H%*s' "$row" "$ipalpha_ui_cols" '' >&9
+  # Match Cross's setup: full-screen application, compact rounded blue panel.
+  # The terminal keeps its normal background; blue belongs to the border/title.
+  ipalpha_ui_box_width=$((ipalpha_ui_cols < 80 ? ipalpha_ui_cols : 80))
+  ipalpha_ui_box_height=$((height < ipalpha_ui_rows ? height : ipalpha_ui_rows))
+  printf '\033[?25l\033[0m\033[H\033[2J' >&9
+  printf -v border '%*s' "$((ipalpha_ui_box_width - 2))" ''
+  border="${border// /─}"
+  printf '\033[1;1H\033[38;5;33m╭%s╮' "$border" >&9
+  for ((row=2; row<ipalpha_ui_box_height; row++)); do
+    printf '\033[%s;1H│\033[%s;%sH│' "$row" "$row" "$ipalpha_ui_box_width" >&9
   done
-  printf -v border '%*s' "$((ipalpha_ui_cols - 4))" ''
-  border="${border// /-}"
-  ipalpha_ui_line 2 "+${border:2}+"
-  ipalpha_ui_line 3 "IPAlpha | $title"
-  ipalpha_ui_line 4 "+${border:2}+"
-  ipalpha_ui_line "$((ipalpha_ui_rows - 2))" "+${border:2}+"
+  printf '\033[%s;1H╰%s╯\033[0m' "$ipalpha_ui_box_height" "$border" >&9
+  printf '\033[3;4H\033[1;38;5;15;48;5;33m IPAlpha - Setup \033[0m' >&9
+  ipalpha_ui_line 5 "$title"
 }
 
 ipalpha_ui_select() {
@@ -75,19 +77,21 @@ ipalpha_ui_select() {
   shift 2
   local options=("$@")
   while true; do
-    ipalpha_ui_frame "$title"
-    ipalpha_ui_line 6 "$prompt"
-    row=8
+    ipalpha_ui_frame "$title" "$((${#options[@]} + 10))"
+    if [[ "$prompt" != "$title" && -n "$prompt" ]]; then
+      ipalpha_ui_line 6 "$prompt"
+    fi
+    row=7
     for option in "${options[@]}"; do
-      if ((row - 8 == selected)); then
-        ipalpha_ui_line "$row" " > $option"
-        printf '\033[%s;4H\033[1;34;47m %-*.*s\033[0;97;44m' "$row" "$((ipalpha_ui_cols - 7))" "$((ipalpha_ui_cols - 7))" "$option" >&9
+      if ((row - 7 == selected)); then
+        ipalpha_ui_line "$row" "› $option"
+        printf '\033[%s;4H\033[1;38;5;39m› %.*s\033[0m' "$row" "$((ipalpha_ui_box_width - 10))" "$option" >&9
       else
-        ipalpha_ui_line "$row" "   $option"
+        ipalpha_ui_line "$row" "  $option"
       fi
       row=$((row + 1))
     done
-    ipalpha_ui_line "$((ipalpha_ui_rows - 1))" "$(ipalpha_msg setup_keys)"
+    printf '\033[%s;4H\033[38;5;245m%.*s\033[0m' "$((ipalpha_ui_box_height - 2))" "$((ipalpha_ui_box_width - 8))" "$(ipalpha_msg setup_keys)" >&9
     key=''; status=0
     IFS= read -rsn1 key <&9 || status=$?
     ((status == 0)) || return 130
@@ -110,12 +114,12 @@ ipalpha_ui_select() {
 
 ipalpha_ui_input() {
   local title="$1" prompt="$2" default="$3"
-  ipalpha_ui_frame "$title"
-  ipalpha_ui_line 6 "$prompt"
-  ipalpha_ui_line 8 "$default"
-  ipalpha_ui_line 10 "$(ipalpha_msg target_prompt)"
-  ipalpha_ui_line "$((ipalpha_ui_rows - 1))" "$(ipalpha_msg setup_input_keys)"
-  printf '\033[12;3H\033[?25h' >&9
+  ipalpha_ui_frame "$title" 15
+  if [[ "$prompt" != "$title" ]]; then ipalpha_ui_line 6 "$prompt"; fi
+  ipalpha_ui_line 7 "$default"
+  ipalpha_ui_line 9 "$(ipalpha_msg target_prompt)"
+  ipalpha_ui_line 13 "$(ipalpha_msg setup_input_keys)"
+  printf '\033[11;4H\033[?25h' >&9
   IFS= read -r ipalpha_ui_answer <&9 || return 130
   ipalpha_ui_answer="${ipalpha_ui_answer:-$default}"
   printf '\033[?25l' >&9
@@ -123,14 +127,14 @@ ipalpha_ui_input() {
 
 ipalpha_ui_progress() {
   local title="$1" row line
-  ipalpha_ui_frame "$title"
-  row=6
+  ipalpha_ui_frame "$title" 20
+  row=7
   while IFS= read -r line; do
     # Tool output is text, not terminal control (npm/git may include ANSI codes).
     line="$(printf '%s' "$line" | LC_ALL=C tr -d '\000-\010\013-\037\177')"
     ipalpha_ui_line "$row" "$line"
     row=$((row + 1))
-  done < <(tail -n "$((ipalpha_ui_rows > 9 ? ipalpha_ui_rows - 9 : 1))" "$ipalpha_ui_log")
+  done < <(tail -n "$((ipalpha_ui_box_height > 10 ? ipalpha_ui_box_height - 10 : 1))" "$ipalpha_ui_log")
 }
 
 ipalpha_ui_run() {
