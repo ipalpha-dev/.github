@@ -81,6 +81,8 @@ follow `ghcr.io/<org>/<ms>`.
 3. Starts every API and the remembered web apps at once — nothing waits for a peer. Each core MS
    exposes `GET /live` (process up) and `GET /ready` (200 only when Mongo, Redis,
    RabbitMQ and the projects cache are all good; 503 `{ready:false, checks}` otherwise).
+   The panel lists Core services, Frontends (core webapps + Mailpit), then Apps — the
+   consumers outside core, one group per app (Forms → Forms API + Forms Web).
    The panel polls `/ready` and shows ● ready / ◐ up-but-not-ready per row; k8s uses the
    same two paths as liveness/readiness probes.
    Processes run in the background with logs under `$TMPDIR/ipalpha-run-logs`.

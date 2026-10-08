@@ -49,6 +49,7 @@ type proc struct {
 	port        string
 	frontend    string
 	parent      string
+	group       string
 	deps        []string
 	softDeps    []string
 	shell       bool

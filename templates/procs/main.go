@@ -33,6 +33,7 @@ type projectSpec struct {
 	Cmd       string `json:"cmd"`
 	Frontend  string `json:"frontend"`
 	Parent    string `json:"parent"`
+	Group     string `json:"group"`
 }
 
 func main() {
@@ -131,6 +132,7 @@ func buildProcs(ipalphaDir, root string, cfg projectJSON) []*proc {
 			port:      port,
 			frontend:  s.Frontend,
 			parent:    s.Parent,
+			group:     s.Group,
 			deps:      wait,
 			softDeps:  soft,
 			autostart: s.Autostart,
@@ -158,18 +160,30 @@ func groupAttached(procs []*proc) []*proc {
 		}
 	}
 	out := make([]*proc, 0, len(procs))
-	var apps []*proc
+	var frontends []*proc
+	var groups []string
+	grouped := map[string][]*proc{}
 	for _, p := range procs {
 		switch {
 		case p.kind == "attached" && p.parent != "":
+		case p.group != "":
+			if _, seen := grouped[p.group]; !seen {
+				groups = append(groups, p.group)
+			}
+			grouped[p.group] = append(grouped[p.group], p)
+			grouped[p.group] = append(grouped[p.group], children[p.id]...)
 		case p.kind == "app" || p.kind == "browser":
-			apps = append(apps, p)
+			frontends = append(frontends, p)
 		default:
 			out = append(out, p)
 			out = append(out, children[p.id]...)
 		}
 	}
-	return append(out, apps...)
+	out = append(out, frontends...)
+	for _, group := range groups {
+		out = append(out, grouped[group]...)
+	}
+	return out
 }
 
 func formatDisplayName(display, name string) string {

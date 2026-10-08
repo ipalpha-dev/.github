@@ -43,6 +43,7 @@ func (m model) View() string {
 	}
 	list.WriteString(muted.Render(listTitle) + "\n")
 	prevKind := ""
+	appsShown := false
 	for i, p := range m.procs {
 		section := p.kind
 		if section == "browser" {
@@ -51,16 +52,26 @@ func (m model) View() string {
 		if section == "attached" {
 			section = "service"
 		}
+		if p.group != "" {
+			section = "group:" + p.group
+		}
 		if section != prevKind {
-			switch section {
-			case "service":
+			switch {
+			case section == "service":
 				if prevKind != "" {
 					list.WriteString("\n")
 				}
 				list.WriteString(muted.Render(tr("section_api")) + "\n")
-			case "app":
+			case section == "app":
 				list.WriteString("\n")
 				list.WriteString(muted.Render(tr("section_web")) + "\n")
+			case p.group != "":
+				if !appsShown {
+					list.WriteString("\n")
+					list.WriteString(muted.Render(tr("section_apps")) + "\n")
+					appsShown = true
+				}
+				list.WriteString(muted.Render("  "+groupTitle(p.group)) + "\n")
 			}
 			prevKind = section
 		}
@@ -91,7 +102,7 @@ func (m model) View() string {
 		}
 		label := p.name
 		indent := ""
-		if p.kind == "attached" {
+		if p.kind == "attached" || p.group != "" {
 			indent = "  "
 		}
 		if st == stateExited && code != 0 {
@@ -182,4 +193,14 @@ func (m model) View() string {
 	}
 
 	return titleStyle.Render(tr("title")) + status + "\n" + body + "\n" + help + "\n"
+}
+
+func groupTitle(group string) string {
+	words := strings.Split(group, "-")
+	for i, w := range words {
+		if w != "" {
+			words[i] = strings.ToUpper(w[:1]) + w[1:]
+		}
+	}
+	return strings.Join(words, " ")
 }

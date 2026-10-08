@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -179,5 +180,36 @@ func TestPanelStartStopPersistsAppChoicesAcrossRuns(t *testing.T) {
 	wait(stateStopped)
 	if browserSelection(dir)[p.id] {
 		t.Fatal("x must forget the explicitly stopped app")
+	}
+}
+
+func TestAppsListGroupsNonCoreProcessesAfterFrontends(t *testing.T) {
+	dir := t.TempDir()
+	setLang("en-US")
+	procs := buildProcs(dir, dir, projectJSON{Projects: []projectSpec{
+		{Name: "projects-api", Kind: "service", Display: "Projects"},
+		{Name: "forms-api", Kind: "service", Group: "forms", Display: "Forms API"},
+		{Name: "auth-api", Kind: "service", Display: "Auth"},
+		{Name: "auth-webapp", Kind: "app", Display: "Auth Web", Frontend: "http://localhost:5100/"},
+		{Name: "forms-webapp", Kind: "app", Group: "forms", Display: "Forms Web", Frontend: "http://localhost:5106/"},
+		{Name: "mailpit", Kind: "browser", Display: "Mailpit", Frontend: "http://127.0.0.1:8025/"},
+	}})
+	var order []string
+	for _, p := range procs {
+		order = append(order, p.id)
+	}
+	want := []string{"infrastructure", "projects-api", "auth-api", "auth-webapp", "mailpit", "forms-api", "forms-webapp"}
+	if !reflect.DeepEqual(order, want) {
+		t.Fatalf("order = %v, want %v", order, want)
+	}
+	m := newModel(dir, dir, procs)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	view := stripANSI(updated.(model).View())
+	core := strings.Index(view, tr("section_api"))
+	web := strings.Index(view, tr("section_web"))
+	apps := strings.Index(view, tr("section_apps"))
+	forms := strings.Index(view, "Forms API")
+	if core < 0 || web < core || apps < web || forms < apps || !strings.Contains(view, "  Forms\n") && !strings.Contains(view, "  Forms ") {
+		t.Fatalf("sections out of order:\n%s", view)
 	}
 }

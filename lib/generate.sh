@@ -561,7 +561,7 @@ SCRIPT
 
 ipalpha_write_projects_json() {
   local root="$1" dest="$2"
-  local repo first=true display port autostart
+  local repo first=true display port autostart group
   {
     echo "{"
     echo "  \"root\": \"$root\","
@@ -576,10 +576,12 @@ ipalpha_write_projects_json() {
       display="${repo%-api}"
       display="$(tr '[:lower:]' '[:upper:]' <<<"${display:0:1}")${display:1}"
       [[ "$repo" != ai-api ]] || display="AI"
+      group="$(ipalpha_app_of "$repo" || true)"
+      [[ -z "$group" ]] || display="$display API"
       port="$(ipalpha_settings_ms_port "$repo")"
       [[ "$first" == true ]] || echo "    ,"
       first=false
-      echo "    {\"name\": \"$repo\", \"kind\": \"service\", \"path\": \"$(ipalpha_repo_rel "$repo")\", \"display\": \"$display\", \"port\": \"$port\", \"autostart\": true}"
+      echo "    {\"name\": \"$repo\", \"kind\": \"service\", \"group\": \"$group\", \"path\": \"$(ipalpha_repo_rel "$repo")\", \"display\": \"$display\", \"port\": \"$port\", \"autostart\": true}"
     done
     for repo in "${ipalpha_web_repos[@]}"; do
       [[ -f "$(ipalpha_repo_path "$root" "$repo")/package.json" ]] || continue
@@ -588,8 +590,9 @@ ipalpha_write_projects_json() {
       port="$(ipalpha_settings_web_port "$repo")"
       autostart=false
       if ipalpha_app_selected "$repo" "$root"; then autostart=true; fi
+      group="$(ipalpha_app_of "$repo" || true)"
       echo "    ,"
-      echo "    {\"name\": \"$repo\", \"kind\": \"app\", \"path\": \"$(ipalpha_repo_rel "$repo")\", \"display\": \"$display\", \"port\": \"$port\", \"autostart\": $autostart, \"cmd\": \"$root/.ipalpha/bin/web-dev $repo\", \"frontend\": \"http://localhost:$port/\"}"
+      echo "    {\"name\": \"$repo\", \"kind\": \"app\", \"group\": \"$group\", \"path\": \"$(ipalpha_repo_rel "$repo")\", \"display\": \"$display\", \"port\": \"$port\", \"autostart\": $autostart, \"cmd\": \"$root/.ipalpha/bin/web-dev $repo\", \"frontend\": \"http://localhost:$port/\"}"
     done
     echo "    ,"
     port="${ipalpha_port_mailpit:-$ipalpha_default_mailpit_port}"

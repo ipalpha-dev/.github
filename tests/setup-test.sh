@@ -144,9 +144,11 @@ forms-api
 ai-api
 developers-api
 dispatch-api" ]] || ipalpha_fail "mprocs order wrong: $ipalpha_order"
-grep -q '"name": "developers-api", "kind": "service", "path": "core/developers-api", "display": "Developers", "port": "3009"' \
+grep -q '"name": "developers-api", "kind": "service", "group": "", "path": "core/developers-api", "display": "Developers", "port": "3009"' \
   "$ipalpha_tmp/IpAlpha/.ipalpha/projects.json" || ipalpha_fail "projects.json developers-api entry wrong"
-grep -q '"name": "ai-api", "kind": "service", "path": "core/ai-api", "display": "AI", "port": "3008"' \
+grep -q '"name": "forms-api", "kind": "service", "group": "forms", "path": "apps/forms/forms-api", "display": "Forms API"' \
+  "$ipalpha_tmp/IpAlpha/.ipalpha/projects.json" || ipalpha_fail "projects.json must list forms-api in the forms app group"
+grep -q '"name": "ai-api", "kind": "service", "group": "", "path": "core/ai-api", "display": "AI", "port": "3008"' \
   "$ipalpha_tmp/IpAlpha/.ipalpha/projects.json" || ipalpha_fail "projects.json ai-api entry wrong"
 grep -q 'export AI_API_URL="$(ms_url ai-api)" DEVELOPERS_API_URL="$(ms_url developers-api)"' "$ipalpha_tmp/IpAlpha/.ipalpha/bin/web-dev" \
   || ipalpha_fail "web-dev must export AI_API_URL and DEVELOPERS_API_URL for the /api proxies"
@@ -180,7 +182,7 @@ grep -q '^NEW_KEY=42$' "$ipalpha_tmp/IpAlpha/core/persons-api/.env" \
 grep -q '"name": "auth-webapp", "kind": "app"' "$ipalpha_tmp/IpAlpha/.ipalpha/projects.json" || ipalpha_fail "projects.json missing auth-webapp app"
 grep -q 'Web · auth-webapp' "$ipalpha_tmp/IpAlpha/.ipalpha/mprocs.yaml" || ipalpha_fail "mprocs missing auth-webapp"
 grep -q 'web-dev auth-webapp' "$ipalpha_tmp/IpAlpha/.ipalpha/projects.json" || ipalpha_fail "projects.json auth-webapp cmd wrong"
-grep -q '"name": "developers-webapp", "kind": "app", "path": "core/developers-webapp", "display": "Developers Web", "port": "5111"' \
+grep -q '"name": "developers-webapp", "kind": "app", "group": "", "path": "core/developers-webapp", "display": "Developers Web", "port": "5111"' \
   "$ipalpha_tmp/IpAlpha/.ipalpha/projects.json" || ipalpha_fail "projects.json missing developers-webapp app on 5111"
 grep -q 'Web · developers-webapp' "$ipalpha_tmp/IpAlpha/.ipalpha/mprocs.yaml" || ipalpha_fail "mprocs missing developers-webapp"
 echo "== web-dev proxies developers-webapp to the local APIs"
