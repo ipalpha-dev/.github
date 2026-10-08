@@ -415,8 +415,17 @@ ipalpha_publish_initialize() {
   fi
 }
 
+ipalpha_publish_complete() {
+  printf '%s\n' --ci --initialize --npm-only --resume --tooling --deployment-path --feature --no-wait \
+    --message -d --dry-run -f --folder --engine -h --help clean
+  echo ":4"
+}
+
 ipalpha_publish() {
   local root="$1"; shift
+  case "${1:-}" in
+    __complete|__completeNoDesc) ipalpha_publish_complete; return 0 ;;
+  esac
   local dry_run=false initialize=false npm_only=false resume=false tooling=false folder="" engine="${ipalpha_ai_cli:-pi}" model="${ipalpha_ai_model:-}"
   local arg deployment_message="Update deployment configuration" feature="" feature_wait=true
   local -a deployment_paths=()
