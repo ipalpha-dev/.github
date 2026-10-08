@@ -458,7 +458,7 @@ run_tasks() {
       rm -rf "$dir/node_modules/@ipalpha/shared-js" "$dir/node_modules/@ipalpha/shared-ui"
       (cd "$dir" && npm install --no-audit --no-fund && touch node_modules) >"$log" 2>&1
     else
-      (cd "$dir" && npm run build) >"$log" 2>&1
+      (cd "$dir" && npm run build && touch dist) >"$log" 2>&1
     fi && exit 0
     printf "\ninstall-deps: %s %s FAILED\n%s\n  full log: %s\n\n" "$task" "$name" \
       "$(grep -v "^npm error *$" "$log" | tail -n 25 | sed "s/^/  │ /")" "$log" >&2
@@ -486,6 +486,17 @@ for dir in "$ipalpha_root"/core/*/ "$ipalpha_root"/apps/*/*/; do
   if needs_install "$dir"; then tasks+=("install $dir"); fi
 done
 run_tasks ${tasks[@]+"${tasks[@]}"}
+
+# A rebuilt shared library reaches consumers that copied it without a full reinstall.
+for lib in "${shared[@]}"; do
+  [[ -d "$lib/dist" ]] || continue
+  for copy in "$ipalpha_root"/core/*/node_modules/@ipalpha/"$(basename "$lib")" "$ipalpha_root"/apps/*/*/node_modules/@ipalpha/"$(basename "$lib")"; do
+    [[ -d "$copy/dist" && ! -L "$copy" ]] || continue
+    [[ -n "$(find "$lib/dist" -newer "$copy/dist" -type f 2>/dev/null | head -n1)" ]] || continue
+    rm -rf "$copy/dist" && cp -R "$lib/dist" "$copy/dist" && cp "$lib/package.json" "$copy/package.json"
+    echo "install-deps: refresh $(basename "$lib") in ${copy#"$ipalpha_root"/}"
+  done
+done
 SCRIPT
   chmod +x "$dest"
 }
