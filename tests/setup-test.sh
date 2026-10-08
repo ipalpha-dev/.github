@@ -219,7 +219,7 @@ for repo in ai-api developers-api developers-webapp; do
 done
 for repo in ai-api developers-api developers-webapp; do rm -rf "$ipalpha_tmp/IpAlpha/core/$repo/.git"; mkdir -p "$ipalpha_tmp/IpAlpha/core/$repo/.git"; done
 
-echo "== publish smoke (no AI, dry-run aborts without changes)"
+echo "== publish smoke (no AI, dry-run previews without changes)"
 repo_dir="$ipalpha_tmp/IpAlpha/core/projects-api"
 git init -q -b master "$repo_dir"
 git -C "$repo_dir" -c user.name=test -c user.email=test@example.invalid commit -q --allow-empty -m "root"
@@ -231,7 +231,8 @@ inplace 's/^ai_cli=.*/ai_cli=bogus/' "$ipalpha_tmp/IpAlpha/.ipalpha/settings"
 ipalpha_out="$(
   cd "$ipalpha_tmp/IpAlpha" && ./publish -d -f projects-api </dev/null 2>&1
 )" || ipalpha_fail "publish dry-run failed: $ipalpha_out"
-grep -qi 'aborted' <<<"$ipalpha_out" || ipalpha_fail "dry-run did not abort: $ipalpha_out"
+grep -q 'DRY RUN complete' <<<"$ipalpha_out" || ipalpha_fail "dry-run did not finish its preview: $ipalpha_out"
+grep -q 'would commit' <<<"$ipalpha_out" || ipalpha_fail "dry-run did not show the planned commit: $ipalpha_out"
 [[ -n "$(git -C "$repo_dir" status --porcelain)" ]] || ipalpha_fail "dry-run changed the repo"
 
 echo "== publish sees committed-but-untagged work as publishable"
@@ -243,7 +244,7 @@ grep -qi 'Nothing to publish' <<<"$ipalpha_out" || ipalpha_fail "tagged clean re
 echo "// more" >>"$repo_dir/index.js"; git -C "$repo_dir" add -A
 git -C "$repo_dir" -c user.name=test -c user.email=test@example.invalid commit -qam "more notes"
 ipalpha_out="$(cd "$ipalpha_tmp/IpAlpha" && ./publish -d -f projects-api </dev/null 2>&1)" || ipalpha_fail "publish dry-run (untagged commit) failed: $ipalpha_out"
-grep -qi 'aborted' <<<"$ipalpha_out" || ipalpha_fail "untagged commit was not offered for publish: $ipalpha_out"
+grep -q 'would commit' <<<"$ipalpha_out" || ipalpha_fail "untagged commit was not offered for publish: $ipalpha_out"
 
 ipalpha_out="$(
   cd "$ipalpha_tmp/IpAlpha" && ./publish -f projects-api </dev/null 2>&1

@@ -16,6 +16,8 @@ Pré-requisito: [chave SSH no GitHub](https://docs.github.com/pt/authentication/
 
 O setup pergunta o idioma e a pasta (padrão `./IpAlpha`), instala as ferramentas,
 clona os repositórios, cria os `.env`, e gera os comandos abaixo na pasta escolhida.
+SMS e email locais usam sempre o Mailpit, mesmo se existirem credenciais de provedores
+nos `.env`. Nenhuma mensagem local é enviada por SMS Barato, Comtele ou SendGrid.
 
 Sem clonar à mão? O comando acima já faz isso. Alternativa com clone manual:
 

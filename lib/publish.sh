@@ -208,47 +208,95 @@ $(git -C "$dir" log --oneline -8 2>/dev/null)"
   echo "$decision"
 }
 
+ipalpha_publish_ui_init() {
+  if [[ -t 1 ]]; then
+    ipalpha_pub_b=$'\e[1m' ipalpha_pub_d=$'\e[2m' ipalpha_pub_r=$'\e[0m'
+    ipalpha_pub_g=$'\e[32m' ipalpha_pub_y=$'\e[33m' ipalpha_pub_c=$'\e[36m' ipalpha_pub_red=$'\e[31m'
+  else
+    ipalpha_pub_b="" ipalpha_pub_d="" ipalpha_pub_r="" ipalpha_pub_g="" ipalpha_pub_y="" ipalpha_pub_c="" ipalpha_pub_red=""
+  fi
+}
+
+ipalpha_publish_hdr() {
+  printf '\n%s== %s ==%s\n' "$ipalpha_pub_b$ipalpha_pub_c" "$1" "$ipalpha_pub_r"
+}
+
+ipalpha_publish_warn() {
+  printf '%s! %s%s\n' "$ipalpha_pub_y" "$1" "$ipalpha_pub_r"
+}
+
+ipalpha_publish_progress() {
+  printf '%s        %s%s\n' "$ipalpha_pub_d" "$1" "$ipalpha_pub_r" >&2
+}
+
+# Fetch every repo the run touches; fast-forward only when applying, never across diverged history.
+ipalpha_publish_preflight() {
+  local dry_run="$1"; shift
+  local dir up ahead behind failed=0
+  for dir in "$@"; do
+    ipalpha_is_git_repo "$dir" || continue
+    up="$(git -C "$dir" rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null)" || continue
+    ipalpha_publish_progress "$(ipalpha_msg publish_pulling) $(basename "$dir")…"
+    if ! git -C "$dir" fetch --quiet 2>/dev/null; then
+      printf '%sx %s: git fetch failed%s\n' "$ipalpha_pub_red" "$(basename "$dir")" "$ipalpha_pub_r" >&2
+      failed=1; continue
+    fi
+    read -r ahead behind < <(git -C "$dir" rev-list --left-right --count "HEAD...$up")
+    (( behind == 0 )) && continue
+    if (( ahead > 0 )); then
+      printf '%sx %s: %s (%s/%s)%s\n' "$ipalpha_pub_red" "$(basename "$dir")" "$(ipalpha_msg publish_diverged)" "$ahead" "$behind" "$ipalpha_pub_r" >&2
+      failed=1; continue
+    fi
+    [[ "$dry_run" == true ]] && continue
+    git -C "$dir" merge --ff-only --quiet "$up" || { failed=1; continue; }
+  done
+  (( failed == 0 )) || return 1
+  printf '%s  %s%s\n' "$ipalpha_pub_g" "$(ipalpha_msg publish_up_to_date)" "$ipalpha_pub_r"
+}
+
 ipalpha_publish_select_repos() {
   local repos=("$@")
+  local n=${#repos[@]} cur=0 i key rest count mark pointer
   local -a selected=()
-  local i choice n
-  for i in "${!repos[@]}"; do
-    selected[$i]=1
-  done
-  if [[ ${#repos[@]} -eq 1 ]]; then
-    printf '%s\n' "${repos[0]}"
+  for i in "${!repos[@]}"; do selected[$i]=1; done
+  if [[ ! -t 0 || ! -t 2 ]]; then
+    printf '%s\n' "${repos[@]}"
     return 0
   fi
+  printf '%s%s%s\n' "$ipalpha_pub_b" "$(ipalpha_msg publish_select)" "$ipalpha_pub_r" >&2
+  printf '\e[?25l' >&2
+  trap 'printf "\e[?25h" >&2' RETURN
+  local drawn=false
   while true; do
-    {
-      echo "$(ipalpha_msg publish_select)"
-      for i in "${!repos[@]}"; do
-        if [[ "${selected[$i]}" == "1" ]]; then
-          echo "  [x] $((i + 1)). ${repos[$i]}"
-        else
-          echo "  [ ] $((i + 1)). ${repos[$i]}"
-        fi
-      done
-      echo "  (a=all · q=quit · Enter=confirm)"
-    } >&2
-    read -r choice || choice="q"
-    [[ -z "$choice" ]] && break
-    case "$choice" in
-      q|Q) return 1 ;;
+    [[ "$drawn" == true ]] && printf '\e[%dA' $((n + 1)) >&2
+    drawn=true
+    count=0
+    for i in "${!repos[@]}"; do
+      [[ "${selected[$i]}" == 1 ]] && count=$((count + 1))
+      if [[ "${selected[$i]}" == 1 ]]; then mark="$ipalpha_pub_g[x]$ipalpha_pub_r"; else mark="$ipalpha_pub_d[ ]$ipalpha_pub_r"; fi
+      if (( i == cur )); then pointer="$ipalpha_pub_c›$ipalpha_pub_r"; else pointer=" "; fi
+      printf '\e[2K%s %s  %s\n' "$pointer" "$mark" "${repos[$i]}" >&2
+    done
+    printf '\e[2K  %s→ %d of %d · %s%s\n' "$ipalpha_pub_d" "$count" "$n" "$(ipalpha_msg publish_select_keys)" "$ipalpha_pub_r" >&2
+    IFS= read -rsn1 key || key=q
+    if [[ "$key" == $'\e' ]]; then
+      IFS= read -rsn2 -t 1 rest || rest=""
+      key="esc$rest"
+    fi
+    case "$key" in
+      'esc[A'|k) (( cur > 0 )) && cur=$((cur - 1)) ;;
+      'esc[B'|j) (( cur < n - 1 )) && cur=$((cur + 1)) ;;
+      ' ') if [[ "${selected[$cur]}" == 1 ]]; then selected[$cur]=0; else selected[$cur]=1; fi ;;
       a|A) for i in "${!repos[@]}"; do selected[$i]=1; done ;;
-      *)
-        for n in $choice; do
-          if [[ "$n" =~ ^[0-9]+$ ]] && (( n >= 1 && n <= ${#repos[@]} )); then
-            i=$((n - 1))
-            if [[ "${selected[$i]}" == "1" ]]; then selected[$i]=0; else selected[$i]=1; fi
-          fi
-        done
-        ;;
+      n|N) for i in "${!repos[@]}"; do selected[$i]=0; done ;;
+      '') break ;;
+      q|Q|esc) return 1 ;;
     esac
   done
   for i in "${!repos[@]}"; do
-    [[ "${selected[$i]}" == "1" ]] && printf '%s\n' "${repos[$i]}"
+    [[ "${selected[$i]}" == 1 ]] && printf '%s\n' "${repos[$i]}"
   done
+  return 0
 }
 
 ipalpha_publish_build_image() {
@@ -511,6 +559,13 @@ ipalpha_publish() {
     fi
   fi
 
+  ipalpha_publish_ui_init
+  local apply=yes
+  [[ "$dry_run" == true ]] && apply=no
+  ipalpha_publish_hdr "publish — mode: ${ipalpha_pub_b}release${ipalpha_pub_r}${ipalpha_pub_b}${ipalpha_pub_c}  (deployment: $root/deployment, apply: $apply)"
+  [[ "$dry_run" == true ]] && ipalpha_publish_warn "$(ipalpha_msg publish_dry_banner)"
+  printf '%smodel: %s:%s   prompt: built-in default%s\n' "$ipalpha_pub_d" "$engine" "${model:-default}" "$ipalpha_pub_r"
+
   local -a dirty=()
   while IFS= read -r repo; do
     [[ -n "$repo" ]] && dirty+=("$repo")
@@ -521,10 +576,18 @@ ipalpha_publish() {
     return 0
   fi
 
+  local -a preflight_dirs=()
+  for repo in "${dirty[@]}"; do preflight_dirs+=("$(ipalpha_repo_path "$root" "$repo")"); done
+  preflight_dirs+=("$root/deployment")
+  ipalpha_publish_preflight "$dry_run" "${preflight_dirs[@]}" || { echo "$(ipalpha_msg publish_preflight_failed)" >&2; return 1; }
+
+  # shellcheck disable=SC2059
+  ipalpha_publish_hdr "$(printf "$(ipalpha_msg publish_found)" "${ipalpha_pub_b}${#dirty[@]}${ipalpha_pub_r}${ipalpha_pub_b}${ipalpha_pub_c}")  ${ipalpha_pub_d}${dirty[*]}${ipalpha_pub_r}${ipalpha_pub_b}${ipalpha_pub_c}"
+
+  local -a selected=()
   if [[ -n "$folder" ]]; then
-    local -a selected=("$folder")
+    selected=("$folder")
   else
-    local -a selected=()
     local picked
     picked="$(ipalpha_publish_select_repos "${dirty[@]}")" || { echo "$(ipalpha_msg publish_aborted)"; return 0; }
     while IFS= read -r repo; do
@@ -537,39 +600,42 @@ ipalpha_publish() {
   fi
 
   local -a plan_bump=() plan_version=() plan_message=()
-  local i=0 decision reason bump message version
+  local i=0 total=${#selected[@]} decision reason bump message version current started took dir
   for repo in "${selected[@]}"; do
-    echo "$(ipalpha_msg publish_asking_ai) ${repo}…" >&2
+    dir="$(ipalpha_repo_path "$root" "$repo")"
+    current="$(ipalpha_publish_current_version "$dir")"
+    printf '%s[%d/%d]%s %-22s %s%s (%s:%s)…%s\n' "$ipalpha_pub_b$ipalpha_pub_c" $((i + 1)) "$total" "$ipalpha_pub_r" \
+      "$repo" "$ipalpha_pub_d" "$(ipalpha_msg publish_analyzing)" "$engine" "${model:-default}" "$ipalpha_pub_r" >&2
+    started=$SECONDS
     decision="$(ipalpha_publish_ask_ai "$root" "$repo" "$engine" "$model")"
+    took=$((SECONDS - started))
     reason="$(sed -n 1p <<<"$decision")"
     bump="$(sed -n 2p <<<"$decision")"
     message="$(sed -n 3p <<<"$decision")"
-    bump="$(ipalpha_publish_scope_clamp "$(ipalpha_repo_path "$root" "$repo")" "$bump")"
-    version="$(ipalpha_publish_current_version "$(ipalpha_repo_path "$root" "$repo")")"
-    version="$(ipalpha_publish_bump_version "$version" "$bump")"
+    bump="$(ipalpha_publish_scope_clamp "$dir" "$bump")"
+    version="$(ipalpha_publish_bump_version "$current" "$bump")"
     [[ -z "$message" ]] && message="Update $repo"
     plan_bump[$i]="$bump"
     plan_version[$i]="$version"
     plan_message[$i]="$message"
-    i=$((i + 1))
-  done
-
-  echo
-  echo "$(ipalpha_msg publish_plan):"
-  i=0
-  for repo in "${selected[@]}"; do
-    echo "  $repo: ${plan_bump[$i]} → v${plan_version[$i]} — ${plan_message[$i]}"
+    ipalpha_publish_hdr "[$((i + 1))/$total] $repo  ${ipalpha_pub_d}($(git -C "$dir" status --porcelain | wc -l | tr -d ' ') changed, ${took}s)${ipalpha_pub_r}${ipalpha_pub_b}${ipalpha_pub_c}"
+    printf '  %sreason:%s  %s\n' "$ipalpha_pub_b" "$ipalpha_pub_r" "$reason"
+    printf '  %sbump:%s  %s    %s%s -> %s%s\n' "$ipalpha_pub_b" "$ipalpha_pub_r" "$bump" "$ipalpha_pub_d" "$current" "$version" "$ipalpha_pub_r"
+    printf '  %smessage:%s %s\n' "$ipalpha_pub_b" "$ipalpha_pub_r" "$message"
+    if [[ "$dry_run" == true ]]; then
+      if [[ "$bump" == none ]]; then
+        printf '  %s(dry-run: would commit "%s" — no version bump)%s\n' "$ipalpha_pub_d" "$message" "$ipalpha_pub_r"
+      else
+        printf '  %s(dry-run: would commit "%s" and write version %s)%s\n' "$ipalpha_pub_d" "$message" "$version" "$ipalpha_pub_r"
+      fi
+    fi
     i=$((i + 1))
   done
 
   if [[ "$dry_run" == true ]]; then
     echo
-    printf '%s ' "$(ipalpha_msg publish_apply)"
-    read -r answer || answer=""
-    case "$answer" in
-      y|Y|s|S) ;;
-      *) echo "$(ipalpha_msg publish_aborted)"; return 0 ;;
-    esac
+    ipalpha_publish_warn "$(ipalpha_msg publish_dry_done)"
+    return 0
   fi
 
   i=0
@@ -577,5 +643,5 @@ ipalpha_publish() {
     ipalpha_publish_repo "$root" "$repo" "${plan_version[$i]}" "${plan_message[$i]}" "${plan_bump[$i]}"
     i=$((i + 1))
   done
-  echo "$(ipalpha_msg publish_done)"
+  printf '%s%s%s\n' "$ipalpha_pub_g" "$(ipalpha_msg publish_done)" "$ipalpha_pub_r"
 }

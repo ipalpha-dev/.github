@@ -54,15 +54,19 @@ try {
   assert.equal(example.SMS_PROVIDER, 'mailpit');
   assert.equal(example.DEPLOYMENT_ENVIRONMENT, 'development');
 
-  // Explicit delivery choices backed by credentials are never overwritten.
+  // Local setup must never enable paid delivery, even when credentials are present.
   fs.writeFileSync(file, 'MAIL_PROVIDER=sendgrid\nSMS_PROVIDER=smsbarato\nSENDGRID_API_KEY=operator-value\nSMSBARATO_KEY=operator-sms\nMAILPIT_URL=http://127.0.0.1:8999\n');
   completeLocalEnv(repo, 'notifications-api', fallback);
   const custom = readEnv(file);
-  assert.equal(custom.MAIL_PROVIDER, 'sendgrid');
-  assert.equal(custom.SMS_PROVIDER, 'smsbarato');
+  assert.equal(custom.MAIL_PROVIDER, 'mailpit');
+  assert.equal(custom.SMS_PROVIDER, 'mailpit');
+  assert.equal(custom.DEPLOYMENT_ENVIRONMENT, 'development');
   assert.equal(custom.SENDGRID_API_KEY, 'operator-value');
   assert.equal(custom.SMSBARATO_KEY, 'operator-sms');
   assert.equal(custom.MAILPIT_URL, 'http://127.0.0.1:8999');
+  const before = fs.readFileSync(file, 'utf8');
+  completeLocalEnv(repo, 'notifications-api', fallback);
+  assert.equal(fs.readFileSync(file, 'utf8'), before, 'Mailpit enforcement must be idempotent');
 
   for (const name of ['infra-up', 'infra-down', 'infra-logs']) {
     shell(`ipalpha_write_bin_${name.replaceAll('-', '_')} "$2/${name}"`);
