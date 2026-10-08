@@ -254,6 +254,8 @@ Flags:
     en-US:publish_no_dirty) echo "Nothing to publish under core/ and apps/ (no local changes; bumped versions wait for the deploy)." ;;
     pt-BR:publish_select) echo "Repos sujos — toggle pelo número, Enter confirma" ;;
     en-US:publish_select) echo "Dirty repos — toggle by number, Enter confirms" ;;
+    pt-BR:publish_asking_ai) echo "  Analisando com IA (até 60s por repo):" ;;
+    en-US:publish_asking_ai) echo "  Asking the AI (up to 60s per repo):" ;;
     pt-BR:publish_plan) echo "Plano de publicação" ;;
     en-US:publish_plan) echo "Publish plan" ;;
     pt-BR:publish_apply) echo "Aplicar este plano? [s/N]" ;;

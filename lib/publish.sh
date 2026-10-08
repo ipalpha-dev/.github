@@ -62,7 +62,7 @@ ipalpha_publish_parse_decision() {
 ipalpha_publish_ai_run() {
   python3 - "$@" <<'PYRUN'
 import os, signal, subprocess, sys, tempfile
-process = subprocess.Popen(sys.argv[1:], cwd=tempfile.gettempdir(), stdout=subprocess.PIPE,
+process = subprocess.Popen(sys.argv[1:], cwd=tempfile.gettempdir(), stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                            stderr=subprocess.DEVNULL, text=True, start_new_session=True)
 try:
     output, _ = process.communicate(timeout=60)
@@ -220,15 +220,17 @@ ipalpha_publish_select_repos() {
     return 0
   fi
   while true; do
-    echo "$(ipalpha_msg publish_select)"
-    for i in "${!repos[@]}"; do
-      if [[ "${selected[$i]}" == "1" ]]; then
-        echo "  [x] $((i + 1)). ${repos[$i]}"
-      else
-        echo "  [ ] $((i + 1)). ${repos[$i]}"
-      fi
-    done
-    echo "  (a=all · q=quit · Enter=confirm)"
+    {
+      echo "$(ipalpha_msg publish_select)"
+      for i in "${!repos[@]}"; do
+        if [[ "${selected[$i]}" == "1" ]]; then
+          echo "  [x] $((i + 1)). ${repos[$i]}"
+        else
+          echo "  [ ] $((i + 1)). ${repos[$i]}"
+        fi
+      done
+      echo "  (a=all · q=quit · Enter=confirm)"
+    } >&2
     read -r choice || choice="q"
     [[ -z "$choice" ]] && break
     case "$choice" in
@@ -523,9 +525,11 @@ ipalpha_publish() {
     local -a selected=("$folder")
   else
     local -a selected=()
+    local picked
+    picked="$(ipalpha_publish_select_repos "${dirty[@]}")" || { echo "$(ipalpha_msg publish_aborted)"; return 0; }
     while IFS= read -r repo; do
       [[ -n "$repo" ]] && selected+=("$repo")
-    done < <(ipalpha_publish_select_repos "${dirty[@]}") || { echo "$(ipalpha_msg publish_aborted)"; return 0; }
+    done <<<"$picked"
   fi
   if [[ ${#selected[@]} -eq 0 ]]; then
     echo "$(ipalpha_msg publish_aborted)"
@@ -535,6 +539,7 @@ ipalpha_publish() {
   local -a plan_bump=() plan_version=() plan_message=()
   local i=0 decision reason bump message version
   for repo in "${selected[@]}"; do
+    echo "$(ipalpha_msg publish_asking_ai) ${repo}…" >&2
     decision="$(ipalpha_publish_ask_ai "$root" "$repo" "$engine" "$model")"
     reason="$(sed -n 1p <<<"$decision")"
     bump="$(sed -n 2p <<<"$decision")"
