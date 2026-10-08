@@ -678,6 +678,11 @@ echo "$(ipalpha_msg run_infra)"
 "$ipalpha_dir/bin/install-deps"
 ipalpha_prepare_local_envs "$ipalpha_root" "$ipalpha_dir/env-fallback"
 "$ipalpha_dir/bin/auth-keys-bootstrap"
+if synced="$(node "$ipalpha_dir/lib/local-clients.mjs" "$ipalpha_root" 2>&1)"; then
+  [[ -z "$synced" ]] || echo "$(ipalpha_msg clients_synced) $synced"
+else
+  echo "$(ipalpha_msg clients_sync_failed) $synced" >&2
+fi
 
 # Browser readiness is independent of service boot and works with every runner.
 # The bounded helper exits if this launcher (exec'd runner) exits.
@@ -824,6 +829,7 @@ ipalpha_materialize_workspace() {
   done
   cp "$setup_root/lib/local-env.mjs" "$dir/lib/local-env.mjs"
   cp "$setup_root/lib/superuser.mjs" "$dir/lib/superuser.mjs"
+  cp "$setup_root/lib/local-clients.mjs" "$dir/lib/local-clients.mjs"
   for f in "$dir"/lib/*.sh; do
     [[ -f "$f" ]] || continue
     chmod +x "$f"

@@ -244,7 +244,7 @@ ipalpha_feature_materialize() {
   local main="$1" froot="$2" slug="$3" shim
   shim="$(mktemp -d "${TMPDIR:-/tmp}/ipalpha-feature.XXXXXX")"
   mkdir -p "$shim/lib" "$shim/templates"
-  cp "$main"/.ipalpha/lib/*.sh "$shim/lib/"
+  cp "$main"/.ipalpha/lib/*.sh "$main"/.ipalpha/lib/*.mjs "$shim/lib/"
   cp -R "$main/.ipalpha/env-fallback" "$shim/templates/env-fallback"
   cp "$main/.ipalpha/compose.yaml" "$shim/templates/compose.yaml"
   mkdir -p "$froot/.ipalpha"

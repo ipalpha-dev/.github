@@ -198,6 +198,10 @@ Ports come from .ipalpha/settings / .ipalpha/ports.env." ;;
     en-US:procs_missing) echo "Process panel unavailable (no go and download failed) — ./run will use background mode" ;;
     pt-BR:auth_clients) echo "Gerando credenciais locais dos MSs (AUTH_CLIENT_ID/SECRET + SEED_CLIENTS_JSON)" ;;
     en-US:auth_clients) echo "Generating local MS credentials (AUTH_CLIENT_ID/SECRET + SEED_CLIENTS_JSON)" ;;
+    pt-BR:clients_synced) echo "  Credenciais locais atualizadas no banco do auth (o .env mudou):" ;;
+    en-US:clients_synced) echo "  Local credentials updated in auth's database (the .env changed):" ;;
+    pt-BR:clients_sync_failed) echo "  Não foi possível conferir as credenciais locais no banco do auth; se um MS receber 401, rode ./run de novo:" ;;
+    en-US:clients_sync_failed) echo "  Could not check local credentials in auth's database; if an MS gets 401, run ./run again:" ;;
     pt-BR:help_pull) echo "Uso: ./pull
 
 Sincroniza esta máquina com a org ipalpha:

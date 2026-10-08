@@ -75,6 +75,7 @@ node "$ipalpha_repo_root/tests/mailpit-test.mjs"
 
 echo "== local environment completion test"
 node "$ipalpha_repo_root/tests/local-env-test.mjs"
+node "$ipalpha_repo_root/tests/local-clients-test.mjs"
 
 echo "== initial superuser setup test"
 node "$ipalpha_repo_root/tests/superuser-test.mjs"
