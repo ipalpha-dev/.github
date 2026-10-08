@@ -274,7 +274,7 @@ ipalpha_publish_select_repos() {
     for i in "${!repos[@]}"; do
       [[ "${selected[$i]}" == 1 ]] && count=$((count + 1))
       if [[ "${selected[$i]}" == 1 ]]; then mark="$ipalpha_pub_g[x]$ipalpha_pub_r"; else mark="$ipalpha_pub_d[ ]$ipalpha_pub_r"; fi
-      if (( i == cur )); then pointer="$ipalpha_pub_c›$ipalpha_pub_r"; else pointer=" "; fi
+      if (( i == cur )); then pointer="${ipalpha_pub_c}›${ipalpha_pub_r}"; else pointer=" "; fi
       printf '\e[2K%s %s  %s\n' "$pointer" "$mark" "${repos[$i]}" >&2
     done
     printf '\e[2K  %s→ %d of %d · %s%s\n' "$ipalpha_pub_d" "$count" "$n" "$(ipalpha_msg publish_select_keys)" "$ipalpha_pub_r" >&2
