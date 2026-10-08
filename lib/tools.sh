@@ -91,8 +91,11 @@ ipalpha_gh_ok() {
   command -v gh >/dev/null 2>&1
 }
 
+# Docker (with Compose v2) is preferred; Apple container is the fallback.
 ipalpha_detect_runtime() {
-  if command -v container >/dev/null 2>&1; then
+  if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
+    ipalpha_runtime="docker"
+  elif command -v container >/dev/null 2>&1; then
     ipalpha_runtime="container"
   elif command -v docker >/dev/null 2>&1; then
     ipalpha_runtime="docker"

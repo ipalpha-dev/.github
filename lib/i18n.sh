@@ -92,8 +92,8 @@ ipalpha_msg() {
     en-US:tool_hint_gh) echo "GitHub CLI — https://cli.github.com  (or: brew install gh) then: gh auth login" ;;
     pt-BR:tool_hint_kubectl) echo "kubectl — https://kubernetes.io/docs/tasks/tools/  (ou: brew install kubectl)" ;;
     en-US:tool_hint_kubectl) echo "kubectl — https://kubernetes.io/docs/tasks/tools/  (or: brew install kubectl)" ;;
-    pt-BR:tool_hint_container) echo "Apple container — macOS 26+: brew install container  (fallback: Docker Desktop)" ;;
-    en-US:tool_hint_container) echo "Apple container — macOS 26+: brew install container  (fallback: Docker Desktop)" ;;
+    pt-BR:tool_hint_container) echo "Docker Desktop (preferido) — ou Apple container, macOS 26+: brew install container" ;;
+    en-US:tool_hint_container) echo "Docker Desktop (preferred) — or Apple container, macOS 26+: brew install container" ;;
     pt-BR:tool_hint_docker) echo "Docker Desktop (ou Docker Engine + Compose v2) — https://www.docker.com/products/docker-desktop/" ;;
     en-US:tool_hint_docker) echo "Docker Desktop (or Docker Engine + Compose v2) — https://www.docker.com/products/docker-desktop/" ;;
     pt-BR:need_runtime) echo "Nenhum runtime de contêiner (container ou docker). Instale um dos dois." ;;

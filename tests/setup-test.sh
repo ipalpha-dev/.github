@@ -279,4 +279,17 @@ IPALPHA_TARGET_DIR="$ipalpha_tmp/IpAlpha2" "$ipalpha_copy/setup" --skip-tools >/
 grep -q '^infra_name=ipalpha2$' "$ipalpha_tmp/IpAlpha2/.ipalpha/settings" || ipalpha_fail "setup re-run put the workspace back on the shared infra"
 grep -q '^IPALPHA_INFRA_NAME=ipalpha2$' "$ipalpha_tmp/IpAlpha2/.ipalpha/ports.env" || ipalpha_fail "ports.env infra name not updated"
 
+echo "== runtime detection prefers Docker with Compose v2, then Apple container"
+ipalpha_fake="$ipalpha_tmp/fake-runtime"
+mkdir -p "$ipalpha_fake/both" "$ipalpha_fake/cli-only"
+printf '#!/bin/sh\nexit 0\n' >"$ipalpha_fake/both/docker"
+printf '#!/bin/sh\n[ "$1" = compose ] && exit 1\nexit 0\n' >"$ipalpha_fake/cli-only/docker"
+for dir in both cli-only; do printf '#!/bin/sh\nexit 0\n' >"$ipalpha_fake/$dir/container"; done
+chmod +x "$ipalpha_fake"/*/*
+for case in "both docker" "cli-only container"; do
+  set -- $case
+  got="$(PATH="$ipalpha_fake/$1:/usr/bin:/bin" bash -c 'source "$0/lib/tools.sh"; ipalpha_detect_runtime; echo "$ipalpha_runtime"' "$ipalpha_repo_root")"
+  [[ "$got" == "$2" ]] || ipalpha_fail "runtime detection ($1): expected $2, got $got"
+done
+
 echo "setup-test: all assertions passed"

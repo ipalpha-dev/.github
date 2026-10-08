@@ -14,7 +14,7 @@ Long-form reference for tools, ports, degraded integrations, and troubleshooting
 
 | Platform | Notes |
 | --- | --- |
-| macOS | Preferred — Apple `container` runtime or Docker Desktop |
+| macOS | Docker Desktop (preferred) or the Apple `container` runtime |
 | Debian/Ubuntu Linux | Docker Engine + Compose v2 |
 | Windows | **Ubuntu WSL2 only** |
 
@@ -23,7 +23,7 @@ Long-form reference for tools, ports, degraded integrations, and troubleshooting
 1. Language (pt-BR default, en-US), workspace root (default: `./IpAlpha` in the
    folder where you pasted the command).
 2. Checks/installs tools: git, Node.js LTS ≥ 20 + npm, `gh`, `kubectl`, and a
-   container runtime — **Apple `container` preferred, Docker fallback**
+   container runtime — **Docker (with Compose v2) preferred, Apple `container` fallback**; automatic install uses Apple `container` because Homebrew cannot install Docker Desktop's engine
    (`runtime=` in `.ipalpha/settings`). The process panel uses an embedded
    background runner; logs land under `$TMPDIR/ipalpha-run-logs`. To use
    `mprocs` instead, install it manually and run with `IPALPHA_RUNNER=mprocs`.
@@ -69,9 +69,9 @@ follow `ghcr.io/<org>/<ms>`.
 ## Day-to-day: `./run`
 
 1. Starts infrastructure in containers and waits for health:
-   MongoDB, Redis, RabbitMQ (+ management UI on 15672), and Mailpit. Apple `container` runs
-   the services directly (network and named volumes prefixed by `infra_name`);
-   Docker uses `docker compose --wait`. Each workspace has its own infra: setup derives
+   MongoDB, Redis, RabbitMQ (+ management UI on 15672), and Mailpit. Docker uses
+   `docker compose --wait`; Apple `container` runs the services directly. Containers, network
+   and volumes are prefixed by `infra_name`. Each workspace has its own infra: setup derives
    `infra_name` in `.ipalpha/settings` from the folder (`IpAlpha` → `ipalpha`, `ipalpha-2` →
    `ipalpha-2`), so a second workspace never reuses another's database or client secrets.
    They share ports, so run one workspace at a time.

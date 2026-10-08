@@ -14,7 +14,7 @@ ipalpha_write_settings() {
     echo "# IPAlpha local workspace settings (created by setup; used by ./run ./publish ./pull)"
     echo "lang=${ipalpha_lang:-pt-BR}"
     echo "org=${ipalpha_org}"
-    echo "runtime=${ipalpha_runtime:-container}"
+    echo "runtime=${ipalpha_runtime:-docker}"
     echo "ai_cli=${ipalpha_ai_cli:-pi}"
     echo "ai_model=${ipalpha_ai_model:-cpamc/muse-spark-1.3-contributor}"
     echo "runner=${ipalpha_runner:-auto}"
