@@ -286,7 +286,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.status = tr("proc_focus")
 			return m, nil
 
-		case "up", "k":
+		case "up":
 			if m.focusLog {
 				m.follow = false
 				m.vp.LineUp(1)
@@ -366,6 +366,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.status = tr("stop") + " " + p.name
 				go p.stop()
+			}
+			return m, nil
+		case "k":
+			if p := m.selectedProc(); p != nil && p.kind != "browser" {
+				if p.port == "" {
+					m.status = p.name + " · " + tr("no_port")
+				} else {
+					m.status = tr("freeing_port") + " :" + p.port
+					ports := m.depPorts()
+					go p.freePortThenRestart(m.events, ports)
+				}
 			}
 			return m, nil
 

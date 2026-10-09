@@ -347,6 +347,34 @@ func (p *proc) restartWithDeps(ch chan<- teaMsg, depPorts map[string]string) {
 	_ = p.start(ch)
 }
 
+// freePortThenRestart kills whatever else is listening on this process's port
+// (a leftover from an earlier run) and starts it again. Returns how many were
+// killed, or -1 when the process has no port.
+func (p *proc) freePortThenRestart(ch chan<- teaMsg, depPorts map[string]string) int {
+	p.stop()
+	if p.port == "" {
+		return -1
+	}
+	own := 0
+	p.mu.Lock()
+	if p.cmdP != nil && p.cmdP.Process != nil {
+		own = p.cmdP.Process.Pid
+	}
+	p.mu.Unlock()
+	n, err := freePort(p.port, own)
+	if err != nil {
+		p.appendLine(tr("free_port_fail") + ": " + err.Error())
+		n = 0
+	} else if n == 0 {
+		p.appendLine(":" + p.port + " " + tr("port_free"))
+	} else {
+		p.appendLine(tr("freed_port") + " :" + p.port + " (" + itoa(n) + ")")
+	}
+	time.Sleep(150 * time.Millisecond)
+	go p.startAfterDeps(ch, depPorts)
+	return n
+}
+
 func (p *proc) setState(s procState, exit int) {
 	p.mu.Lock()
 	p.state = s

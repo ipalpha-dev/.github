@@ -61,7 +61,7 @@ func TestMailpitBrowserRowCannotLaunchAnotherProcess(t *testing.T) {
 
 func TestBrowserHelpHasFiveLanguages(t *testing.T) {
 	for _, code := range []string{"pt-BR", "en-US", "es", "fr", "de"} {
-		for _, key := range []string{"browser_on", "browser_off", "browser_failed", "help"} {
+		for _, key := range []string{"browser_on", "browser_off", "browser_failed", "help", "freeing_port", "freed_port", "port_free", "free_port_fail"} {
 			if messages[code][key] == "" {
 				t.Fatalf("missing %s/%s", code, key)
 			}
