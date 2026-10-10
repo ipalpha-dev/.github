@@ -13,7 +13,7 @@ import (
 
 func TestBrowserSelectionPersistsIncludingEmpty(t *testing.T) {
 	dir := t.TempDir()
-	want := map[string]bool{"auth-webapp": true, "oikos-webapp": true, "mailpit": true}
+	want := map[string]bool{"auth-webapp": true, "mordomia-webapp": true, "mailpit": true}
 	if got := browserSelection(dir); !reflect.DeepEqual(got, want) {
 		t.Fatalf("defaults = %v", got)
 	}

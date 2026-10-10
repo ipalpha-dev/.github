@@ -16,7 +16,7 @@ assert.ok(source, 'usage: node tests/fresh-start-test.mjs /path/to/ipalpha');
 const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'ipalpha-cold-start-'));
 const root = path.join(fixture, 'IpAlpha');
 const infra = `ipalpha-qa-${process.pid}`;
-const apis = ['projects-api', 'persons-api', 'organizations-api', 'places-api', 'notifications-api', 'auth-api', 'forms-api', 'ai-api', 'developers-api', 'dispatch-api'];
+const apis = ['projects-api', 'persons-api', 'organizations-api', 'notifications-api', 'auth-api', 'forms-api', 'ai-api', 'developers-api', 'dispatch-api'];
 const repoPath = (workspace, name) => path.join(workspace, name.startsWith('forms-') ? 'apps/forms' : 'core', name);
 const environment = { ...process.env, IPALPHA_TEST_WORKSPACE: source,
   IPALPHA_CLONE_COMMAND: path.join(tooling, 'tests/workspace-clone'),
@@ -34,7 +34,7 @@ const run = async (command, args, options = {}) => {
   catch (error) { throw new Error(`${command} ${args.join(' ')} failed: ${error.stderr || error.stdout || error.message}`); }
 };
 try {
-  await run(process.env.IPALPHA_BASH || '/bin/bash', [path.join(tooling, 'setup'), '--skip-tools', '--keep-setup']);
+  await run('/bin/bash', [path.join(tooling, 'setup'), '--skip-tools', '--keep-setup']);
   const settings = readEnv(path.join(root, '.ipalpha/settings'), true);
   assert.equal(settings.infra_name, infra);
   assert.equal(new Set(apis.map(api => settings[`${api}_port`])).size, apis.length);
@@ -43,7 +43,7 @@ try {
   const settingsText = fs.readFileSync(settingsFile, 'utf8');
   fs.writeFileSync(settingsFile, /^browser_apps=.*$/m.test(settingsText)
     ? settingsText.replace(/^browser_apps=.*$/m, 'browser_apps=') : settingsText + '\nbrowser_apps=\n');
-  for (const name of ['shared-js', 'shared-ui', ...apis, 'auth-webapp', 'forms-webapp', 'oikos-webapp', 'developers-webapp']) {
+  for (const name of ['shared-js', 'shared-ui', ...apis, 'auth-webapp', 'forms-webapp', 'mordomia-webapp', 'developers-webapp']) {
     const deps = path.join(repoPath(source, name), 'node_modules');
     assert.ok(fs.existsSync(deps), `${name} needs an installed source dependency tree`);
     fs.symlinkSync(deps, path.join(repoPath(root, name), 'node_modules'), 'dir');

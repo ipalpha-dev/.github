@@ -15,8 +15,8 @@ const settings = readEnv(path.join(workspace, '.ipalpha/settings'), true);
 const port = Number(process.argv[2]);
 const authWebappUrl = `http://localhost:${settings['auth-webapp_port'] || 5100}`;
 const defaults = { VITE_AUTH_WEBAPP_URL: authWebappUrl };
-if (pkg.name === 'oikos-webapp') Object.assign(defaults, {
-  VITE_APP_CLIENT_ID: auth.BUILTIN_OIKOS_CLIENT_ID || 'oikos-webapp',
+if (pkg.name === 'mordomia-webapp') Object.assign(defaults, {
+  VITE_APP_CLIENT_ID: auth.BUILTIN_MORDOMIA_CLIENT_ID || 'mordomia-web',
   VITE_ENTRY_POINT_KEY: 'church',
   VITE_AUTH_CALLBACK_URI: `http://localhost:${port}/auth/callback`,
   VITE_FORMS_URL: `http://localhost:${settings['forms-webapp_port'] || 5106}`,

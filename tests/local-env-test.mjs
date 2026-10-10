@@ -11,7 +11,7 @@ const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ipalpha-env-test-'));
 const fallback = path.join(tooling, 'templates/env-fallback');
 const envFile = (name) => path.join(root, name === 'forms-api' ? 'apps/forms/forms-api/.env' : `core/${name}/.env`);
 const write = (file, text) => { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, text); };
-const shell = (script) => execFileSync(process.env.IPALPHA_BASH || '/bin/bash', ['-c', `set -euo pipefail
+const shell = (script) => execFileSync('/bin/bash', ['-c', `set -euo pipefail
 source lib/common.sh
 source lib/i18n.sh
 source lib/env.sh
@@ -33,7 +33,7 @@ try {
   const encryptionKey = persons.IMPORT_ROWS_KEY;
   completeLocalEnv(path.dirname(envFile('persons-api')), 'persons-api', path.join(fallback, 'persons-api.env'));
   assert.equal(readEnv(envFile('persons-api')).IMPORT_ROWS_KEY, encryptionKey);
-  if (process.platform !== 'win32') assert.equal(fs.statSync(envFile('persons-api')).mode & 0o777, 0o600);
+  assert.equal(fs.statSync(envFile('persons-api')).mode & 0o777, 0o600);
   write(envFile('forms-api'), 'AUTH_TOKEN_ISSUER=https://auth.operator.invalid\nFORMS_APP_ID=custom-app\n');
   completeLocalEnv(path.dirname(envFile('forms-api')), 'forms-api', path.join(fallback, 'forms-api.env'));
   assert.equal(readEnv(envFile('forms-api')).FORMS_APP_ID, 'custom-app');

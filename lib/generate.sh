@@ -366,7 +366,6 @@ export AUTH_API_URL="$(ms_url auth-api)" PROJECTS_API_URL="$(ms_url projects-api
 export ORGANIZATIONS_API_URL="$(ms_url organizations-api)" NOTIFICATIONS_API_URL="$(ms_url notifications-api)"
 export FORMS_API_URL="$(ms_url forms-api)" DISPATCH_API_URL="$(ms_url dispatch-api)"
 export AI_API_URL="$(ms_url ai-api)" DEVELOPERS_API_URL="$(ms_url developers-api)"
-export PLACES_API_URL="$(ms_url places-api)"
 [[ "$repo" != auth-webapp ]] || export AUTH_API_URL="http://127.0.0.1:$api_port"
 exec node "$ipalpha_dir/bin/web-dev.mjs" "$web_port" "${@:2}"
 SCRIPT
@@ -572,17 +571,16 @@ SCRIPT
 }
 
 ipalpha_write_projects_json() {
-  local root="$1" dest="$2" root_json
+  local root="$1" dest="$2"
   local repo first=true display port autostart group
-  root_json="${root//\\//}"
   {
     echo "{"
-    echo "  \"root\": \"$root_json\","
+    echo "  \"root\": \"$root\","
     echo "  \"lang\": \"${ipalpha_lang:-pt-BR}\","
     echo "  \"infra\": {"
-    echo "    \"start\": \"$root_json/.ipalpha/bin/infra-up\","
-    echo "    \"logs\": \"$root_json/.ipalpha/bin/infra-logs\","
-    echo "    \"stop\": \"$root_json/.ipalpha/bin/infra-down\""
+    echo "    \"start\": \"$root/.ipalpha/bin/infra-up\","
+    echo "    \"logs\": \"$root/.ipalpha/bin/infra-logs\","
+    echo "    \"stop\": \"$root/.ipalpha/bin/infra-down\""
     echo "  },"
     echo "  \"projects\": ["
     for repo in "${ipalpha_ms_order[@]}"; do
@@ -605,7 +603,7 @@ ipalpha_write_projects_json() {
       if ipalpha_app_selected "$repo" "$root"; then autostart=true; fi
       group="$(ipalpha_app_of "$repo" || true)"
       echo "    ,"
-      echo "    {\"name\": \"$repo\", \"kind\": \"app\", \"group\": \"$group\", \"path\": \"$(ipalpha_repo_rel "$repo")\", \"display\": \"$display\", \"port\": \"$port\", \"autostart\": $autostart, \"cmd\": \"$root_json/.ipalpha/bin/web-dev $repo\", \"frontend\": \"http://localhost:$port/\"}"
+      echo "    {\"name\": \"$repo\", \"kind\": \"app\", \"group\": \"$group\", \"path\": \"$(ipalpha_repo_rel "$repo")\", \"display\": \"$display\", \"port\": \"$port\", \"autostart\": $autostart, \"cmd\": \"$root/.ipalpha/bin/web-dev $repo\", \"frontend\": \"http://localhost:$port/\"}"
     done
     echo "    ,"
     port="${ipalpha_port_mailpit:-$ipalpha_default_mailpit_port}"
@@ -827,33 +825,6 @@ SCRIPT
   chmod +x "$root/feature"
 }
 
-ipalpha_write_root_check() {
-  local root="$1"
-  cat >"$root/check" <<'SCRIPT'
-#!/usr/bin/env bash
-set -euo pipefail
-
-ipalpha_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-exec node "$ipalpha_root/.ipalpha/bin/policy-check.mjs" \
-  --policy "$ipalpha_root/.ipalpha/policy" --workspace "$ipalpha_root" "$@"
-SCRIPT
-  chmod +x "$root/check"
-}
-
-ipalpha_materialize_security_policy() {
-  local setup_root="$1" target_root="$2" dir="$target_root/.ipalpha"
-  [[ -d "$setup_root/policy" ]] || { echo "missing canonical security policy" >&2; return 1; }
-  [[ -f "$setup_root/templates/workspace-AGENTS.md" ]] || { echo "missing workspace AGENTS template" >&2; return 1; }
-  [[ -f "$setup_root/scripts/policy-check.mjs" ]] || { echo "missing policy checker" >&2; return 1; }
-
-  rm -rf "$dir/policy"
-  cp -R "$setup_root/policy" "$dir/policy"
-  cp "$setup_root/templates/workspace-AGENTS.md" "$target_root/AGENTS.md"
-  cp "$setup_root/scripts/policy-check.mjs" "$dir/bin/policy-check.mjs"
-  chmod +x "$dir/bin/policy-check.mjs"
-  ipalpha_write_root_check "$target_root"
-}
-
 ipalpha_materialize_workspace() {
   local setup_root="$1" target_root="$2"
   local dir="$target_root/.ipalpha"
@@ -908,7 +879,6 @@ ipalpha_materialize_workspace() {
   ipalpha_write_root_pull "$target_root"
   ipalpha_write_root_publish "$target_root"
   ipalpha_write_root_feature "$target_root"
-  ipalpha_materialize_security_policy "$setup_root" "$target_root"
 
   echo "$(ipalpha_msg writing_settings)"
   ipalpha_write_settings "$target_root"

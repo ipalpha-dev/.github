@@ -4,17 +4,6 @@ set -euo pipefail
 ipalpha_repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ipalpha_repo_root"
 
-# Native Node/Python on Git Bash cannot execute the POSIX-only /bin/bash path.
-# Pass the host path explicitly; Linux/macOS keep the conventional path.
-if [[ -z "${IPALPHA_BASH:-}" ]]; then
-  if command -v cygpath >/dev/null 2>&1; then
-    IPALPHA_BASH="$(cygpath -w "$(command -v bash)")"
-  else
-    IPALPHA_BASH="$(command -v bash)"
-  fi
-  export IPALPHA_BASH
-fi
-
 ipalpha_fail() { echo "FAIL: $1" >&2; exit 1; }
 
 echo "== bash -n over setup, lib and tests"
@@ -41,18 +30,11 @@ fi
 
 echo "== docker compose config"
 if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
-  ipalpha_compose_tmp="$(mktemp -d)"
-  trap 'rm -rf "$ipalpha_compose_tmp"' EXIT
-  printf 'MONGO_USERNAME=x\nMONGO_PASSWORD=x\nRABBITMQ_USERNAME=x\nRABBITMQ_PASSWORD=x\n' >"$ipalpha_compose_tmp/credentials.env"
-  printf 'MONGO_HOST_PORT=27017\nREDIS_HOST_PORT=6379\nRABBITMQ_HOST_PORT=5672\nRABBITMQ_MGMT_HOST_PORT=15672\n' >"$ipalpha_compose_tmp/ports.env"
-  if ! docker compose \
-    --env-file "$ipalpha_compose_tmp/credentials.env" \
-    --env-file "$ipalpha_compose_tmp/ports.env" \
-    -f templates/compose.yaml config --quiet; then
-    ipalpha_fail "compose config rejected compose.yaml"
-  fi
-  rm -rf "$ipalpha_compose_tmp"
-  trap - EXIT
+  docker compose \
+    --env-file <(printf 'MONGO_USERNAME=x\nMONGO_PASSWORD=x\nRABBITMQ_USERNAME=x\nRABBITMQ_PASSWORD=x\n') \
+    --env-file <(printf 'MONGO_HOST_PORT=27017\nREDIS_HOST_PORT=6379\nRABBITMQ_HOST_PORT=5672\nRABBITMQ_MGMT_HOST_PORT=15672\n') \
+    -f templates/compose.yaml \
+    config --quiet || ipalpha_fail "compose config rejected compose.yaml"
 else
   echo "SKIP: docker compose unavailable"
 fi
@@ -86,9 +68,6 @@ if grep -HE '^(SMSBARATO_KEY|COMTELE_TOKEN|AUTH_CLIENT_ID|AUTH_CLIENT_SECRET|SUP
   ipalpha_fail "secrets must stay blank in templates"
 fi
 
-echo "== canonical security policy"
-node "$ipalpha_repo_root/tests/policy-test.mjs"
-
 echo "== setup fixture test"
 node "$ipalpha_repo_root/tests/browser-test.mjs"
 node "$ipalpha_repo_root/tests/mailpit-test.mjs"
@@ -105,10 +84,10 @@ echo "== parallel repository clone test"
 node "$ipalpha_repo_root/tests/clone-test.mjs"
 
 echo "== setup terminal UI test"
-if command -v python3 >/dev/null 2>&1 && python3 -c 'import sys' >/dev/null 2>&1; then
+if command -v python3 >/dev/null 2>&1; then
   python3 "$ipalpha_repo_root/tests/setup-ui-test.py"
 else
-  echo "SKIP: functional python3 not installed"
+  echo "SKIP: python3 not installed"
 fi
 
 echo "== feature workspace test"

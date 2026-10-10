@@ -283,7 +283,7 @@ ipalpha_feature_new() {
 
   echo
   echo "$(ipalpha_msg feature_created): $froot"
-  echo "  cd features/$slug && ./run        # mongo :$ipalpha_port_mongo · web :$ipalpha_port_oikos_webapp"
+  echo "  cd features/$slug && ./run        # mongo :$ipalpha_port_mongo · web :$ipalpha_port_mordomia_webapp"
   echo "  ./publish --feature $slug         # preview:"
   for host in $(ipalpha_feature_hosts "$slug"); do echo "    https://$host"; done
   echo "    https://$(ipalpha_feature_developers_host "$slug")   (IPAlpha Developers, when the baseline has it)"
