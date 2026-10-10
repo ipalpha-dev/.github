@@ -51,9 +51,7 @@ func Write(w *workspace.Workspace, self string) error {
 	if err := writeGitignore(w); err != nil {
 		return err
 	}
-	if err := writeAgentPointers(w); err != nil {
-		return err
-	}
+	removeAgentPointers(w)
 	return w.Save()
 }
 
@@ -159,83 +157,27 @@ func writeGitignore(w *workspace.Workspace) error {
 	return envfile.WriteAtomic(filepath.Join(w.Dir(), ".gitignore"), []byte(data), 0o644)
 }
 
-// AgentPointer files make every coding agent read the repository's AGENTS.md.
-var agentFiles = map[string]string{
-	"CLAUDE.md":                       "@AGENTS.md\n",
-	"GEMINI.md":                       "@AGENTS.md\n",
-	".github/copilot-instructions.md": "Follow the instructions in AGENTS.md at the repository root (and the AGENTS.md of the folder you work in).\n",
-}
-
-const agentMarker = "<!-- ipalpha: points to AGENTS.md -->\n"
-
-// writeAgentPointers adds pointer files next to every AGENTS.md (workspace root and each repo),
-// never overwriting a file someone wrote by hand.
-func writeAgentPointers(w *workspace.Workspace) error {
+// removeAgentPointers deletes the CLAUDE.md / GEMINI.md / copilot-instructions.md pointers an
+// earlier version of this tool generated (recognized by their marker). Agent instructions are
+// personal: the tools never write or ship them; hand-written files are never touched.
+func removeAgentPointers(w *workspace.Workspace) {
+	const marker = "ipalpha: points to AGENTS.md"
 	var dirs []string
-	for _, pattern := range []string{"AGENTS.md", "*/AGENTS.md", "*/*/AGENTS.md", "apps/*/*/AGENTS.md"} {
+	for _, pattern := range []string{".", "*", "*/*", "apps/*/*", "features/*", "features/*/*", "features/*/*/*", "features/*/apps/*/*"} {
 		matches, _ := filepath.Glob(filepath.Join(w.Root, filepath.FromSlash(pattern)))
-		for _, m := range matches {
-			if !strings.Contains(filepath.ToSlash(m), "/node_modules/") && !strings.Contains(filepath.ToSlash(m), "/features/") {
-				dirs = append(dirs, filepath.Dir(m))
-			}
-		}
+		dirs = append(dirs, matches...)
 	}
 	for _, dir := range dirs {
-		for name, body := range agentFiles {
-			path := filepath.Join(dir, filepath.FromSlash(name))
-			if data, err := os.ReadFile(path); err == nil && !strings.Contains(string(data), "ipalpha: points to AGENTS.md") {
-				continue // hand-written: keep
+		if strings.Contains(filepath.ToSlash(dir), "/node_modules") {
+			continue
+		}
+		for _, name := range []string{"CLAUDE.md", "GEMINI.md", filepath.Join(".github", "copilot-instructions.md")} {
+			path := filepath.Join(dir, name)
+			if data, err := os.ReadFile(path); err == nil && strings.Contains(string(data), marker) {
+				os.Remove(path)
 			}
-			if name == ".github/copilot-instructions.md" {
-				if _, err := os.Stat(filepath.Join(dir, ".github", ".git")); err == nil {
-					continue // a clone of the org's .github tooling repo lives there
-				}
-				if _, err := os.Stat(filepath.Join(dir, ".github")); err != nil && dir != w.Root {
-					// Only create .github/ in a repository when it already has one (no new folders in repos).
-					continue
-				}
-			}
-			content := agentMarker + body
-			if cur, err := os.ReadFile(path); err == nil && string(cur) == content {
-				continue
-			}
-			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-				return err
-			}
-			if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-				return err
-			}
-			excludeFromGit(dir, filepath.ToSlash(name))
 		}
 	}
-	return nil
-}
-
-// excludeFromGit keeps a generated pointer out of `git status` through .git/info/exclude (no
-// tracked .gitignore change). Worktrees share the main clone's exclude.
-func excludeFromGit(repo, name string) {
-	common, err := sys.Git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir")
-	if err != nil {
-		return
-	}
-	prefix, err := sys.Git(repo, "rev-parse", "--show-prefix")
-	if err != nil {
-		return
-	}
-	name = prefix + name
-	path := filepath.Join(common, "info", "exclude")
-	data, _ := os.ReadFile(path)
-	for _, l := range strings.Split(string(data), "\n") {
-		if strings.TrimSpace(l) == "/"+name {
-			return
-		}
-	}
-	_ = os.MkdirAll(filepath.Dir(path), 0o755)
-	text := string(data)
-	if text != "" && !strings.HasSuffix(text, "\n") {
-		text += "\n"
-	}
-	_ = os.WriteFile(path, []byte(text+"/"+name+"\n"), 0o644)
 }
 
 // cleanLegacy removes what the bash tooling generated (it would shadow or confuse the new tools).

@@ -38,9 +38,7 @@ Windows). Something wrong? `./doctor` lists what is missing with the fix for eac
    never overwritten — except notifications, which always go to Mailpit locally.
 6. **First sign-in**: your name and mobile number become the local superuser. Codes arrive in Mailpit.
 7. **AI for `./publish`**: any installed coding CLI, any model, or your own command (see below).
-8. **Files**: `.ipalpha/` (settings, compose file, binary, logs) and the wrappers; `CLAUDE.md`, `GEMINI.md` and
-   `.github/copilot-instructions.md` next to every `AGENTS.md` so every agent reads the same rules (kept out of
-   `git status` through `.git/info/exclude`; files written by hand are never replaced).
+8. **Files**: `.ipalpha/` (settings, compose file, binary, logs) and the wrappers.
 9. **npm dependencies** (failures do not stop setup; `./run` retries).
 
 Non-interactive (CI): `ipalpha setup <folder> --yes` with `IPALPHA_SUPERUSER_PHONE`, `IPALPHA_AI_CLI=none`.
@@ -170,7 +168,7 @@ In a feature environment every core service runs; an app joins only when one of 
 ## Feature environments: `./feature`
 
 One feature = one isolated workspace, one `feat/<slug>` branch per repo, one preview namespace with its own
-data and public HTTPS hosts, alive 72 h after each publish. Design: `deployment/docs/feature-environments.md`.
+data and public HTTPS hosts, alive 72 h after each publish. 
 
 ```sh
 ./feature new hello-preview          # features/hello-preview/: worktrees on feat/hello-preview at the last green Core Deploy
