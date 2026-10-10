@@ -63,7 +63,8 @@ func Select(title, desc string, opts []Option, def string) (string, error) {
 	if desc != "" {
 		sel.Description(desc)
 	}
-	return value, run(huh.NewForm(huh.NewGroup(sel)))
+	err := run(huh.NewForm(huh.NewGroup(sel)))
+	return value, err
 }
 
 // MultiSelect asks for several options (all of def pre-selected).
@@ -84,7 +85,8 @@ func MultiSelect(title, desc string, opts []Option, def []string) ([]string, err
 	if desc != "" {
 		ms.Description(desc)
 	}
-	return value, run(huh.NewForm(huh.NewGroup(ms)))
+	err := run(huh.NewForm(huh.NewGroup(ms)))
+	return value, err
 }
 
 // Input asks for a text with validation. Not interactive → def (validated).
@@ -105,7 +107,8 @@ func Input(title, desc, def string, validate func(string) error) (string, error)
 	if validate != nil {
 		in.Validate(validate)
 	}
-	return strings.TrimSpace(value), run(huh.NewForm(huh.NewGroup(in)))
+	err := run(huh.NewForm(huh.NewGroup(in)))
+	return strings.TrimSpace(value), err
 }
 
 // Secret asks for a hidden text.
@@ -118,7 +121,8 @@ func Secret(title, desc string) (string, error) {
 	if desc != "" {
 		in.Description(desc)
 	}
-	return strings.TrimSpace(value), run(huh.NewForm(huh.NewGroup(in)))
+	err := run(huh.NewForm(huh.NewGroup(in)))
+	return strings.TrimSpace(value), err
 }
 
 // Confirm asks yes/no. Not interactive → def.
@@ -131,7 +135,8 @@ func Confirm(title, desc string, def bool) (bool, error) {
 	if desc != "" {
 		c.Description(desc)
 	}
-	return value, run(huh.NewForm(huh.NewGroup(c)))
+	err := run(huh.NewForm(huh.NewGroup(c)))
+	return value, err
 }
 
 // TypeToConfirm asks the developer to type an exact word (destructive actions).
