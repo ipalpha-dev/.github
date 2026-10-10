@@ -1,8 +1,0 @@
-#!/usr/bin/env bash
-set -euo pipefail
-
-ipalpha_url="${1:?usage: fake-clone URL DEST}"
-ipalpha_dest="${2:?usage: fake-clone URL DEST}"
-
-mkdir -p "$ipalpha_dest/.git" "$ipalpha_dest/node_modules"
-echo "fake-clone: $ipalpha_url -> $ipalpha_dest"

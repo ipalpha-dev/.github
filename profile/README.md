@@ -9,12 +9,20 @@ que os ministérios usam para cuidar das pessoas, sem duplicar cadastros.
 
 ## Começar a desenvolver (copie e cole no terminal)
 
+macOS, Linux, WSL:
+
 ```sh
-bash <(curl -fsSL https://raw.githubusercontent.com/ipalpha-dev/.github/master/bootstrap.sh)
+curl -fsSL https://raw.githubusercontent.com/ipalpha-dev/.github/master/install.sh | sh
 ```
 
-Precisa de [chave SSH no GitHub](https://docs.github.com/pt/authentication/connecting-to-github-with-ssh) e ser membro da organização.
-Depois: `cd IpAlpha && ./run`.
+Windows (PowerShell):
+
+```powershell
+irm https://raw.githubusercontent.com/ipalpha-dev/.github/master/install.ps1 | iex
+```
+
+Precisa ser membro da organização. O setup instala o que faltar e entra no GitHub pelo navegador
+(ou usa sua chave SSH). Depois: `cd IpAlpha` e `./run` (`.\run` no Windows). Algo deu errado? `./doctor`.
 
 ## Repositórios
 
@@ -27,4 +35,4 @@ Depois: `cd IpAlpha && ./run`.
 | `projects-api` | Projetos e aplicativos conectados |
 | `notifications-api` | Envio de SMS e modelos de mensagem |
 | `deployment` | Manifestos Kubernetes |
-| `.github` | Esta página + as ferramentas de desenvolvimento |
+| `.github` | Esta página + a ferramenta `ipalpha` (setup, run, publish, feature, doctor) |
