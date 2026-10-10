@@ -1,341 +1,227 @@
 # IPAlpha local development (reference)
 
-Primary path for a new machine:
+New machine:
 
 ```sh
-bash <(curl -fsSL https://raw.githubusercontent.com/ipalpha-dev/.github/master/bootstrap.sh)
+curl -fsSL https://raw.githubusercontent.com/ipalpha-dev/.github/master/install.sh | sh     # macOS / Linux / WSL
+irm https://raw.githubusercontent.com/ipalpha-dev/.github/master/install.ps1 | iex          # Windows PowerShell
 cd IpAlpha
-./run
+./run            # .\run on Windows
 ```
 
-Long-form reference for tools, ports, degraded integrations, and troubleshooting.
+Everything below is done by one program, `ipalpha` (Go, no runtime dependencies). The workspace keeps a
+copy in `.ipalpha/bin/` and small wrappers at its root (`run`, `pull`, … on macOS/Linux; `run.cmd`, … on
+Windows). Something wrong? `./doctor` lists what is missing with the fix for each item.
 
 ## Supported platforms
 
 | Platform | Notes |
 | --- | --- |
-| macOS | Docker Desktop (preferred) or the Apple `container` runtime |
-| Debian/Ubuntu Linux | Docker Engine + Compose v2 |
-| Windows | **Ubuntu WSL2 only** |
+| macOS (Apple Silicon, Intel) | Docker Desktop (preferred) or Apple `container` (macOS 26+) |
+| Linux (x86-64, arm64) | Docker Engine + Compose v2. Not in the `docker` group? `./doctor` says how. |
+| Windows 10/11 (x64, arm64) | Native: Docker Desktop + Git for Windows (its Git Bash runs the npm scripts). Windows Terminal recommended. Keep the workspace on a short path (e.g. `C:\IpAlpha`). |
+| WSL2 | Works like Linux; enable *WSL integration* for the distro in Docker Desktop. |
 
-## What `setup` does
+## Setup
 
-1. Language (pt-BR default, en-US), workspace root (default: `./IpAlpha` in the
-   folder where you pasted the command).
-2. Checks/installs tools: git, Node.js LTS ≥ 20 + npm, `gh`, `kubectl`, and a
-   container runtime — **Docker (with Compose v2) preferred, Apple `container` fallback**; automatic install uses Apple `container` because Homebrew cannot install Docker Desktop's engine
-   (`runtime=` in `.ipalpha/settings`). The process panel uses an embedded
-   background runner; logs land under `$TMPDIR/ipalpha-run-logs`. To use
-   `mprocs` instead, install it manually and run with `IPALPHA_RUNNER=mprocs`.
-3. Clones the org repos into the layout: `core/shared-js`,
-   `core/{auth-api,persons-api,organizations-api,projects-api,notifications-api}`,
-   `deployment`. Existing folders are kept.
-4. Writes `.env` per microservice from each repo's `.env.example`; until those
-   exist, the fallback templates in `templates/env-fallback/` are used (secrets
-   always blank — never real secrets in this repo). Re-runs and `./pull` only
-   **add missing keys**, never overwrite local values.
-5. Resolves ports: if an infra or API port is busy, picks a free one, rewrites
-   the `.env` files, and records everything in `.ipalpha/settings`.
-6. Runs `npm install` in every repo that has a `package.json`.
-7. Writes `.ipalpha/` (settings, compose, ports, mprocs config for opt-in, `lib/`,
-   helper scripts) and the `./run`, `./publish`, `./pull` wrappers at the workspace root.
+`ipalpha setup [folder]` (what the install one-liners run) — safe to run again on an existing workspace:
 
-The `.github` clone is **temporary**: setup deletes it when done (`--keep-setup`
-keeps it). `./pull` re-downloads `.github` into a temp folder to refresh
-`.ipalpha/lib`, templates and `set-keys`, then deletes it.
+1. **Folder** (default `./IpAlpha`). The container prefix comes from its name (`IpAlpha` → `ipalpha`,
+   `ipalpha-2` → `ipalpha-2`), so two workspaces never share a database.
+2. **Tools**: Git, Node.js ≥ 20, Docker (+ Compose v2); optional GitHub CLI and kubectl. A missing tool can
+   be installed after confirmation with winget (Windows), Homebrew (macOS) or apt/dnf/pacman (Linux).
+3. **GitHub**: an SSH key works; without one the GitHub CLI signs in through the browser (`gh auth login`).
+4. **Repositories** cloned in parallel into `core/`, `apps/<app>/` and `deployment/`. Optional app repos
+   (Acampa Kids) are skipped quietly when your account cannot read them.
+5. **`.env` per API** from its `.env.example` (or the embedded fallback in `internal/assets/files/env-fallback`
+   until the repo has one). Re-runs and `./pull` only **add missing keys** and fill blanks; local values are
+   never overwritten — except notifications, which always go to Mailpit locally.
+6. **First sign-in**: your name and mobile number become the local superuser. Codes arrive in Mailpit.
+7. **AI for `./publish`**: any installed coding CLI, any model, or your own command (see below).
+8. **Files**: `.ipalpha/` (settings, compose file, binary, logs) and the wrappers.
+9. **npm dependencies** (failures do not stop setup; `./run` retries).
 
-## Repos (org `ipalpha-dev`)
+Non-interactive (CI): `ipalpha setup <folder> --yes` with `IPALPHA_SUPERUSER_PHONE`, `IPALPHA_AI_CLI=none`.
 
-| Repo | Kind |
-| --- | --- |
-| `.github` | org profile page + this tooling (not cloned into the workspace) |
-| `shared-js` | npm library `@ipalpha/shared-js` on npmjs.com (helpers only) |
-| `shared-ui` | React component library `@ipalpha/shared-ui`, consumed by every webapp via `file:../shared-ui`; built by `install-deps` before them (not published) |
-| `auth-api`, `persons-api`, `organizations-api`, `projects-api`, `notifications-api`, `forms-api`, `dispatch-api`, `ai-api`, `developers-api` | NestJS + TypeScript backends, **no frontend of their own** |
-| `mordomia-webapp` | standalone Vite app (port 5110): Mordomia, the one UI for superuser + stewards over every core API (persons, projects, org chart, notifications, access, my data), live through dispatch-api |
-| `auth-webapp` | standalone Vite app (port 5100): the sign-in popup (account chooser + consent) |
-| `forms-webapp` | standalone Vite app (port 5106): IPAlpha Formulários |
-| `developers-webapp` | standalone Vite app (port 5111): IPAlpha Developers, the public developer portal (docs, app directory, requests); its /api proxy reaches developers-api, auth-api, projects-api and dispatch-api |
+## `./run`
 
-Every webapp is served at `/` and reaches the APIs same-origin at `/api/<name>` (`/api/auth`,
-`/api/projects`, `/api/persons`, `/api/organizations`, `/api/notifications`, `/api/forms`, `/api/ai`,
-`/api/developers`;
-sockets at `/api/dispatch/socket.io`): the Vite proxy locally, the ingress in production. No CORS.
-| `deployment` | k8s manifests under `core/<ms>/`, namespace `ipalpha-core` |
+1. Starts Docker Desktop / Apple container when it is installed but off (up to 2 minutes).
+2. **Ports**: each service keeps its preferred port (`.ipalpha/settings`) unless something else holds it;
+   then it moves to the next free port **for this run only** and every URL handed to the processes follows
+   (`.env` files keep the defaults). The panel says which moved and who held the port. The infra keeps a
+   moved port across runs while its container lives. Two workspaces can run at the same time.
+3. Infra containers (MongoDB, Redis, RabbitMQ + UI, Mailpit) up and healthy (`docker compose --wait`).
+4. `.env` completion, npm installs (shared-js/shared-ui built first, consumers' copies refreshed).
+5. auth-api signing keys, then the **local** auth database is reconciled: drifted client secrets of the local
+   services and the `localhost` origins/callbacks of the built-in apps (so sign-in keeps working when a web
+   port moved). Only loopback MongoDB; non-loopback entries are never touched.
+6. Every API and the remembered web apps start at once — nothing waits on a peer. Each API's `GET /ready`
+   drives its dot: ● ready, ◐ starting/not ready, ✖ failed, ○ stopped.
 
-The org name lives in one place (`ipalpha_org` in `lib/common.sh`); image names
-follow `ghcr.io/<org>/<ms>`.
+Processes left behind by a closed terminal are stopped by the next `./run`.
 
-## Day-to-day: `./run`
+**Panel keys** (`?` shows them): `s` start/stop · `r` restart · `x` stop and forget · `o` open the page ·
+`p` move to a free port · `K` stop whoever holds the port · `e` copy an error report (for a teammate or an
+AI) · `y` copy the log · `L` log file path · `c` clear · `f` follow · `m` mouse text selection · `q` quit
+(the infra keeps running; `./stop` stops it).
 
-1. Starts infrastructure in containers and waits for health:
-   MongoDB, Redis, RabbitMQ (+ management UI on 15672), and Mailpit. Docker uses
-   `docker compose --wait`; Apple `container` runs the services directly. Containers, network
-   and volumes are prefixed by `infra_name`. Each workspace has its own infra: setup derives
-   `infra_name` in `.ipalpha/settings` from the folder (`IpAlpha` → `ipalpha`, `ipalpha-2` →
-   `ipalpha-2`), so a second workspace never reuses another's database or client secrets.
-   They share ports, so run one workspace at a time.
-2. Installs missing npm dependencies in parallel: shared-js/shared-ui are installed and built
-   first (consumers copy them), then every other project. A failure prints npm's last lines and
-   the full log path under `.ipalpha/.state/install-deps/`.
-3. Starts every API and the remembered web apps at once — nothing waits for a peer. Each core MS
-   exposes `GET /live` (process up) and `GET /ready` (200 only when Mongo, Redis,
-   RabbitMQ and the projects cache are all good; 503 `{ready:false, checks}` otherwise).
-   The panel lists Core services, Frontends (core webapps + Mailpit), then Apps — the
-   consumers outside core, one group per app (Forms → Forms API + Forms Web).
-   The panel polls `/ready` and shows ● ready / ◐ up-but-not-ready per row; k8s uses the
-   same two paths as liveness/readiness probes.
-   Processes run in the background with logs under `$TMPDIR/ipalpha-run-logs`.
+When a process stops, a **crash card** above its log explains the likely cause (port in use, missing
+module, missing env var, MongoDB auth, TypeScript error, connection refused) and what to press or run.
 
-Stop: Ctrl+C, then `.ipalpha/bin/infra-down`.
+Flags: `--plain` (prefixed logs, no panel; automatic without a terminal), `--only a,b`, `--no-browser`,
+`--skip-deps`, `--until-ready 5m` (exit 0 once every service is ready — CI and scripts).
 
-Runner override: `runner=` in `.ipalpha/settings` or `IPALPHA_RUNNER=` —
-`background` (default, embedded), `mprocs` (opt-in; needs `mprocs` installed).
+Logs: `.ipalpha/logs/run/<service>.log` (one per process, rewritten on each start) and
+`.ipalpha/logs/<command>-<time>.log` (every command, 20 kept).
 
 ### Browser pages
 
-`./run` opens the remembered local pages once their servers respond. By default Auth Webapp,
-Mordomia and Mailpit start and open; start any other web app with `s` and it is remembered. Auth Webapp starts but never opens its own tab: other
-apps open it as the sign-in popup (`o` still opens it manually). The same selection controls which standalone
-web apps start and which pages open. It is remembered in `browser_apps` in `.ipalpha/settings`, including
-an empty selection. Setup and `./pull` preserve it; URLs always use current ports.
-
-In the process panel, starting/restarting an app (`s`/`r`) remembers it; explicitly
-stopping an app (`s`/`x`) removes it. Next `./run` starts the remembered apps and
-automatically opens their pages after they respond. Quitting the whole runner
-does not clear your choices; a startup failure does not clear them either.
-Press `o` to open a page and remember it. Mailpit has its
-own browser-only row: it is started by infrastructure, not as a second process.
-The launcher cannot detect which tabs you later close in your browser; use `x`
-to stop reopening a page.
-
-APIs and shared infrastructure keep starting normally. Mailpit's selection controls
-only its inbox tab, not the capture container needed by notifications-api.
-Background and mprocs reuse the saved choices. Manage them without starting services:
-
-```sh
-./run apps                             # list remembered apps/pages (browsers is an alias)
-./run apps set mordomia-webapp mailpit auth-webapp
-./run apps set                         # start no web apps and open no pages
-./run apps defaults                    # restore Auth Webapp, Mordomia and Mailpit
-IPALPHA_OPEN_BROWSERS=0 ./run           # skip opening this time, keep preferences
-```
-
-Only loopback HTTP URLs from the generated workspace manifest are opened. Failed
-or slow servers do not delay boot; automatic opening retries for at most two
-minutes and exits if the runner exits. CI never opens browsers. The helper uses
-the default system browser (`open` on macOS, `xdg-open` on Linux, `wslview` in WSL)
-and records opener errors in `.ipalpha/.state/browser.log`. No application database,
-member data, extra container, or paid service is involved.
-
-## Day-to-day: `./publish`
-
-Dev-only release (no prod rollout):
-
-1. Detects dirty repos under `core/` (multi-select when several; all selected
-   by default; `-f NAME` for one).
-2. Asks the AI CLI (default `pi` / `cpamc/muse-spark-1.3-contributor`, from
-   `.ipalpha/settings`; `--engine` overrides) for the semver bump + commit
-   message, shown as a plan. Decisions are cached in
-   `.ipalpha/.publish-cache` (same diff → same decision).
-3. Docs-only changes clamp to no version bump.
-4. Commits, tags `v<version>`, pushes each repo. shared-js is then published to
-   npm (`npm publish`, needs `npm login`) — no image.
-5. Builds and pushes `ghcr.io/ipalpha-dev/<ms>:<version>` (Docker or Apple
-   `container build`), then bumps the image tag in `deployment/core/<ms>/` and
-   pushes `deployment`.
-
-```sh
-./publish                 # full dev publish
-./publish -d              # preview, then optionally apply that exact plan
-./publish -f auth-api     # one repo
-./publish clean           # wipe decision cache
-```
-
-`ghcr.io` push needs a one-time `docker login ghcr.io` (or
-`container registry login`) with a GitHub token with `write:packages`.
-
-## Day-to-day: `./pull`
-
-1. Fast-forward pull of every repo (conflicts skip that folder untouched).
-2. Clones repos that are missing from the layout.
-3. Creates `.env` for new repos, adds missing keys to existing ones
-   (local values are never overwritten).
-4. Rewrites ports from `.ipalpha/settings` and refreshes `.ipalpha/`
-   (lib, compose, mprocs config) and the `./run` wrapper (so new defaults
-   reach existing workspaces).
-
-## Ports (defaults)
-
-| Service | Default host port |
-| --- | --- |
-| projects-api | 3001 |
-| persons-api | 3002 |
-| organizations-api | 3003 |
-| notifications-api | 3004 |
-| auth-api | 3005 |
-| forms-api | 3006 |
-| dispatch-api | 3007 |
-| ai-api | 3008 |
-| developers-api | 3009 |
-| auth-webapp (Vite) | 5100 |
-| forms-webapp (Vite) | 5106 |
-| mordomia-webapp (Vite) | 5110 |
-| developers-webapp (Vite) | 5111 |
-| MongoDB | 27017 |
-| Redis | 6379 |
-| RabbitMQ | 5672 |
-| RabbitMQ management | 15672 |
-| Mailpit inbox + Send API (loopback only) | 8025 |
-
-Busy ports are remapped at setup; the mapping lives in `.ipalpha/settings` and
-`.ipalpha/ports.env`.
+Remembered pages start (web apps) and open once their server answers. Default: Auth Web (starts, never gets
+a tab — it is the sign-in popup), Oikos, Mailpit. Starting/opening a page in the panel remembers it, `x`
+forgets it. Outside the panel: `./ipalpha apps` (menu), `./run apps set oikos-webapp mailpit`,
+`./run apps defaults`. `IPALPHA_OPEN_BROWSERS=0` or `--no-browser` skips opening once.
 
 ### Local notifications
 
-New notifications-api `.env` files select `MAIL_PROVIDER=mailpit`, `SMS_PROVIDER=mailpit`,
-`DEPLOYMENT_ENVIRONMENT=development`, and `MAILPIT_URL=http://127.0.0.1:8025`.
-`./run` starts the inbox automatically. Open that URL to read captured email and SMS
-(SMS appears as an `[SMS]` email). A busy port is remapped along with the URL.
-Existing `.env` values are preserved; remove or update the notifications `.env` to opt in.
-No SendGrid, SMS Barato, Comtele, or Mailpit credentials are required; failed capture
-never falls back to real delivery. Production manifests and runtime defaults are unchanged.
+notifications-api always uses Mailpit locally (`MAIL_PROVIDER=mailpit`, `SMS_PROVIDER=mailpit`), even when
+vendor keys exist; SMS appear as `[SMS]` e-mails. Mailpit binds to loopback, keeps ≤ 200 messages for 24 h,
+no persistent volume. Use synthetic recipients only.
 
-The inbox is a local development dependency, not a church application or production asset.
-It binds only to loopback; use synthetic recipients and codes, never real member data.
-Mailpit keeps at most 200 messages for 24 hours in ephemeral container storage, with a
-1 MiB message limit, no persistent volume, and a 128 MiB Docker limit (256 MiB with
-Apple `container`, whose VM requires at least 200 MiB). This avoids
-delivery charges and extra persistent disk cost. Container replacement clears the inbox.
-Do not add SMTP relay settings.
+## `./publish`
+
+1. Changed repositories (`core/`, `apps/`): uncommitted changes, or commits since the last `v*` tag not yet
+   bumped. Several → a checklist (all selected).
+2. Fetch every touched repo; fast-forward when applying; diverged history stops with the fix.
+3. **AI decision** per repo (semver bump + one-line conventional commit message), cached by diff. Docs-only
+   changes never bump. When the AI fails, the engine's own error is shown and you choose the bump and type
+   the message.
+4. Confirm → `package.json`/lock version, commit, push; libraries are tagged `v<version>` here, image repos by
+   CI when they reach production. shared-js → npm (`npm login` checked before any commit); images are built
+   and pushed (Docker or Apple container) and `deployment` image tags bumped.
+
+`-d` shows the plan and offers to apply exactly that plan · `-f <repo>` one repo · `--engine/--model` one-off
+AI · `-y` no confirmation · `./publish clean` wipes the decision cache. Also `--resume`, `--npm-only`,
+`--initialize`, `--deployment-path`, `--ci` (TeamCity builds images).
+
+### AI configuration
+
+`./ipalpha ai` (menu, tests the choice), `./ipalpha ai set <cli> [model]`, `./ipalpha ai test`.
+
+| Preset | Command used | Model examples |
+| --- | --- | --- |
+| `pi` | `pi -p --no-session [--model M]` (prompt on stdin) | `anthropic/claude-sonnet-4-5` |
+| `claude` | `claude -p [--model M]` | `sonnet`, `opus` |
+| `codex` | `codex exec --skip-git-repo-check [--model M]` | `gpt-5` |
+| `gemini` | `gemini -p " " [--model M]` | `gemini-2.5-pro` |
+| `opencode` | `opencode run [--model M]` | `anthropic/claude-sonnet-4-5`, `ollama/qwen3` |
+| `copilot` | `copilot -p <prompt> [--model M]` | `claude-sonnet-4.5` |
+| `grok` | `grok -p <prompt> [--model M]` | `grok-4` |
+| `ollama` | `ollama run <model>` (local, free) | `qwen3:8b` |
+| `custom` | any command; prompt on stdin, or `{prompt}`, `{prompt_file}`, `{model}` | `llm -m {model}` |
+| `none` | you type bump and message | |
+
+The choice is per workspace (`ai_cli`, `ai_model`, `ai_command` in `.ipalpha/settings`).
+
+## `./pull`
+
+Downloads the newest tool (checksum verified) and continues with it; fast-forwards every repo (a conflict
+leaves that folder untouched and is listed at the end), clones missing ones, moves repos whose folder
+changed (e.g. `core/forms-*` → `apps/forms/`, feature worktrees included), adds new `.env` keys, refreshes
+wrappers and generated files. Feature workspaces only fetch. Workspaces made by the old bash tooling are
+migrated by their next `./pull`.
+
+## Settings
+
+`./ipalpha config` (menu) or `config get` / `config set <key> <value>`:
+
+| Key | Meaning |
+| --- | --- |
+| `lang` | `pt-BR`, `en-US`, `es`, `fr`, `de`; empty follows the computer |
+| `ai_cli`, `ai_model`, `ai_command` | publish AI |
+| `browser_apps` | pages/web apps of `./run` |
+| `runtime` | `docker`, `container` (Apple) or empty (auto) |
+| `<service>_port` | preferred port (moves automatically when busy) |
+| `infra_name` | container/volume prefix |
+
+## Ports (defaults)
+
+| Service | Port | Service | Port |
+| --- | --- | --- | --- |
+| projects-api | 3001 | auth-webapp | 5100 |
+| persons-api | 3002 | forms-webapp | 5106 |
+| organizations-api | 3003 | oikos-webapp | 5110 |
+| notifications-api | 3004 | developers-webapp | 5111 |
+| auth-api | 3005 | MongoDB | 27017 |
+| forms-api | 3006 | Redis | 6379 |
+| dispatch-api | 3007 | RabbitMQ | 5672 |
+| ai-api | 3008 | RabbitMQ UI | 15672 |
+| developers-api | 3009 | Mailpit | 8025 |
+| places-api | 3011 | | |
 
 ## Core and apps
 
-`core/` holds the shared capabilities (auth, persons, projects, organizations, notifications, dispatch,
-ai, developers, shared-js, shared-ui) and the core UIs (Mordomia, the auth popup). Apps that only
-*consume* core live in `apps/<app>/` — today `apps/forms/{forms-api,forms-webapp}` — and run in their
-own namespace in production (`ipalpha-forms`, own Mongo/Redis, events to core over HTTP webhooks).
-They still depend on `../../../core/shared-js` / `shared-ui`. `./pull` moves an older workspace's
-`core/forms-*` (and its feature worktrees) to `apps/forms/` automatically.
-
-**Acampa Kids** (`apps/acampa-kids/{backend,frontend,face-service}`, GitHub `ipalpha-dev/acampa-kids-backend` /
-`acampa-kids-frontend` / `acampa-kids-face-service`) is an app outside core with its own repos, registry path and TeamCity project
-(namespace `ipalpha-acampa-kids`). It does not depend on core packages and `./run` does not start it.
-Its repos are optional: setup/`./pull` clone them when your account can read them (otherwise one warning)
-and `./feature` skips them when absent.
-
-In a feature environment every core service always runs; an app joins only when one of its own
-repos changed — a forms change never deploys other apps.
+`core/` holds the shared capabilities and the core UIs; apps that consume core live in `apps/<app>/`
+(`apps/forms/{forms-api,forms-webapp}`). **Acampa Kids** (`apps/acampa-kids/{backend,frontend,face-service}`)
+has its own repositories, registry and TeamCity project; `./run` does not start it and its repos are optional.
+In a feature environment every core service runs; an app joins only when one of its own repos changed.
 
 ## Feature environments: `./feature`
 
-One feature = one isolated workspace, one `feat/<slug>` branch per touched repo, one preview
-namespace with its own Mongo/Redis/RabbitMQ and public HTTPS hosts, alive 72 h after each
-successful publish. Design and CI side: `deployment/docs/feature-environments.md`.
+One feature = one isolated workspace, one `feat/<slug>` branch per repo, one preview namespace with its own
+data and public HTTPS hosts, alive 72 h after each publish. 
 
 ```sh
 ./feature new hello-preview          # features/hello-preview/: worktrees on feat/hello-preview at the last green Core Deploy
 cd features/hello-preview
-# … change code (e.g. core/forms-webapp) …
-./run                                # optional: same as ./run, own ports (+100 per feature) and own infra containers
-./publish                            # = ./publish --feature hello-preview: commit (no version bump), push, deploy the preview
+./run                                # own ports (+100 per feature) and own infra
+./publish                            # = --feature hello-preview: commit (no version bump), push, deploy the preview
 cd ../..
-./feature list                       # local features, generation, expiry, preview namespaces
+./feature list                       # previews + local features, generation, expiry, URLs
 ./feature extend hello-preview       # +72 h without a build
-./feature rebase hello-preview       # move to the latest green Core Deploy (rebases feat/hello-preview)
-./feature reset hello-preview        # back to the synthetic seed (asks you to type the slug)
-./feature destroy hello-preview      # delete the preview (namespace, record → archive); keeps branches
+./feature rebase hello-preview       # move to the latest green Core Deploy
+./feature reset hello-preview        # back to the synthetic seed (type the slug to confirm)
+./feature destroy hello-preview      # delete the preview and worktrees; branches stay
 ```
 
-After a successful publish you get:
+`--baseline <deployment commit>` pins an earlier recorded baseline. Slugs: `^[a-z0-9-]{3,30}$`, no hyphen at
+either end, every host ≤ 63 chars.
 
 | URL | What |
 | --- | --- |
-| `https://ipalpha-<slug>.kevyn.com.br` | Mordomia (with the `preview · <slug> · expires in Nh` badge) |
+| `https://ipalpha-<slug>.kevyn.com.br` | Oikos |
 | `https://forms-ipalpha-<slug>.kevyn.com.br` | IPAlpha Formulários |
 | `https://auth-ipalpha-<slug>.kevyn.com.br` | sign-in popup |
-| `https://developers-ipalpha-<slug>.kevyn.com.br` | IPAlpha Developers — when the baseline includes developers-webapp |
-| `https://ipalpha-<slug>.kevyn.com.br/mailbox` | captured e-mail/SMS: your login codes (shared `previews` account) |
-| `https://acampa-ipalpha-<slug>.kevyn.com.br` | Acampa Kids — only when an `acampa-kids-*` repo changed in this feature |
+| `https://developers-ipalpha-<slug>.kevyn.com.br` | IPAlpha Developers (when the baseline has it) |
+| `https://ipalpha-<slug>.kevyn.com.br/mailbox` | captured e-mail/SMS (sign-in codes) |
+| `https://acampa-ipalpha-<slug>.kevyn.com.br` | Acampa Kids — only when an `acampa-kids-*` repo changed |
 
-In previews the Developers portal lets an app owner edit their app's project message templates (production after a
-reviewed audience change).
-
-Acampa in a preview: `./feature new` pins `apps/acampa-kids/<repo>` at the tag `v<version>` of the image
-its production manifest names in the baseline's deployment commit (e.g. backend `0.19.0` → `v0.19.0`;
-origin/master with a warning when that tag is missing). Publishing a change to one of them builds it
-(`<version>-<slug>-<buildId>`); the others run their production images (the face service included; the
-import worker too when Kevyn stored the shared, budget-capped preview OpenRouter key — otherwise CI notes that it
-left the worker out). The pipeline registers Acampa in the preview's core through IPAlpha
-Developers (request → approval → owner secret → app-bound client) and sets up its project as a steward
-would (roles, editions, memberships, message templates); people, families and roles live in core and are
-synthetic (fixture v2). Its quota is the core-only budget (1200m / 2560Mi) plus Acampa's increment (+ the
-worker's when it runs): core-only previews reserve only the core budget. The
-preview needs the per-repo layout of `base/apps/acampa-kids/` in your `feat/<slug>` branch of
-`deployment` (a baseline deployed after it, or rebase that branch on master).
-
-Sign in with a fixture account (all fictional — `deployment/fixtures/2/README.md`):
-`ana.superuser@example.test` (superuser), `bruno.cuidado@example.test` (steward), `carla@example.test`,
-`gabi.presbi@example.test`. Codes never reach a real phone or mailbox; read them in `/mailbox`.
-`ci.preview@example.test` is reserved for the pipeline's own sign-in check; the pipeline also signs in
-as `rafael.acampa@example.test` (owner of the Acampa app) while it provisions Acampa. Acampa people sign in
-by phone or "Entrar com IPAlpha" (`+55 11 90000-0011` coordenação, `-0012` team + bus check-in, `-0013`
-team + saúde, `-0014`/`-0015`/`-0017` responsáveis, `-0003` responsável + team, `-0018` last year only →
-"não encontramos seu cadastro"); every role per person is in that README.
-
-- Slug: `^[a-z0-9-]{3,30}$`, no hyphen at either end.
-- Your main checkouts are never touched: `features/<slug>/core/<repo>` are `git worktree`s. Inside a
-  feature folder plain `./publish` means `--feature <slug>`: no release, tag or version bump — CI
-  tags images `<version>-<slug>-<buildId>` in its own build copy.
-- Unchanged services run the baseline images (`deployment/releases/core-latest.json`, pinned at
-  `./feature new`); `shared-js` changes rebuild every API, `shared-ui` every web app. Manifests come
-  from your `feat/<slug>` branch of `deployment` (it starts where the baseline was deployed from).
-- How you learn the result without any CI token: `./publish` pushes `previews/<slug>/release.json`
-  to deployment master, TeamCity `Preview` runs, and CI's answer is its own record commit on master
-  (URLs + expiry are printed). `--no-wait` returns right after the push; failures show in TeamCity
-  (*Ip Alpha / Core / Previews / Preview*).
-- Data survives republishes; `reset` wipes it. 72 h without a publish or `extend` and the preview
-  (with its data) is deleted by `PreviewCleanup` / the cluster janitor.
-- Previews only hold synthetic data. Never copy member data into one (LGPD).
-
-## Expected degraded integrations (local)
-
-- SMS providers need real `SMSBARATO_KEY` / `COMTELE_TOKEN` in
-  `core/notifications-api/.env` — without them notifications-api runs but cannot
-  send.
-- Superuser seed (`SUPERUSER_NAME/PHONE/EMAIL`) and `WEBAUTHN_RP_ID` are blank
-  by default — auth-api will tell you what it needs.
-- `AUTH_CLIENT_ID`/`AUTH_CLIENT_SECRET` (machine credentials) come from the
-  auth-api client registry; blank until seeded.
+How it works: main checkouts are never touched (`git worktree`); unchanged services run the baseline images
+(`deployment/releases/core-latest.json`); `shared-js` changes rebuild every core API, `shared-ui` every core
+web app. `./publish` pushes `previews/<slug>/release.json` to deployment master (a throwaway worktree, retried
+on races, CI fields kept) and waits for CI's record commit — no CI token on laptops. Pushes use
+`--force-with-lease` against the tip this workspace pushed, so a teammate's push is never overwritten.
+`.env` files are kept out of commits. Acampa repos start at the `v<version>` tag their production manifest
+names (origin/master with a warning when missing). Sign in with the fixture accounts in
+`deployment/fixtures/2/README.md`. Previews only hold synthetic data (LGPD).
 
 ## Troubleshooting
 
-- **Apple `container` failing**: run `container system start`; if the runtime is
-  unusable, set `runtime=docker` in `.ipalpha/settings` (requires Docker
-  Desktop with the daemon running).
-- **Docker daemon unavailable**: start Docker Desktop; on WSL enable WSL
-  integration.
-- **Port conflicts**: `./pull` re-applies saved ports; or re-run the setup command
-  to remap busy ports.
-- **Mongo auth failures after changing compose credentials**: wipe the volume
-  (`ipalpha-mongo-data`) — local data only — and `./run` again.
-- **`pi` missing for publish**: install the Pi CLI, or
-  `./publish --engine claude|grok|codex` as a one-off.
+Start with `./doctor` (`--ai` also tests the AI, `--copy` copies the report).
+
+- **Docker not running**: `./run` starts it; if it cannot, open Docker Desktop (Windows/macOS) or
+  `sudo systemctl start docker` (Linux). WSL: enable WSL integration.
+- **A service crashed**: read its crash card; `e` copies a report you can paste to a teammate or an AI.
+- **Port problems**: nothing to do — busy ports move. `p` moves a running service, `K` frees a port held by
+  a leftover process.
+- **MongoDB auth failures after changing `.ipalpha/.env`**: `./stop --volumes` recreates the local data.
+- **Windows `EPERM`/`EBUSY` during npm install**: close editors/terminals using the folder and run again.
+- **AI fails in `./publish`**: the box shows the engine's message; type the version by hand or
+  `./ipalpha ai` to switch.
 
 ## FAQ
 
-### Why are the APIs not in containers?
+**Why are the APIs not in containers?** Node on the host keeps edit → restart fast and debuggable; only the
+infra runs in containers.
 
-Node processes on the host keep edit→restart fast and debuggable; only the
-infra (Mongo, Redis, RabbitMQ) runs in containers.
-
-### Where do env samples live?
-
-Each repo should own `.env.example`. Until then, the tooling's
-`templates/env-fallback/<ms>.env` is used with a warning. Secrets are always
-blank in templates — fill them in each repo's local `.env` only.
-
-### Why is the tooling not a repo in my workspace?
-
-Same as Cross: tooling lives in the org `.github` repo and is copied into
-`.ipalpha/`. The workspace only holds product repos, so nothing to keep in sync by hand.
+**Where does the tooling live?** In the org's `.github` repository (Go). It is never cloned into a workspace:
+the binary is downloaded and updates itself on `./pull`.

@@ -1,56 +1,55 @@
 # IPAlpha — ferramentas para desenvolvedores
 
-Este repositório é o `.github` da organização **ipalpha-dev**: guarda a página da
-organização (`profile/`) e as ferramentas de desenvolvimento (`setup`, `lib/`,
-`templates/`). Não é clonado no seu ambiente — o setup roda a partir de uma cópia
-temporária e a apaga no fim, como no Cross.
+Este repositório é o `.github` da organização **ipalpha-dev**: a página da organização
+(`profile/`) e a ferramenta `ipalpha` (Go, um único binário para Windows, macOS e Linux).
 
 ## Setup (copie e cole no terminal)
 
-```sh
-bash <(curl -fsSL https://raw.githubusercontent.com/ipalpha-dev/.github/master/bootstrap.sh)
-```
-
-Pré-requisito: [chave SSH no GitHub](https://docs.github.com/pt/authentication/connecting-to-github-with-ssh)
-(`ssh -T git@github.com`) e ser membro da organização `ipalpha-dev`.
-
-O setup pergunta o idioma e a pasta (padrão `./IpAlpha`), instala as ferramentas,
-clona os repositórios, cria os `.env`, e gera os comandos abaixo na pasta escolhida.
-SMS e email locais usam sempre o Mailpit, mesmo se existirem credenciais de provedores
-nos `.env`. Nenhuma mensagem local é enviada por SMS Barato, Comtele ou SendGrid.
-
-Sem clonar à mão? O comando acima já faz isso. Alternativa com clone manual:
+**macOS, Linux, WSL**
 
 ```sh
-git clone git@github.com:ipalpha-dev/.github.git /tmp/ipalpha-setup && /tmp/ipalpha-setup/setup
+curl -fsSL https://raw.githubusercontent.com/ipalpha-dev/.github/master/install.sh | sh
 ```
 
-Layout gerado:
+**Windows (PowerShell)**
 
-```text
-IpAlpha/
-├── core/           # shared-js, shared-ui, auth-api, auth-webapp, persons-api, organizations-api, projects-api, notifications-api,
-│                   # dispatch-api, ai-api, developers-api, mordomia-webapp, developers-webapp
-├── apps/           # apps fora do core (namespace próprio em produção): apps/forms/{forms-api,forms-webapp}
-├── deployment/     # manifestos k8s (namespace ipalpha-core, imagens ghcr.io/ipalpha-dev/<ms>)
-├── features/     # ./feature new <slug> (worktrees, um por feature)
-├── run  publish  pull  feature  set-keys
-└── .ipalpha/       # settings, compose, portas, mprocs (opt-in), scripts auxiliares
+```powershell
+irm https://raw.githubusercontent.com/ipalpha-dev/.github/master/install.ps1 | iex
 ```
+
+O setup verifica as ferramentas (Git, Node.js 20+, Docker; instala com winget/brew/apt se você
+aceitar), entra no GitHub (chave SSH **ou** login pelo navegador com o GitHub CLI), clona os
+repositórios, cria os `.env`, pergunta o primeiro acesso e qual IA usar, e gera os comandos abaixo.
+Pode rodar de novo a qualquer momento: nada que você configurou é sobrescrito.
+
+Pré-requisito: ser membro da organização `ipalpha-dev` no GitHub.
 
 ## Dia a dia
 
+No Windows use `.\run`, `.\pull`… (PowerShell/cmd) ou `./run.cmd` (Git Bash).
+
 | Comando | Faz |
 | --- | --- |
-| `./run` | Infra (MongoDB, Redis, RabbitMQ, Mailpit) → dependências npm → APIs e webapps. Abre Mordomia, Mailpit e Auth por padrão; lembra as páginas escolhidas (`b` no painel, `o` abre e lembra). |
-| `./pull` | Atualiza todos os repositórios, clona os novos, adiciona chaves novas nos `.env` e atualiza `.ipalpha/` a partir deste repositório |
-| `./publish` | Repositórios alterados → IA escolhe versão + mensagem → commit/push → imagem `ghcr.io/ipalpha-dev/<ms>` (ou npm, para o shared-js) → atualiza `deployment/` |
-| `./feature new <slug>` | Ambiente de feature isolado: `features/<slug>/` com worktrees em `feat/<slug>` a partir do último Core Deploy verde. Dentro dela, `./publish` publica um preview em `https://ipalpha-<slug>.kevyn.com.br` (+ `forms-`/`auth-ipalpha-<slug>`, caixa de códigos em `/mailbox`), válido por 72 h. `./feature list\|extend\|rebase\|reset\|destroy`. Guia: [docs/local-development.md](docs/local-development.md#feature-environments-feature) |
-| `./set-keys` | Pergunta as chaves (SMS Barato, Comtele, superusuário) e grava nos `.env` locais |
+| `./run` | Sobe MongoDB, Redis, RabbitMQ e Mailpit, instala dependências e abre o painel com cada API e web app. Porta ocupada? O serviço muda para uma livre nesta execução e tudo continua funcionando. `?` no painel mostra as teclas. |
+| `./status` · `./logs <serviço> -f` · `./stop` | O que está rodando e em que porta · logs · para a infra |
+| `./pull` | Atualiza a ferramenta, os repositórios e adiciona chaves novas aos `.env` |
+| `./publish` | Repositórios alterados → a IA escolhida propõe versão + mensagem (ou você digita) → commit/push → npm/imagem → `deployment` |
+| `./feature new <slug>` | Ambiente de feature isolado com preview público. Guia: [docs/local-development.md](docs/local-development.md#feature-environments-feature) |
+| `./doctor` | Diz o que falta ou está quebrado e como resolver. `--copy` copia o relatório |
+| `./ipalpha config` · `./ipalpha ai` | Muda idioma, IA/modelo, web apps, portas, runtime |
 
-`./run --help`, `./publish --help`, `./pull --help` mostram o uso completo.
+Qualquer erro mostra a causa, as últimas linhas, como resolver e o caminho do log completo
+(`.ipalpha/logs/`).
 
-## Manter estas ferramentas
+## Manter esta ferramenta
 
-Edite aqui, rode `tests/validate.sh`, faça push. Os desenvolvedores recebem as
-mudanças no próximo `./pull`. Referência completa: [docs/local-development.md](docs/local-development.md).
+```sh
+go test ./...          # unitários + ponta a ponta (sem rede, sem Docker)
+go run ./cmd/ipalpha   # rodar sem instalar
+```
+
+Código em `internal/` (um pacote por assunto), catálogo de repositórios e portas em
+`internal/catalog`, textos nos 5 idiomas em `internal/i18n` (um teste falha se faltar algum),
+arquivos gerados no workspace em `internal/assets/files`. O CI testa em Windows, Linux e macOS e
+publica os binários a cada push em `master`; os desenvolvedores recebem no próximo `./pull`.
+Referência completa: [docs/local-development.md](docs/local-development.md).

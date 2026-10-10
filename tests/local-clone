@@ -1,7 +1,0 @@
-#!/usr/bin/env bash
-# Test clone command: git@github.com:<org>/<repo>.git → $IPALPHA_TEST_ORIGINS/<repo>.git
-set -euo pipefail
-url="${1:?usage: local-clone URL DEST}"
-dest="${2:?usage: local-clone URL DEST}"
-name="$(basename "$url" .git)"
-git clone -q "$IPALPHA_TEST_ORIGINS/$name.git" "$dest"
