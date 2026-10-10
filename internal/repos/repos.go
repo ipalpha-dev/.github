@@ -97,12 +97,19 @@ func Clone(org, repo, dest string, a Access) error {
 	return fmt.Errorf("%s", strings.Join(errs, " / "))
 }
 
+// lastLine is the most useful line of git's output: an "error:"/"fatal:"/rejected line when there is one.
 func lastLine(s string) string {
-	t := ui.Tail(s, 1)
-	if len(t) == 0 {
-		return "failed"
+	lines := ui.Tail(s, 12)
+	for i := len(lines) - 1; i >= 0; i-- {
+		l := strings.TrimSpace(lines[i])
+		if strings.HasPrefix(l, "fatal:") || strings.HasPrefix(l, "error:") || strings.Contains(l, "[rejected]") || strings.HasPrefix(l, "ERROR") {
+			return l
+		}
 	}
-	return strings.TrimSpace(t[0])
+	if len(lines) == 0 {
+		return "git exited with an error"
+	}
+	return strings.TrimSpace(lines[len(lines)-1])
 }
 
 // Outcome of one repository.
@@ -157,9 +164,12 @@ func PullAll(org, root string, fetchOnly bool, a Access, progress func(Outcome))
 		if !IsGit(dir) {
 			return Outcome{Repo: r, Status: "skipped", Detail: i18n.T("repos_not_git")}
 		}
-		if res := (sys.Cmd{Name: "git", Args: []string{"-C", dir, "fetch", "--quiet", "--tags"}, Env: []string{"GIT_TERMINAL_PROMPT=0"}}).Run(); res.Err != nil {
+		if res := (sys.Cmd{Name: "git", Args: []string{"-C", dir, "fetch", "--prune"}, Env: []string{"GIT_TERMINAL_PROMPT=0"}}).Run(); res.Err != nil {
 			return Outcome{Repo: r, Status: "failed", Detail: i18n.T("repos_fetch_failed") + ": " + lastLine(res.Output)}
 		}
+		// Tags separately and forced: origin owns release tags, and a tag moved there (re-tagged
+		// release) must not block the pull with "would clobber existing tag".
+		_ = (sys.Cmd{Name: "git", Args: []string{"-C", dir, "fetch", "--tags", "--force"}, Env: []string{"GIT_TERMINAL_PROMPT=0"}}).Run()
 		if fetchOnly {
 			return Outcome{Repo: r, Status: "fetched"}
 		}

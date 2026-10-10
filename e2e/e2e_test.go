@@ -235,6 +235,21 @@ func TestSetupPullAndWrappers(t *testing.T) {
 	if envfile.Read(filepath.Join(e.root, "core", "projects-api", ".env"))["BRAND_NEW_KEY"] != "hello" {
 		t.Fatal("pull did not add the new key")
 	}
+	// A release tag moved on origin (re-tagged) must not block ./pull.
+	git(t, s1, "tag", "v9.9.9")
+	git(t, s1, "push", "-q", "origin", "v9.9.9")
+	e.must(e.root, "pull")
+	appendFile(t, filepath.Join(s1, "README.md"), "retag\n")
+	git(t, s1, "commit", "-qam", "retag")
+	git(t, s1, "tag", "-f", "v9.9.9")
+	git(t, s1, "push", "-q", "--force", "origin", "master", "v9.9.9")
+	out = e.must(e.root, "pull")
+	if strings.Contains(out, "fetch failed") {
+		t.Fatalf("a moved tag blocked pull:\n%s", out)
+	}
+	if git(t, filepath.Join(e.root, "core", "projects-api"), "rev-parse", "v9.9.9") != git(t, s1, "rev-parse", "v9.9.9") {
+		t.Fatal("moved tag not updated locally")
+	}
 	// doctor runs and reports (no Docker in CI is a failure, not a crash).
 	out, _ = e.run(e.root, "doctor")
 	if !strings.Contains(out, "System") || strings.Contains(out, "panic") {
