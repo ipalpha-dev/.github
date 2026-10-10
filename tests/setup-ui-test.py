@@ -3,6 +3,8 @@
 import errno
 import fcntl
 import os
+
+BASH = os.environ.get("IPALPHA_BASH", "/bin/bash")
 from pathlib import Path
 import pty
 import select
@@ -34,7 +36,7 @@ class Terminal:
             os.chdir(ROOT)
             os.environ["TERM"] = "xterm-256color"
             os.environ["IPALPHA_PLAIN"] = "1" if plain else "0"
-            os.execv("/bin/bash", ["bash", "-c", script])
+            os.execv(BASH, ["bash", "-c", script])
         fcntl.ioctl(self.fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
         self.initial_attrs = termios.tcgetattr(self.fd)
         self.output = b""
@@ -281,7 +283,7 @@ exec ./setup --skip-tools --keep-setup
     def test_redirected_and_plain_mode_have_no_screen_controls(self):
         for plain in ("0", "1"):
             result = subprocess.run(
-                ["/bin/bash", "-c", PRELUDE + "ipalpha_ui_run Test echo ordinary-output"],
+                [BASH, "-c", PRELUDE + "ipalpha_ui_run Test echo ordinary-output"],
                 cwd=ROOT, env={**os.environ, "TERM": "xterm", "IPALPHA_PLAIN": plain},
                 capture_output=True, check=True,
             )

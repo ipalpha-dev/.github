@@ -37,8 +37,9 @@ Long-form reference for tools, ports, degraded integrations, and troubleshooting
 5. Resolves ports: if an infra or API port is busy, picks a free one, rewrites
    the `.env` files, and records everything in `.ipalpha/settings`.
 6. Runs `npm install` in every repo that has a `package.json`.
-7. Writes `.ipalpha/` (settings, compose, ports, mprocs config for opt-in, `lib/`,
-   helper scripts) and the `./run`, `./publish`, `./pull` wrappers at the workspace root.
+7. Writes `.ipalpha/` (canonical security policy, settings, compose, ports, mprocs config for opt-in, `lib/`,
+   helper scripts), the managed workspace `AGENTS.md`, and the `./run`, `./publish`, `./pull`, `./check` wrappers at the workspace root.
+   `./pull` refreshes the policy and agent entry point; local policy edits are deliberately replaced by the reviewed canonical copy.
 
 The `.github` clone is **temporary**: setup deletes it when done (`--keep-setup`
 keeps it). `./pull` re-downloads `.github` into a temp folder to refresh
@@ -51,8 +52,8 @@ keeps it). `./pull` re-downloads `.github` into a temp folder to refresh
 | `.github` | org profile page + this tooling (not cloned into the workspace) |
 | `shared-js` | npm library `@ipalpha/shared-js` on npmjs.com (helpers only) |
 | `shared-ui` | React component library `@ipalpha/shared-ui`, consumed by every webapp via `file:../shared-ui`; built by `install-deps` before them (not published) |
-| `auth-api`, `persons-api`, `organizations-api`, `projects-api`, `notifications-api`, `forms-api`, `dispatch-api`, `ai-api`, `developers-api` | NestJS + TypeScript backends, **no frontend of their own** |
-| `mordomia-webapp` | standalone Vite app (port 5110): Mordomia, the one UI for superuser + stewards over every core API (persons, projects, org chart, notifications, access, my data), live through dispatch-api |
+| `auth-api`, `persons-api`, `organizations-api`, `places-api`, `projects-api`, `notifications-api`, `forms-api`, `dispatch-api`, `ai-api`, `developers-api` | NestJS + TypeScript backends, **no frontend of their own** |
+| `oikos-webapp` | standalone Vite app (port 5110): Oikos, the one UI for superuser + stewards over every core API (persons, projects, org chart, places, notifications, access, my data), live through dispatch-api |
 | `auth-webapp` | standalone Vite app (port 5100): the sign-in popup (account chooser + consent) |
 | `forms-webapp` | standalone Vite app (port 5106): IPAlpha Formulários |
 | `developers-webapp` | standalone Vite app (port 5111): IPAlpha Developers, the public developer portal (docs, app directory, requests); its /api proxy reaches developers-api, auth-api, projects-api and dispatch-api |
@@ -65,6 +66,16 @@ sockets at `/api/dispatch/socket.io`): the Vite proxy locally, the ingress in pr
 
 The org name lives in one place (`ipalpha_org` in `lib/common.sh`); image names
 follow `ghcr.io/<org>/<ms>`.
+
+## Security policy: `./check`
+
+The setup materializes this tooling repository's reviewed `policy/` under
+`.ipalpha/policy/` and a short `AGENTS.md` at the workspace root. Agents must
+read that entry point before touching a repository. `./check` validates policy
+completeness/version and rejects tracked environment or key-container files
+without reading local `.env`, credential stores or Kubernetes Secrets. Each
+product repository adds its own tests, SAST and authorization gates during the
+policy rollout.
 
 ## Day-to-day: `./run`
 
@@ -95,7 +106,7 @@ Runner override: `runner=` in `.ipalpha/settings` or `IPALPHA_RUNNER=` —
 ### Browser pages
 
 `./run` opens the remembered local pages once their servers respond. By default Auth Webapp,
-Mordomia and Mailpit start and open; start any other web app with `s` and it is remembered. Auth Webapp starts but never opens its own tab: other
+Oikos and Mailpit start and open; start any other web app with `s` and it is remembered. Auth Webapp starts but never opens its own tab: other
 apps open it as the sign-in popup (`o` still opens it manually). The same selection controls which standalone
 web apps start and which pages open. It is remembered in `browser_apps` in `.ipalpha/settings`, including
 an empty selection. Setup and `./pull` preserve it; URLs always use current ports.
@@ -115,9 +126,9 @@ Background and mprocs reuse the saved choices. Manage them without starting serv
 
 ```sh
 ./run apps                             # list remembered apps/pages (browsers is an alias)
-./run apps set mordomia-webapp mailpit auth-webapp
+./run apps set oikos-webapp mailpit auth-webapp
 ./run apps set                         # start no web apps and open no pages
-./run apps defaults                    # restore Auth Webapp, Mordomia and Mailpit
+./run apps defaults                    # restore Auth Webapp, Oikos and Mailpit
 IPALPHA_OPEN_BROWSERS=0 ./run           # skip opening this time, keep preferences
 ```
 
@@ -178,9 +189,10 @@ Dev-only release (no prod rollout):
 | dispatch-api | 3007 |
 | ai-api | 3008 |
 | developers-api | 3009 |
+| places-api | 3011 |
 | auth-webapp (Vite) | 5100 |
 | forms-webapp (Vite) | 5106 |
-| mordomia-webapp (Vite) | 5110 |
+| oikos-webapp (Vite) | 5110 |
 | developers-webapp (Vite) | 5111 |
 | MongoDB | 27017 |
 | Redis | 6379 |
@@ -211,8 +223,8 @@ Do not add SMTP relay settings.
 
 ## Core and apps
 
-`core/` holds the shared capabilities (auth, persons, projects, organizations, notifications, dispatch,
-ai, developers, shared-js, shared-ui) and the core UIs (Mordomia, the auth popup). Apps that only
+`core/` holds the shared capabilities (auth, persons, projects, organizations, places, notifications, dispatch,
+ai, developers, shared-js, shared-ui) and the core UIs (Oikos, the auth popup). Apps that only
 *consume* core live in `apps/<app>/` — today `apps/forms/{forms-api,forms-webapp}` — and run in their
 own namespace in production (`ipalpha-forms`, own Mongo/Redis, events to core over HTTP webhooks).
 They still depend on `../../../core/shared-js` / `shared-ui`. `./pull` moves an older workspace's
@@ -251,7 +263,7 @@ After a successful publish you get:
 
 | URL | What |
 | --- | --- |
-| `https://ipalpha-<slug>.kevyn.com.br` | Mordomia (with the `preview · <slug> · expires in Nh` badge) |
+| `https://ipalpha-<slug>.kevyn.com.br` | Oikos (with the `preview · <slug> · expires in Nh` badge) |
 | `https://forms-ipalpha-<slug>.kevyn.com.br` | IPAlpha Formulários |
 | `https://auth-ipalpha-<slug>.kevyn.com.br` | sign-in popup |
 | `https://developers-ipalpha-<slug>.kevyn.com.br` | IPAlpha Developers — when the baseline includes developers-webapp |

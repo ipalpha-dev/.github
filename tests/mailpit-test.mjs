@@ -11,7 +11,8 @@ const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ipalpha-mailpit-test-'));
 const repo = path.join(root, 'core/notifications-api');
 const file = path.join(repo, '.env');
 const fallback = path.join(tooling, 'templates/env-fallback/notifications-api.env');
-const shell = script => execFileSync('/bin/bash', ['-eu', '-c', `
+const bash = process.env.IPALPHA_BASH || '/bin/bash';
+const shell = script => execFileSync(bash, ['-eu', '-c', `
   for lib in common i18n env ports settings generate; do source "$1/lib/$lib.sh"; done
   ${script}
 `, 'mailpit-test', tooling, root], { encoding: 'utf8' });
@@ -72,7 +73,7 @@ try {
     shell(`ipalpha_write_bin_${name.replaceAll('-', '_')} "$2/${name}"`);
     const script = fs.readFileSync(path.join(root, name), 'utf8');
     assert.ok(script.includes('$infra-mailpit'), `${name} must include Mailpit`);
-    execFileSync('/bin/bash', ['-n', path.join(root, name)]);
+    execFileSync(bash, ['-n', path.join(root, name)]);
   }
   const compose = fs.readFileSync(path.join(tooling, 'templates/compose.yaml'), 'utf8');
   assert.ok(compose.includes('127.0.0.1:${MAILPIT_HOST_PORT:-8025}:8025'));
