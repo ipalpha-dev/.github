@@ -122,15 +122,15 @@ func migrateLayout(w *workspace.Workspace) {
 			continue
 		}
 		list, _ := sys.Git(old, "worktree", "list", "--porcelain")
-		relOld := filepath.Join("core", r.Name)
 		for _, l := range strings.Split(list, "\n") {
 			wt := strings.TrimPrefix(l, "worktree ")
-			if wt == l || !strings.HasPrefix(wt, filepath.Join(root, "features")) || !strings.HasSuffix(wt, relOld) {
+			if wt == l {
 				continue
 			}
-			nw := strings.TrimSuffix(wt, relOld) + filepath.FromSlash(r.Rel())
-			_ = os.MkdirAll(filepath.Dir(nw), 0o755)
-			_, _ = sys.Git(old, "worktree", "move", wt, nw)
+			if nw, ok := movedWorktree(root, wt, "core/"+r.Name, r.Rel()); ok {
+				_ = os.MkdirAll(filepath.Dir(nw), 0o755)
+				_, _ = sys.Git(old, "worktree", "move", wt, nw)
+			}
 		}
 		_ = os.MkdirAll(filepath.Dir(dest), 0o755)
 		if os.Rename(old, dest) == nil {
@@ -138,6 +138,39 @@ func migrateLayout(w *workspace.Workspace) {
 			ui.Item(r.Name, "core/"+r.Name+" → "+r.Rel())
 		}
 	}
+}
+
+// movedWorktree returns where a feature worktree of a moved repository goes. Git reports worktree
+// paths with forward slashes (C:/Users/... on Windows) and resolved symlinks (/private/var on
+// macOS), so both sides are compared in one canonical form (slashes, and case-insensitive on Windows).
+func movedWorktree(root, wt, relOld, relNew string) (string, bool) {
+	canon := func(p string) string {
+		if r, err := filepath.EvalSymlinks(p); err == nil {
+			p = r
+		}
+		p = strings.TrimSuffix(filepath.ToSlash(p), "/")
+		if sys.Windows {
+			p = strings.ToLower(p)
+		}
+		return p
+	}
+	w, base := canon(wt), canon(root)+"/features/"
+	suffix := "/" + relOld
+	if sys.Windows {
+		suffix = strings.ToLower(suffix)
+	}
+	if !strings.HasPrefix(w, base) || !strings.HasSuffix(w, suffix) {
+		return "", false
+	}
+	// features/<slug>/core/<repo>: exactly one folder between features/ and the repo.
+	slug := strings.TrimSuffix(strings.TrimPrefix(w, base), suffix)
+	if slug == "" || strings.Contains(slug, "/") {
+		return "", false
+	}
+	cut := filepath.ToSlash(wt)
+	cut = strings.TrimSuffix(cut, "/")
+	cut = cut[:len(cut)-len(suffix)]
+	return filepath.FromSlash(cut + "/" + relNew), true
 }
 
 // Release download location.
