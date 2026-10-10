@@ -38,7 +38,7 @@ jobs:
         shell: bash
         run: |
           if [ "$RUNNER_OS" = Windows ]; then
-            pwsh -NoProfile -Command '$null = [System.Management.Automation.Language.Parser]::ParseFile("install.ps1", [ref]$null, [ref]$e); if ($e) { $e; exit 1 }'
+            pwsh -NoProfile -Command '$t = $null; $e = $null; $null = [System.Management.Automation.Language.Parser]::ParseFile("install.ps1", [ref]$t, [ref]$e); if ($e) { $e; exit 1 }'
           else
             sh -n install.sh && bash -n bootstrap.sh
           fi
@@ -65,7 +65,8 @@ jobs:
           git config --global user.name ci; git config --global user.email ci@example.invalid
           git config --global init.defaultBranch master
           $o = Join-Path $env:RUNNER_TEMP origins
-          foreach ($r in 'deployment','shared-js','shared-ui','auth-api','persons-api','auth-webapp','oikos-webapp') {
+          $repos = 'deployment','shared-js','shared-ui','projects-api','persons-api','organizations-api','places-api','notifications-api','auth-api','forms-api','ai-api','developers-api','dispatch-api','auth-webapp','forms-webapp','oikos-webapp','developers-webapp'
+          foreach ($r in $repos) {
             git init -q --bare "$o\$r.git"
             $s = Join-Path $env:RUNNER_TEMP "seed\$r"; git clone -q "$o\$r.git" $s
             Set-Content "$s\README.md" "# $r"
