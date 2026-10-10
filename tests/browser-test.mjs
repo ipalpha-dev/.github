@@ -20,11 +20,16 @@ let runnerExit;
 let runnerOutput = '';
 const stopRunner = async () => {
   if (!runner) return;
-  try { process.kill(-runner.pid, 'SIGTERM'); } catch {}
-  await runnerExit;
+  if (process.platform === 'win32') {
+    try { execFileSync('taskkill.exe', ['/pid', String(runner.pid), '/t', '/f'], {stdio: 'ignore'}); } catch {}
+  } else {
+    try { process.kill(-runner.pid, 'SIGTERM'); } catch {}
+  }
+  await Promise.race([runnerExit, new Promise(resolve => setTimeout(resolve, 3000))]);
   runner = undefined;
 };
-const shell = script => execFileSync('/bin/bash', ['-eu', '-c', `
+const bash = process.env.IPALPHA_BASH || '/bin/bash';
+const shell = script => execFileSync(bash, ['-eu', '-c', `
   for lib in common i18n settings generate; do source "$1/lib/$lib.sh"; done
   ${script}
 `, 'browser-test', tooling, root], {encoding: 'utf8'});
@@ -40,7 +45,7 @@ try {
   saveBrowsers(dir, ['forms-webapp', 'mailpit']);
   shell('ipalpha_write_settings "$2"');
   assert.deepEqual(selectedBrowsers(dir), ['forms-webapp', 'mailpit']);
-  fs.appendFileSync(path.join(dir, 'settings'), 'CUSTOM_VALUE=preserved\n');
+  fs.appendFileSync(path.join(dir, 'settings'), 'CUSTOM_VALUE=preserved\nruntime=container\n');
 
   const projects = [];
   for (const name of [...defaultBrowsers, 'forms-webapp', 'extra-webapp']) {
@@ -61,7 +66,7 @@ try {
   assert.equal(selectApp(dir, 'auth-webapp', true), true);
   assert.deepEqual(selectedBrowsers(dir), ['mailpit', 'auth-webapp']);
   assert.match(fs.readFileSync(path.join(dir, 'settings'), 'utf8'), /CUSTOM_VALUE=preserved/);
-  assert.equal(fs.statSync(path.join(dir, 'settings')).mode & 0o777, 0o600);
+  if (process.platform !== 'win32') assert.equal(fs.statSync(path.join(dir, 'settings')).mode & 0o777, 0o600);
   assert.throws(() => selectApp(dir, 'unknown', true));
   assert.throws(() => saveBrowsers(dir, ['bad\nKEY=value']));
 
@@ -118,18 +123,22 @@ try {
   }
   fs.copyFileSync(path.join(tooling, 'templates/browser-dev.mjs'), path.join(bin, 'browser-dev.mjs'));
   for (const name of ['infra-up', 'infra-down', 'install-deps', 'auth-keys-bootstrap']) write(path.join(bin, name), '#!/bin/sh\nexit 0\n', 0o700);
-  write(path.join(bin, 'fallback-run'), `#!${process.execPath}\nsetInterval(() => {}, 1000);\n`, 0o700);
+  write(path.join(bin, 'fallback-run'), `#!/usr/bin/env node\nsetInterval(() => {}, 1000);\n`, 0o700);
   shell('ipalpha_write_root_run "$2"');
   const openLog = path.join(fixture, 'opened.jsonl');
   const fakeBin = path.join(fixture, 'fake-bin');
+  const opener = path.join(fakeBin, 'opener.cjs');
+  write(opener, `require('fs').appendFileSync(process.env.BROWSER_TEST_LOG, JSON.stringify(process.argv[2]) + '\\n');\n`);
   for (const name of ['open', 'xdg-open', 'wslview']) {
-    write(path.join(fakeBin, name), `#!${process.execPath}\nrequire('fs').appendFileSync(process.env.BROWSER_TEST_LOG, JSON.stringify(process.argv[2]) + '\\n');\n`, 0o700);
+    write(path.join(fakeBin, name), `#!/usr/bin/env node\nrequire(${JSON.stringify(opener)});\n`, 0o700);
+    if (process.platform === 'win32') write(path.join(fakeBin, `${name}.cmd`), `@echo off\r\n"${process.execPath}" "${opener}" %1\r\n`, 0o700);
   }
   const launchAndWait = async count => {
     runnerOutput = '';
-    runner = spawn(path.join(root, 'run'), [], {detached: true, env: {...process.env,
+    runner = spawn(bash, [path.join(root, 'run')], {detached: true, env: {...process.env,
       CI: '', IPALPHA_RUNNER: 'background', IPALPHA_OPEN_BROWSERS: '1',
       PATH: `${fakeBin}:${process.env.PATH}`, BROWSER_TEST_LOG: openLog,
+      IPALPHA_BROWSER_OPEN_COMMAND: process.execPath, IPALPHA_BROWSER_OPEN_ARG: opener,
     }, stdio: ['ignore', 'pipe', 'pipe']});
     runnerExit = once(runner, 'exit');
     runner.stdout.on('data', chunk => { runnerOutput += chunk; });
@@ -147,20 +156,21 @@ try {
   saveBrowsers(dir, defaultBrowsers);
   const first = await launchAndWait(autoOpened.length);
   assert.deepEqual(new Set(first), new Set(projects.filter(p => autoOpened.includes(p.name)).map(p => p.frontend)));
-  for (const [command, id] of [['enable', 'extra-webapp'], ['disable', 'mordomia-webapp'], ['disable', 'auth-webapp']]) {
+  for (const [command, id] of [['enable', 'extra-webapp'], ['disable', 'oikos-webapp'], ['disable', 'auth-webapp']]) {
     execFileSync(process.execPath, [path.join(bin, 'browser-dev.mjs'), dir, command, id]);
   }
   const remembered = ['mailpit', 'extra-webapp'];
   const second = await launchAndWait(autoOpened.length + remembered.length);
   assert.deepEqual(new Set(second.slice(autoOpened.length)), new Set(projects.filter(p => remembered.includes(p.name)).map(p => p.frontend)));
   assert.deepEqual(selectedBrowsers(dir), remembered);
-  const listed = JSON.parse(execFileSync(path.join(root, 'run'), ['browsers'], {encoding: 'utf8'}));
+  const listed = JSON.parse(execFileSync(bash, [path.join(root, 'run'), 'browsers'], {encoding: 'utf8'}));
   assert.deepEqual(listed, remembered);
-  execFileSync(path.join(root, 'run'), ['browsers', 'set']);
+  execFileSync(bash, [path.join(root, 'run'), 'browsers', 'set']);
   assert.deepEqual(selectedBrowsers(dir), []);
-  execFileSync(path.join(root, 'run'), ['browsers', 'defaults']);
+  execFileSync(bash, [path.join(root, 'run'), 'browsers', 'defaults']);
   assert.deepEqual(selectedBrowsers(dir), defaultBrowsers);
-  const desktopEnv = {...process.env, PATH: `${fakeBin}:${process.env.PATH}`, BROWSER_TEST_LOG: openLog};
+  const desktopEnv = {...process.env, PATH: `${fakeBin}:${process.env.PATH}`, BROWSER_TEST_LOG: openLog,
+    IPALPHA_BROWSER_OPEN_COMMAND: process.execPath, IPALPHA_BROWSER_OPEN_ARG: opener};
   const previousLog = fs.readFileSync(openLog, 'utf8');
   for (const overrides of [{CI: '1', IPALPHA_OPEN_BROWSERS: '1'}, {CI: '', IPALPHA_OPEN_BROWSERS: '0'}]) {
     execFileSync(process.execPath, [path.join(bin, 'browser-dev.mjs'), dir, 'watch'], {env: {...desktopEnv, ...overrides}, timeout: 2000});
@@ -172,25 +182,25 @@ try {
   assert.ok(fs.readFileSync(openLog, 'utf8').includes(projects.find(p => p.name === 'extra-webapp').frontend));
 
   write(path.join(root, 'core/auth-webapp/package.json'), '{}');
-  write(path.join(root, 'core/mordomia-webapp/package.json'), '{}');
-  shell(`ipalpha_port_mailpit=18025; ipalpha_port_auth_webapp=15100; ipalpha_port_mordomia_webapp=15110
+  write(path.join(root, 'core/oikos-webapp/package.json'), '{}');
+  shell(`ipalpha_port_mailpit=18025; ipalpha_port_auth_webapp=15100; ipalpha_port_oikos_webapp=15110
     ipalpha_write_projects_json "$2" "$2/.ipalpha/generated-projects.json"`);
   const generated = JSON.parse(fs.readFileSync(path.join(dir, 'generated-projects.json'), 'utf8')).projects;
   assert.equal(generated.find(p => p.name === 'mailpit').frontend, 'http://127.0.0.1:18025/');
   assert.equal(generated.find(p => p.name === 'mailpit').kind, 'browser');
   assert.equal(generated.find(p => p.name === 'mailpit').autostart, false);
   assert.equal(generated.find(p => p.name === 'auth-webapp').frontend, 'http://localhost:15100/');
-  assert.equal(generated.find(p => p.name === 'mordomia-webapp').frontend, 'http://localhost:15110/');
+  assert.equal(generated.find(p => p.name === 'oikos-webapp').frontend, 'http://localhost:15110/');
   assert.equal(generated.find(p => p.name === 'auth-webapp').autostart, true);
-  assert.equal(generated.find(p => p.name === 'mordomia-webapp').autostart, true);
+  assert.equal(generated.find(p => p.name === 'oikos-webapp').autostart, true);
   // The headless runner and mprocs start exactly the saved web apps, without changing APIs.
   write(path.join(root, 'apps/forms/forms-webapp/package.json'), '{}');
   const startLog = path.join(fixture, 'started.jsonl');
-  write(path.join(bin, 'web-dev'), `#!${process.execPath}\nrequire('fs').appendFileSync(${JSON.stringify(startLog)}, JSON.stringify(process.argv[2]) + '\\n'); setInterval(() => {}, 1000);\n`, 0o700);
+  write(path.join(bin, 'web-dev'), `#!/usr/bin/env node\nrequire('fs').appendFileSync(${JSON.stringify(startLog)}, JSON.stringify(process.argv[2]) + '\\n'); setInterval(() => {}, 1000);\n`, 0o700);
   shell('ipalpha_write_bin_fallback_run "$2/.ipalpha/bin/fallback-run"');
   const saved = ['auth-webapp', 'forms-webapp'];
   saveBrowsers(dir, saved);
-  runner = spawn(path.join(bin, 'fallback-run'), [], {detached: true,
+  runner = spawn(bash, [path.join(bin, 'fallback-run')], {detached: true,
     env: {...process.env, TMPDIR: `${fixture}/`}, stdio: ['ignore', 'pipe', 'pipe']});
   runnerExit = once(runner, 'exit');
   const deadline = Date.now() + 3000;
@@ -206,8 +216,8 @@ try {
   shell('ipalpha_load_settings "$2"; ipalpha_write_mprocs_yaml "$2" "$2/.ipalpha/mprocs.yaml"');
   const yaml = fs.readFileSync(path.join(dir, 'mprocs.yaml'), 'utf8');
   for (const name of saved) assert.match(yaml, new RegExp(`Web · ${name}[^]*?autostart: true`));
-  assert.match(yaml, /Web · mordomia-webapp[^]*?autostart: false/);
-  const selectedNow = JSON.parse(execFileSync(path.join(root, 'run'), ['apps'], {encoding: 'utf8'}));
+  assert.match(yaml, /Web · oikos-webapp[^]*?autostart: false/);
+  const selectedNow = JSON.parse(execFileSync(bash, [path.join(root, 'run'), 'apps'], {encoding: 'utf8'}));
   assert.deepEqual(selectedNow, saved);
   assert.ok(!fs.readdirSync(dir).some(name => name.includes('.browser-')));
   console.log('browser-test: all assertions passed (real local HTTP, mocked desktop opener)');

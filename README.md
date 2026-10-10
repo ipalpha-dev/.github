@@ -29,26 +29,36 @@ Layout gerado:
 
 ```text
 IpAlpha/
-├── core/           # shared-js, shared-ui, auth-api, auth-webapp, persons-api, organizations-api, projects-api, notifications-api,
-│                   # dispatch-api, ai-api, developers-api, mordomia-webapp, developers-webapp
+├── core/           # shared-js, shared-ui, auth-api, auth-webapp, persons-api, organizations-api, places-api, projects-api, notifications-api,
+│                   # dispatch-api, ai-api, developers-api, oikos-webapp, developers-webapp
 ├── apps/           # apps fora do core (namespace próprio em produção): apps/forms/{forms-api,forms-webapp}
 ├── deployment/     # manifestos k8s (namespace ipalpha-core, imagens ghcr.io/ipalpha-dev/<ms>)
 ├── features/     # ./feature new <slug> (worktrees, um por feature)
-├── run  publish  pull  feature  set-keys
-└── .ipalpha/       # settings, compose, portas, mprocs (opt-in), scripts auxiliares
+├── AGENTS.md       # entrada obrigatória para agentes de IA (gerada pelo setup)
+├── run  publish  pull  feature  check  set-keys
+└── .ipalpha/       # policy, settings, compose, portas, mprocs (opt-in), scripts auxiliares
 ```
 
 ## Dia a dia
 
 | Comando | Faz |
 | --- | --- |
-| `./run` | Infra (MongoDB, Redis, RabbitMQ, Mailpit) → dependências npm → APIs e webapps. Abre Mordomia, Mailpit e Auth por padrão; lembra as páginas escolhidas (`b` no painel, `o` abre e lembra). |
+| `./run` | Infra (MongoDB, Redis, RabbitMQ, Mailpit) → dependências npm → APIs e webapps. Abre Oikos, Mailpit e Auth por padrão; lembra as páginas escolhidas (`b` no painel, `o` abre e lembra). |
 | `./pull` | Atualiza todos os repositórios, clona os novos, adiciona chaves novas nos `.env` e atualiza `.ipalpha/` a partir deste repositório |
 | `./publish` | Repositórios alterados → IA escolhe versão + mensagem → commit/push → imagem `ghcr.io/ipalpha-dev/<ms>` (ou npm, para o shared-js) → atualiza `deployment/` |
 | `./feature new <slug>` | Ambiente de feature isolado: `features/<slug>/` com worktrees em `feat/<slug>` a partir do último Core Deploy verde. Dentro dela, `./publish` publica um preview em `https://ipalpha-<slug>.kevyn.com.br` (+ `forms-`/`auth-ipalpha-<slug>`, caixa de códigos em `/mailbox`), válido por 72 h. `./feature list\|extend\|rebase\|reset\|destroy`. Guia: [docs/local-development.md](docs/local-development.md#feature-environments-feature) |
+| `./check` | Valida a política canônica, o `AGENTS.md` do workspace e arquivos de configuração proibidos; os repositórios acrescentam seus próprios testes no rollout dos gates. |
 | `./set-keys` | Pergunta as chaves (SMS Barato, Comtele, superusuário) e grava nos `.env` locais |
 
 `./run --help`, `./publish --help`, `./pull --help` mostram o uso completo.
+
+## Segurança para agentes
+
+A fonte canônica está em [`policy/`](policy/README.md). O setup a copia para
+`.ipalpha/policy/` e gera `AGENTS.md` na raiz do workspace, para que agentes
+leiam as regras mesmo sem rede. `./pull` atualiza ambos. As regras canônicas
+prevalecem sobre exemplos ou READMEs antigos; exceções precisam ser registradas,
+aprovadas e ter validade.
 
 ## Manter estas ferramentas
 

@@ -1,0 +1,81 @@
+version: 1.0.0
+status: proposed
+owner: ipalpha-security-platform
+precedence:
+  - security-baseline
+  - canonical-owner-contract
+  - repository-security-profile
+  - task-requirement
+  - implementation-preference
+classes:
+  public:
+    productionOnly: false
+    allowedInPreview: true
+  internal:
+    productionOnly: false
+    allowedInPreview: synthetic-only
+  personal:
+    allowedInPreview: false
+    allowedInLogs: false
+    allowedForExternalAI: false
+  sensitive:
+    allowedInPreview: false
+    allowedInLogs: false
+    allowedForExternalAI: false
+  biometric:
+    allowedInPreview: false
+    allowedInLogs: false
+    allowedForExternalAI: false
+    approval: security-and-institutional
+  credential:
+    allowedInPreview: environment-specific-only
+    allowedInLogs: false
+    allowedForAI: false
+invariants:
+  - deny-by-default
+  - server-side-authorization
+  - one-token-one-audience
+  - one-acting-project-role
+  - purpose-before-role
+  - login-consent-link-membership-are-separate
+  - persons-api-owns-person-data
+  - no-production-data-outside-production
+  - no-secrets-in-code-client-logs-or-ai
+  - peer-failure-never-widens-access
+requiredDocuments:
+  - README.md
+  - SECURITY_BASELINE.md
+  - DATA_CLASSIFICATION.md
+  - IDENTITY_AND_AUTHORIZATION.md
+  - APP_TRUST_AND_APPROVAL.md
+  - AI_AND_EXTERNAL_PROCESSORS.md
+  - SECRETS_AND_CONFIGURATION.md
+  - LOGGING_AND_AUDIT.md
+  - FRONTEND_MOBILE_AND_OFFLINE.md
+  - API_AND_INTEGRATION_SECURITY.md
+  - DATA_LIFECYCLE.md
+  - DEVELOPMENT_ENVIRONMENTS.md
+  - SECURE_DELIVERY.md
+  - INCIDENT_RESPONSE.md
+  - SECURITY_EXCEPTIONS.md
+minimumGates:
+  - tests
+  - typecheck-or-compile
+  - reproducible-install
+  - secret-scan
+  - dependency-scan
+  - static-analysis
+  - authorization-negative-tests
+  - policy-profile-validation
+  - protected-pull-request
+stopConditions:
+  - widen-data-or-access
+  - public-endpoint
+  - authentication-or-cryptography-change
+  - external-ai-or-processor
+  - biometric-processing
+  - production-data-outside-production
+  - secret-access
+  - retention-or-deletion-change
+  - destructive-operation
+  - approval-workflow-change

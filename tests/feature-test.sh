@@ -21,10 +21,10 @@ ipalpha_fail() { echo "FAIL: $1" >&2; exit 1; }
 rel() { case "$1" in deployment) echo deployment ;; forms-api|forms-webapp) echo "apps/forms/$1" ;;
   acampa-kids-*) echo "apps/acampa-kids/${1#acampa-kids-}" ;; *) echo "core/$1" ;; esac; }
 
-repos=(deployment shared-js shared-ui projects-api persons-api organizations-api notifications-api auth-api
-  forms-api ai-api developers-api dispatch-api auth-webapp forms-webapp mordomia-webapp developers-webapp
+repos=(deployment shared-js shared-ui projects-api persons-api organizations-api places-api notifications-api auth-api
+  forms-api ai-api developers-api dispatch-api auth-webapp forms-webapp oikos-webapp developers-webapp
   acampa-kids-backend acampa-kids-frontend acampa-kids-face-service)
-apis=(projects-api persons-api organizations-api notifications-api auth-api forms-api ai-api developers-api dispatch-api)
+apis=(projects-api persons-api organizations-api places-api notifications-api auth-api forms-api ai-api developers-api dispatch-api)
 
 echo "== origins"
 seed="$ipalpha_tmp/seed"
@@ -68,7 +68,7 @@ node -e '
   const [seed, ...apis] = process.argv.slice(1), cp = require("child_process");
   const head = r => cp.execSync(`git -C ${seed}/${r} rev-parse HEAD`).toString().trim();
   const services = {};
-  for (const r of [...apis, "auth-webapp", "forms-webapp", "mordomia-webapp", "developers-webapp"])
+  for (const r of [...apis, "auth-webapp", "forms-webapp", "oikos-webapp", "developers-webapp"])
     services[r] = { image: `registry.kevyn.com.br/ip-alpha/core/${r}@sha256:${"a".repeat(64)}`, sourceCommit: head(r) };
   require("fs").mkdirSync(`${seed}/deployment/releases`, { recursive: true });
   require("fs").writeFileSync(`${seed}/deployment/releases/core-latest.json`, JSON.stringify({
@@ -194,13 +194,13 @@ node -e 'const r=require(process.argv[1]); process.exit(!("developers-webapp" in
   "$root/features/no-devweb/.ipalpha/release.json" || ipalpha_fail "record lists a repo outside the baseline"
 
 echo "== failed new rolls back"
-git -C "$root/core/mordomia-webapp" checkout -q -b feat/rollback-me
+git -C "$root/core/oikos-webapp" checkout -q -b feat/rollback-me
 (cd "$root" && ./feature new rollback-me >/dev/null 2>&1) && ipalpha_fail "new succeeded with a branch checked out elsewhere"
 [[ ! -e "$root/features/rollback-me" ]] || ipalpha_fail "rollback left the folder"
 git -C "$root/core/auth-api" rev-parse -q --verify refs/heads/feat/rollback-me >/dev/null && ipalpha_fail "rollback left a created branch"
 [[ -z "$(git -C "$root/core/auth-api" worktree list | grep rollback-me)" ]] || ipalpha_fail "rollback left a worktree"
-git -C "$root/core/mordomia-webapp" rev-parse -q --verify refs/heads/feat/rollback-me >/dev/null || ipalpha_fail "rollback deleted a pre-existing branch"
-git -C "$root/core/mordomia-webapp" checkout -q master
+git -C "$root/core/oikos-webapp" rev-parse -q --verify refs/heads/feat/rollback-me >/dev/null || ipalpha_fail "rollback deleted a pre-existing branch"
+git -C "$root/core/oikos-webapp" checkout -q master
 
 echo "== publish --feature"
 inplace() { if sed --version >/dev/null 2>&1; then sed -i "$@"; else sed -i '' "$@"; fi; }
@@ -356,7 +356,10 @@ echo wip >"$root/features/hello-test/core/forms-api/wip.txt"
 [[ -d "$root/apps/forms/forms-api/.git" && ! -e "$root/core/forms-api" ]] || ipalpha_fail "main clone not moved to apps/forms"
 [[ -f "$legacy/.git" && -f "$legacy/wip.txt" && ! -e "$root/features/hello-test/core/forms-api" ]] || ipalpha_fail "feature worktree not moved"
 [[ "$(git -C "$legacy" symbolic-ref --short HEAD)" == feat/hello-test ]] || ipalpha_fail "moved worktree lost its branch"
-git -C "$root/apps/forms/forms-api" worktree list | grep -q "$legacy" || ipalpha_fail "worktree not registered at the new path"
+registered_legacy="$legacy"
+command -v cygpath >/dev/null 2>&1 && registered_legacy="$(cygpath -m "$legacy")"
+git -C "$root/apps/forms/forms-api" worktree list --porcelain | grep -qF "worktree $registered_legacy" \
+  || ipalpha_fail "worktree not registered at the new path"
 
 echo "== rebase keeps the app pin rule (moves to the new production tag)"
 echo "x" >>"$seed/acampa-kids-backend/README.md"

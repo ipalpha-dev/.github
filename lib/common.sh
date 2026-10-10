@@ -3,13 +3,13 @@
 ipalpha_org="ipalpha-dev"
 ipalpha_registry="${IPALPHA_REGISTRY:-registry.kevyn.com.br/ip-alpha/core}"
 
-ipalpha_ms_repos=(shared-js shared-ui projects-api persons-api organizations-api notifications-api auth-api forms-api ai-api developers-api dispatch-api)
+ipalpha_ms_repos=(shared-js shared-ui projects-api persons-api organizations-api places-api notifications-api auth-api forms-api ai-api developers-api dispatch-api)
 # Run order (panel rows, fallback-run). Nothing waits on a peer (GET /ready), so it only reads peers-first:
 # ai-api calls auth + projects; developers-api calls auth + persons + projects; dispatch-api calls developers-api.
-ipalpha_ms_order=(projects-api persons-api organizations-api notifications-api auth-api forms-api ai-api developers-api dispatch-api)
+ipalpha_ms_order=(projects-api persons-api organizations-api places-api notifications-api auth-api forms-api ai-api developers-api dispatch-api)
 # Standalone web apps: cloned, deps installed, image published, no .env, run with Vite.
-ipalpha_web_repos=(auth-webapp forms-webapp mordomia-webapp developers-webapp)
-ipalpha_default_browser_apps="auth-webapp mordomia-webapp mailpit"
+ipalpha_web_repos=(auth-webapp forms-webapp oikos-webapp developers-webapp)
+ipalpha_default_browser_apps="auth-webapp oikos-webapp mailpit"
 ipalpha_root_repos=(deployment)
 # Apps outside core with their own repositories, registry path and TeamCity project (Acampa Kids): GitHub
 # ipalpha-dev/<repo>, local apps/<app>/<repo without the app prefix> (acampa-kids-backend → apps/acampa-kids/
@@ -46,6 +46,7 @@ ipalpha_default_ms_port() {
     dispatch-api) echo 3007 ;;
     ai-api) echo 3008 ;;
     developers-api) echo 3009 ;;
+    places-api) echo 3011 ;;
     *) echo 3000 ;;
   esac
 }
@@ -55,7 +56,7 @@ ipalpha_default_web_port() {
   case "$1" in
     auth-webapp) echo 5100 ;;
     forms-webapp) echo 5106 ;;
-    mordomia-webapp) echo 5110 ;;
+    oikos-webapp) echo 5110 ;;
     developers-webapp) echo 5111 ;;
     *) echo 5199 ;;
   esac
@@ -65,7 +66,7 @@ ipalpha_web_api_backend() {
   case "$1" in
     auth-webapp) echo auth-api ;;
     forms-webapp) echo forms-api ;;
-    mordomia-webapp) echo persons-api ;;
+    oikos-webapp) echo persons-api ;;
     developers-webapp) echo developers-api ;;
     *) echo "" ;;
   esac

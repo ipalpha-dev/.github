@@ -27,11 +27,13 @@ try {
   assert.equal(readEnv(file).SUPERUSER_NAME, name);
   assert.equal(readEnv(file).SUPERUSER_PHONE, '+5599900000000');
   assert.equal(readEnv(file).AUTH_CLIENT_SECRET, 'keep-secret');
-  const link = path.join(fixture, 'linked-helper.mjs');
-  fs.symlinkSync(path.join(tooling, 'lib/superuser.mjs'), link);
-  const normalized = execFileSync(process.execPath, [link, 'normalize', 'phone'], { input: '99900000000', encoding: 'utf8' });
-  assert.equal(normalized, '+5599900000000', 'CLI entry point must also run through a symlink');
-  assert.equal(fs.statSync(file).mode & 0o777, 0o600);
+  if (process.platform !== 'win32') {
+    const link = path.join(fixture, 'linked-helper.mjs');
+    fs.symlinkSync(path.join(tooling, 'lib/superuser.mjs'), link);
+    const normalized = execFileSync(process.execPath, [link, 'normalize', 'phone'], { input: '99900000000', encoding: 'utf8' });
+    assert.equal(normalized, '+5599900000000', 'CLI entry point must also run through a symlink');
+  }
+  if (process.platform !== 'win32') assert.equal(fs.statSync(file).mode & 0o777, 0o600);
   const before = fs.readFileSync(file, 'utf8');
   assert.throws(() => writeSuperuser(file, 'Name', '123'), /invalidPhone/);
   assert.equal(fs.readFileSync(file, 'utf8'), before, 'bad input must not partially replace seed configuration');
@@ -43,12 +45,12 @@ source lib/env.sh
 source lib/superuser.sh
 ipalpha_prompt_superuser "$TEST_ROOT"
 ipalpha_write_superuser "$TEST_ROOT"`;
-  execFileSync('/bin/bash', ['-c', script], { cwd: tooling, env: { ...env, TEST_ROOT: fixture }, stdio: 'pipe' });
+  execFileSync(process.env.IPALPHA_BASH || '/bin/bash', ['-c', script], { cwd: tooling, env: { ...env, TEST_ROOT: fixture }, stdio: 'pipe' });
   assert.equal(readEnv(file).SUPERUSER_NAME, name, 'repeat setup keeps the existing identity');
   const missing = path.join(fixture, 'new-workspace');
-  assert.throws(() => execFileSync('/bin/bash', ['-c', script], { cwd: tooling, env: { ...env, TEST_ROOT: missing }, stdio: 'pipe' }), error => error.status === 1);
+  assert.throws(() => execFileSync(process.env.IPALPHA_BASH || '/bin/bash', ['-c', script], { cwd: tooling, env: { ...env, TEST_ROOT: missing }, stdio: 'pipe' }), error => error.status === 1);
   for (const lang of ['pt-BR', 'en-US', 'es', 'fr', 'de']) {
-    const text = execFileSync('/bin/bash', ['-c', `source lib/i18n.sh; ipalpha_lang='${lang}'; ipalpha_msg seed_phone_invalid`], { cwd: tooling, encoding: 'utf8' });
+    const text = execFileSync(process.env.IPALPHA_BASH || '/bin/bash', ['-c', `source lib/i18n.sh; ipalpha_lang='${lang}'; ipalpha_msg seed_phone_invalid`], { cwd: tooling, encoding: 'utf8' });
     assert.notEqual(text.trim(), 'seed_phone_invalid');
   }
   console.log('superuser-test: all assertions passed');

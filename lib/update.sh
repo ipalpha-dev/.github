@@ -43,10 +43,16 @@ ipalpha_update_refresh_libs() {
 # Repos that moved out of core/ (e.g. forms → apps/forms/): move the clone and every feature
 # worktree of it, keeping local branches, .env files and uncommitted work.
 ipalpha_migrate_layout() {
-  local root="$1" repo old new line wt rel_old rel_new
+  local root="$1" root_cmp repo old new line wt wt_cmp dest rel_old rel_new
   # Git reports physical worktree paths (/private/var on macOS), even when the
-  # workspace was opened via /var. Compare the same canonical prefix.
+  # workspace was opened via /var. Git for Windows reports C:/... while Git Bash
+  # may report the same directory as /tmp/...; compare one canonical form.
   root="$(cd "$root" && pwd -P)"
+  root_cmp="$root"
+  if command -v cygpath >/dev/null 2>&1; then
+    root_cmp="$(cygpath -m "$root")"
+  fi
+  root_cmp="${root_cmp%/}"
   for repo in $(ipalpha_all_repos); do
     ipalpha_app_of "$repo" >/dev/null || continue
     old="$root/core/$repo"; new="$(ipalpha_repo_path "$root" "$repo")"
@@ -54,9 +60,15 @@ ipalpha_migrate_layout() {
     rel_old="core/$repo"; rel_new="$(ipalpha_repo_rel "$repo")"
     while IFS= read -r line; do
       wt="${line#worktree }"
-      [[ "$wt" == "$root"/features/*/"$rel_old" ]] || continue
-      mkdir -p "$(dirname "${wt%/"$rel_old"}/$rel_new")"
-      git -C "$old" worktree move "$wt" "${wt%/"$rel_old"}/$rel_new"
+      wt_cmp="$wt"
+      if command -v cygpath >/dev/null 2>&1; then
+        wt_cmp="$(cygpath -m "$wt")"
+      fi
+      wt_cmp="${wt_cmp%/}"
+      [[ "$wt_cmp" == "$root_cmp"/features/*/"$rel_old" ]] || continue
+      dest="${wt_cmp%/"$rel_old"}/$rel_new"
+      mkdir -p "$(dirname "$dest")"
+      git -C "$old" worktree move "$wt" "$dest"
     done < <(git -C "$old" worktree list --porcelain 2>/dev/null | grep '^worktree ')
     mkdir -p "$(dirname "$new")"
     mv "$old" "$new"

@@ -4,10 +4,12 @@
     "projects-api": ["revocations:read", "apps:read", "organizations:snapshot"],
     "persons-api": ["revocations:read", "projects:read", "ai:invoke", "projects:import-memberships"],
     "organizations-api": ["revocations:read"],
-    "notifications-api": ["revocations:read", "projects:read", "persons:contact"],
+    "notifications-api": ["revocations:read", "projects:read", "persons:contact", "persons:birthdays"],
     "forms-api": ["revocations:read", "prefill:redeem", "prefill:read", "persons:read", "persons:write", "dispatch:events"],
     "dispatch-api": ["revocations:read", "apps:read", "apps:webhook-secret", "persons:import-results"],
     "ai-api": ["revocations:read", "projects:read"],
-    "developers-api": ["revocations:read", "apps:provision", "apps:read", "projects:provision", "persons:eligibility"]
+    "developers-api": ["revocations:read", "apps:provision", "apps:read", "projects:provision", "persons:eligibility"],
+    "photos-api": ["revocations:read", "projects:read"],
+    "places-api": ["revocations:read", "projects:read", "organizations:snapshot"]
   }
 }
