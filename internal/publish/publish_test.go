@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/ipalpha-dev/tooling/internal/catalog"
 )
 
 func TestBumpAndClamp(t *testing.T) {
@@ -57,5 +59,46 @@ func TestSetVersionKeepsFormatting(t *testing.T) {
 func TestNpmBuildURL(t *testing.T) {
 	if got := NpmBuildURL("shared-js"); got != "https://devops.kevyn.com.br/buildConfiguration/IpAlpha_Core_SharedJs_Publish" {
 		t.Fatalf("NpmBuildURL = %s", got)
+	}
+}
+
+func TestBuildContextFollowsEachDockerfile(t *testing.T) {
+	root := "/w"
+	core, _ := catalog.Get("auth-webapp")
+	app, _ := catalog.Get("forms-api")
+	if got := BuildContext(root, core, "/w/core/auth-webapp"); got != filepath.Join(root, "core") {
+		t.Fatalf("core repo context = %s", got)
+	}
+	if got := BuildContext(root, app, "/w/apps/forms/forms-api"); got != root {
+		t.Fatalf("ministry app context = %s", got)
+	}
+	optional := catalog.Repo{Name: "acampa-kids-backend", Kind: catalog.KindOptional, App: "acampa-kids"}
+	if got := BuildContext(root, optional, "/w/apps/acampa-kids/backend"); got != "/w/apps/acampa-kids/backend" {
+		t.Fatalf("optional app context = %s", got)
+	}
+}
+
+func TestRewriteImageTagsReplacesTagsAndDigests(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "deployment.yaml")
+	in := "image: reg.example/ip-alpha/core/auth-webapp:0.6.0\n" +
+		"other: reg.example/ip-alpha/core/auth-webapp:0.5.0@sha256:abc123\n" +
+		"keep: reg.example/ip-alpha/core/auth-api:1.0.0\n"
+	if err := os.WriteFile(file, []byte(in), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	changed := RewriteImageTags(dir, "reg.example/ip-alpha/core/auth-webapp:", "0.7.0")
+	if len(changed) != 1 || changed[0] != "deployment.yaml" {
+		t.Fatalf("changed = %v", changed)
+	}
+	out, _ := os.ReadFile(file)
+	want := "image: reg.example/ip-alpha/core/auth-webapp:0.7.0\n" +
+		"other: reg.example/ip-alpha/core/auth-webapp:0.7.0\n" +
+		"keep: reg.example/ip-alpha/core/auth-api:1.0.0\n"
+	if string(out) != want {
+		t.Fatalf("got:\n%s", out)
+	}
+	if again := RewriteImageTags(dir, "reg.example/ip-alpha/core/auth-webapp:", "0.7.0"); len(again) != 0 {
+		t.Fatalf("second run changed %v", again)
 	}
 }
