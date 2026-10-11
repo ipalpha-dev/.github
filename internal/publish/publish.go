@@ -14,7 +14,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/ipalpha-dev/tooling/internal/ai"
 	"github.com/ipalpha-dev/tooling/internal/catalog"
@@ -361,11 +360,6 @@ func SetLockVersion(data []byte, version string) []byte {
 	return []byte(text[:start] + block + text[start+end:])
 }
 
-func npmLoggedIn(dir string) bool {
-	_, _, err := sys.RunTimeout(30*time.Second, dir, "", sys.Npm(), "whoami")
-	return err == nil
-}
-
 func git(dir string, args ...string) error {
 	res := sys.Cmd{Name: "git", Args: append([]string{"-C", dir}, args...), Log: ui.LogWriter()}.Run()
 	if res.Err != nil {
@@ -377,9 +371,7 @@ func git(dir string, args ...string) error {
 // Apply commits, tags, pushes and ships one repository.
 func Apply(w *workspace.Workspace, p Plan, ciMode bool) error {
 	dir := p.Dir
-	if p.Repo.Kind == catalog.KindLibrary && p.Bump != "none" && !npmLoggedIn(dir) {
-		return ui.NewProblem(i18n.T("publish_npm_step", p.Repo.Name), i18n.T("publish_npm_login"), "npm login")
-	}
+
 	if p.Bump != "none" {
 		if err := SetVersion(dir, p.Next); err != nil {
 			return ui.Wrap(i18n.T("publish_version_step", p.Repo.Name), err)
@@ -417,7 +409,7 @@ func Apply(w *workspace.Workspace, p Plan, ciMode bool) error {
 	}
 	switch {
 	case p.Repo.Kind == catalog.KindLibrary:
-		return NpmPublish(p.Repo.Name, dir)
+		return NpmPublish(w.Settings.Org, p.Repo.Name, p.Next, dir)
 	}
 	if !ciMode {
 		if err := BuildImage(w, p.Repo, p.Next, dir); err != nil {
@@ -427,16 +419,17 @@ func Apply(w *workspace.Workspace, p Plan, ciMode bool) error {
 	return BumpDeployment(w, p.Repo.Name, p.Next)
 }
 
-// NpmPublish publishes a library (dist rebuilt by prepublishOnly; deleted modules never survive).
-func NpmPublish(name, dir string) error {
-	if !npmLoggedIn(dir) {
-		return ui.NewProblem(i18n.T("publish_npm_step", name), i18n.T("publish_npm_login"), "npm login")
-	}
-	os.RemoveAll(filepath.Join(dir, "dist"))
-	res := sys.Cmd{Dir: dir, Env: sys.NodeEnv(), Name: sys.Npm(), Args: []string{"publish"}, Log: ui.LogWriter()}.Run()
+// NpmPublish ships a library through GitHub Actions Trusted Publishing (OIDC): no npm token
+// and no one-time password. The workflow checks out the tag and runs npm publish.
+func NpmPublish(org, name, version, dir string) error {
+	res := sys.Cmd{Dir: dir, Name: "gh", Args: []string{
+		"workflow", "run", "publish.yml", "--ref", "master", "-f", "version=" + version,
+	}, Log: ui.LogWriter()}.Run()
 	if res.Err != nil {
-		return &ui.Problem{Step: i18n.T("publish_npm_step", name), Cause: strings.Join(ui.Tail(res.Output, 1), ""), Tail: ui.Tail(res.Output, 12)}
+		return &ui.Problem{Step: i18n.T("publish_npm_step", name), Cause: strings.Join(ui.Tail(res.Output, 1), ""),
+			Tail: ui.Tail(res.Output, 12), Fix: []string{i18n.T("publish_npm_trusted_fix", org+"/"+name)}}
 	}
+	ui.Info(i18n.T("publish_npm_trusted_started", name, version))
 	return nil
 }
 

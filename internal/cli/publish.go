@@ -300,7 +300,7 @@ func npmOnly(w *workspace.Workspace, folder string, dry bool) error {
 	if dry {
 		return nil
 	}
-	return publish.NpmPublish(folder, dir)
+	return publish.NpmPublish(w.Settings.Org, folder, v, dir)
 }
 
 func resume(w *workspace.Workspace, folder string, dry, ci bool) error {
