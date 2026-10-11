@@ -47,6 +47,8 @@ var Repos = []Repo{
 	{Name: "persons-api", Kind: KindAPI, Port: 3002, Display: "Persons"},
 	{Name: "organizations-api", Kind: KindAPI, Port: 3003, Display: "Organizations"},
 	{Name: "places-api", Kind: KindAPI, Port: 3011, Display: "Places"},
+	{Name: "photos-api", Kind: KindAPI, Port: 3010, Display: "Photos"},
+	{Name: "documents-api", Kind: KindAPI, Port: 3012, Display: "Documents"},
 	{Name: "notifications-api", Kind: KindAPI, Port: 3004, Display: "Notifications"},
 	{Name: "auth-api", Kind: KindAPI, Port: 3005, Display: "Auth"},
 	{Name: "forms-api", Kind: KindAPI, App: "forms", Port: 3006, Display: "Forms API"},
@@ -71,6 +73,7 @@ type Infra struct {
 	Display   string
 	EnvKey    string // ports.env variable
 	Browser   string // path opened in a browser, when it has a UI
+	Optional  bool   // off by default: only runs when the workspace turns it on (settings face=on)
 }
 
 // InfraServices are the containers every workspace runs.
@@ -80,6 +83,8 @@ var InfraServices = []Infra{
 	{Key: "rabbitmq", Service: "rabbitmq", Port: 5672, Container: 5672, Display: "RabbitMQ", EnvKey: "RABBITMQ_HOST_PORT"},
 	{Key: "rabbitmq-mgmt", Service: "rabbitmq", Port: 15672, Container: 15672, Display: "RabbitMQ UI", EnvKey: "RABBITMQ_MGMT_HOST_PORT", Browser: "/"},
 	{Key: "mailpit", Service: "mailpit", Port: 8025, Container: 8025, Display: "Mailpit", EnvKey: "MAILPIT_HOST_PORT", Browser: "/"},
+	{Key: "rustfs", Service: "rustfs", Port: 9000, Container: 9000, Display: "RustFS (S3)", EnvKey: "RUSTFS_HOST_PORT"},
+	{Key: "face", Service: "face", Port: 8000, Container: 8000, Display: "Face service", EnvKey: "FACE_HOST_PORT", Optional: true},
 }
 
 // DefaultBrowserApps start (web apps) and open (pages) on ./run until the developer changes them.

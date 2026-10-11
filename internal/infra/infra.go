@@ -42,7 +42,7 @@ type Engine struct {
 func credentials(w *workspace.Workspace) map[string]string {
 	path := filepath.Join(w.Dir(), ".env")
 	vals := envfile.Read(path)
-	defaults := map[string]string{"MONGO_USERNAME": "ipalpha", "MONGO_PASSWORD": "ipalpha", "RABBITMQ_USERNAME": "ipalpha", "RABBITMQ_PASSWORD": "ipalpha"}
+	defaults := map[string]string{"MONGO_USERNAME": "ipalpha", "MONGO_PASSWORD": "ipalpha", "RABBITMQ_USERNAME": "ipalpha", "RABBITMQ_PASSWORD": "ipalpha", "RUSTFS_ACCESS_KEY": "ipalpha", "RUSTFS_SECRET_KEY": "ipalpha-secret"}
 	for k, v := range defaults {
 		if vals[k] == "" {
 			vals[k] = v
@@ -58,7 +58,7 @@ func WriteFiles(w *workspace.Workspace) error {
 	}
 	credPath := filepath.Join(w.Dir(), ".env")
 	if _, err := os.Stat(credPath); os.IsNotExist(err) {
-		return envfile.WriteAtomic(credPath, []byte("MONGO_USERNAME=ipalpha\nMONGO_PASSWORD=ipalpha\nRABBITMQ_USERNAME=ipalpha\nRABBITMQ_PASSWORD=ipalpha\n"), 0o600)
+		return envfile.WriteAtomic(credPath, []byte("MONGO_USERNAME=ipalpha\nMONGO_PASSWORD=ipalpha\nRABBITMQ_USERNAME=ipalpha\nRABBITMQ_PASSWORD=ipalpha\nRUSTFS_ACCESS_KEY=ipalpha\nRUSTFS_SECRET_KEY=ipalpha-secret\n"), 0o600)
 	}
 	return nil
 }
@@ -199,6 +199,11 @@ func (e *Engine) compose(plan *ports.Plan, args ...string) sys.Cmd {
 		p, _ := ports.Load(e.W.StateDir())
 		env = e.Env(p)
 	}
+	// The optional face service only exists when the workspace turned it on. stop/down always include its
+	// profile, so turning it off later still stops a container that is left over.
+	if e.W.Settings.Face || (len(args) > 0 && (args[0] == "stop" || args[0] == "down")) {
+		env = append(env, "COMPOSE_PROFILES=face")
+	}
 	return sys.Cmd{Dir: e.W.Dir(), Env: env, Name: "docker", Args: full, Log: ui.LogWriter()}
 }
 
@@ -313,6 +318,10 @@ func (e *Engine) Up(plan ports.Plan) error {
 	if res.Err != nil {
 		return e.upProblem(res.Output)
 	}
+	// One-shot job: create the photos bucket in RustFS when it is missing (idempotent).
+	if res := e.compose(&plan, "run", "--rm", "--no-deps", "rustfs-init").Run(); res.Err != nil {
+		return &ui.Problem{Step: i18n.T("infra_step"), Cause: i18n.T("infra_bucket_failed"), Tail: ui.Tail(res.Output, 8), Fix: []string{i18n.T("infra_fix_logs")}}
+	}
 	return nil
 }
 
@@ -350,7 +359,7 @@ func (e *Engine) Stop(purge, volumes bool) error {
 			}
 		}
 		if purge && volumes {
-			for _, v := range []string{"mongo-data", "redis-data", "rabbitmq-data"} {
+			for _, v := range []string{"mongo-data", "redis-data", "rabbitmq-data", "rustfs-data", "face-models"} {
 				_, _ = sys.Output("", "container", "volume", "delete", e.Name+"-"+v)
 			}
 		}
@@ -370,7 +379,7 @@ func (e *Engine) Stop(purge, volumes bool) error {
 	return nil
 }
 
-func services() []string { return []string{"mongo", "redis", "rabbitmq", "mailpit"} }
+func services() []string { return []string{"mongo", "redis", "rabbitmq", "mailpit", "rustfs", "face"} }
 
 // Health of each service: running+healthy / starting / stopped / unhealthy.
 func (e *Engine) Health() map[string]string {

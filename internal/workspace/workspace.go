@@ -31,6 +31,7 @@ type Settings struct {
 	browserSet  bool
 	InfraName   string
 	Registry    string
+	Face        bool           // run the optional face service (settings face=on); off = photos-api skips face work
 	Ports       map[string]int // preferred ports (port key → port)
 	extra       []string       // unknown lines, kept as written
 }
@@ -158,6 +159,8 @@ func LoadSettings(path string) (*Settings, error) {
 			if v != "" {
 				s.Registry = v
 			}
+		case "face":
+			s.Face = v == "on" || v == "true" || v == "1"
 		case "runner":
 			// Removed (the panel and --plain replace mprocs/background runners).
 		default:
@@ -242,6 +245,9 @@ func (s *Settings) Render() string {
 	fmt.Fprintf(&b, "infra_name=%s\n", s.InfraName)
 	if s.Registry != catalog.DefaultRegistry {
 		fmt.Fprintf(&b, "registry=%s\n", s.Registry)
+	}
+	if s.Face {
+		b.WriteString("face=on\n")
 	}
 	for _, k := range catalog.PortKeys() {
 		fmt.Fprintf(&b, "%s_port=%d\n", settingsPortKey(k), s.Port(k))

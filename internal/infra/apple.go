@@ -20,7 +20,7 @@ func (e *Engine) appleUp(plan ports.Plan) error {
 	c := credentials(e.W)
 	n := e.Name
 	_, _ = sys.Output("", "container", "network", "create", n)
-	for _, v := range []string{"mongo-data", "redis-data", "rabbitmq-data"} {
+	for _, v := range []string{"mongo-data", "redis-data", "rabbitmq-data", "rustfs-data", "face-models"} {
 		_, _ = sys.Output("", "container", "volume", "create", n+"-"+v)
 	}
 	specs := []struct {
@@ -46,6 +46,21 @@ func (e *Engine) appleUp(plan ports.Plan) error {
 			"--env", "MP_MAX_MESSAGE_SIZE=1", "--env", "MP_DISABLE_VERSION_CHECK=true", "--env", "MP_SMTP_DISABLE_RDNS=true",
 			"axllent/mailpit:v1.31.3"},
 			[]string{"/mailpit", "readyz"}},
+		{"rustfs", []string{"--network", n, "--publish", fmt.Sprintf("127.0.0.1:%d:9000", plan.Port("rustfs")),
+			"--env", "RUSTFS_VOLUMES=/data", "--env", "RUSTFS_ADDRESS=:9000", "--env", "RUSTFS_CONSOLE_ENABLE=false",
+			"--env", "RUSTFS_ACCESS_KEY=" + c["RUSTFS_ACCESS_KEY"], "--env", "RUSTFS_SECRET_KEY=" + c["RUSTFS_SECRET_KEY"],
+			"--volume", n + "-rustfs-data:/data", "rustfs/rustfs:1.0.1", "/data"},
+			[]string{"curl", "-fsS", "http://127.0.0.1:9000/health/ready"}},
+	}
+	if e.W.Settings.Face {
+		specs = append(specs, struct {
+			name  string
+			args  []string
+			ready []string
+		}{"face", []string{"--network", n, "--platform", "linux/amd64", "--publish", fmt.Sprintf("127.0.0.1:%d:8000", plan.Port("face")),
+			"--env", "FACE_MODEL=buffalo_l", "--env", "FACE_MODEL_ROOT=/app/data/insightface", "--env", "FACE_DET_SIZE=640", "--env", "FACE_MAX_BYTES=8388608",
+			"--volume", n + "-face-models:/app/data/insightface", "registry.kevyn.com.br/ip-alpha/kids/acampa-2025-face:0.1.0"},
+			[]string{"python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4)"}})
 	}
 	status := map[string]string{}
 	for _, ac := range appleList() {
@@ -94,6 +109,14 @@ func (e *Engine) appleUp(plan ports.Plan) error {
 		if !ok {
 			ui.Warning(i18n.T("infra_not_healthy_yet", s.name))
 		}
+	}
+	// One-shot job: create the photos bucket when it is missing (idempotent).
+	endpoint := "http://" + n + "-rustfs:9000"
+	if out, err := sys.Output("", "container", "run", "--rm", "--network", n,
+		"--env", "AWS_ACCESS_KEY_ID="+c["RUSTFS_ACCESS_KEY"], "--env", "AWS_SECRET_ACCESS_KEY="+c["RUSTFS_SECRET_KEY"], "--env", "AWS_DEFAULT_REGION=us-east-1",
+		"--entrypoint", "sh", "amazon/aws-cli:2.37.9", "-c",
+		"aws --endpoint-url "+endpoint+" s3api head-bucket --bucket photos || aws --endpoint-url "+endpoint+" s3api create-bucket --bucket photos"); err != nil {
+		return &ui.Problem{Step: i18n.T("infra_step"), Cause: i18n.T("infra_bucket_failed"), Tail: ui.Tail(out+"\n"+err.Error(), 8), Fix: []string{i18n.T("infra_fix_use_docker")}}
 	}
 	return nil
 }

@@ -97,7 +97,7 @@ func Complete(w *workspace.Workspace, r catalog.Repo) (Change, error) {
 	return ch, nil
 }
 
-var peers = []string{"projects", "persons", "organizations", "notifications", "forms", "ai", "developers", "dispatch", "places"}
+var peers = []string{"projects", "persons", "organizations", "notifications", "forms", "ai", "developers", "dispatch", "places", "photos", "documents"}
 
 // Stable ids owned by auth-api (src/builtin-apps.ts).
 var builtinIDs = [][2]string{
@@ -171,11 +171,26 @@ func fillLocal(w *workspace.Workspace, r catalog.Repo, f *envfile.File) []string
 			set("DEPLOYMENT_ENVIRONMENT", "development")
 		}
 	}
+	if r.Name == "photos-api" {
+		// Same keys the RustFS container starts with (.ipalpha/.env), else the local defaults.
+		store := envfile.Read(filepath.Join(w.Dir(), ".env"))
+		fill("S3_ACCESS_KEY", firstNonEmpty(store["RUSTFS_ACCESS_KEY"], "ipalpha"))
+		fill("S3_SECRET_KEY", firstNonEmpty(store["RUSTFS_SECRET_KEY"], "ipalpha-secret"))
+		if w.Settings.Face {
+			fill("FACE_SERVICE_URL", "http://127.0.0.1:8000")
+		}
+	}
 	if r.Name == "persons-api" {
 		fill("IMPORT_ROWS_KEY", randomB64(32))
 	}
 	if r.Name == "auth-api" {
 		fill("WEBHOOK_SECRET_KEY", randomB64(32))
+		// An existing list is kept; only the audiences new services need are appended.
+		if cur, ok := f.Get("AUTH_RESOURCE_AUDIENCES_JSON"); ok {
+			if merged, changedList := addAudiences(cur, "ipalpha:photos", "ipalpha:documents"); changedList {
+				set("AUTH_RESOURCE_AUDIENCES_JSON", merged)
+			}
+		}
 	}
 	// Machine credentials of this service, registered in auth-api through SEED_CLIENTS_JSON.
 	fill("AUTH_CLIENT_ID", r.Name)
@@ -379,4 +394,39 @@ func WriteSuperuser(w *workspace.Workspace, name, phone string) error {
 func Superuser(w *workspace.Workspace) (string, string) {
 	e := envfile.Read(filepath.Join(w.Repo("auth-api"), ".env"))
 	return e["SUPERUSER_NAME"], e["SUPERUSER_PHONE"]
+}
+
+func firstNonEmpty(v ...string) string {
+	for _, s := range v {
+		if strings.TrimSpace(s) != "" {
+			return s
+		}
+	}
+	return ""
+}
+
+// addAudiences appends missing audiences to a JSON array value (quotes around it are tolerated).
+// A value that is not a JSON string array is left alone.
+func addAudiences(raw string, add ...string) (string, bool) {
+	raw = strings.TrimSpace(raw)
+	if len(raw) >= 2 && (raw[0] == '\'' || raw[0] == '"') && raw[len(raw)-1] == raw[0] {
+		raw = raw[1 : len(raw)-1]
+	}
+	var list []string
+	if json.Unmarshal([]byte(raw), &list) != nil || len(list) == 0 {
+		return "", false
+	}
+	have := map[string]bool{}
+	for _, a := range list {
+		have[a] = true
+	}
+	changed := false
+	for _, a := range add {
+		if !have[a] {
+			list = append(list, a)
+			changed = true
+		}
+	}
+	data, _ := json.Marshal(list)
+	return string(data), changed
 }

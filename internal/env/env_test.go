@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/ipalpha-dev/tooling/internal/envfile"
@@ -129,5 +130,48 @@ func TestSuperuserQuoted(t *testing.T) {
 	n, p := Superuser(w)
 	if n != "Joao $USER O'Neal" || p != "+5511987654321" {
 		t.Fatalf("%q %q", n, p)
+	}
+}
+
+func TestPhotosAPIGetsStoreKeysAndFaceOnlyWhenOn(t *testing.T) {
+	w := ws(t)
+	dir := w.Repo("photos-api")
+	os.MkdirAll(dir, 0o755)
+	os.WriteFile(filepath.Join(dir, ".env.example"), []byte("S3_ACCESS_KEY=\nS3_SECRET_KEY=\nS3_ENDPOINT=http://127.0.0.1:9000\nFACE_SERVICE_URL=\n"), 0o644)
+	os.WriteFile(filepath.Join(w.Dir(), ".env"), []byte("RUSTFS_ACCESS_KEY=custom-key\nRUSTFS_SECRET_KEY=custom-secret-1\n"), 0o600)
+	if _, err := Prepare(w); err != nil {
+		t.Fatal(err)
+	}
+	e := envfile.Read(filepath.Join(dir, ".env"))
+	if e["S3_ACCESS_KEY"] != "custom-key" || e["S3_SECRET_KEY"] != "custom-secret-1" || e["FACE_SERVICE_URL"] != "" {
+		t.Fatalf("face is off by default and S3 keys follow the infra credentials: %v", e)
+	}
+	w.Settings.Face = true
+	if _, err := Prepare(w); err != nil {
+		t.Fatal(err)
+	}
+	if got := envfile.Read(filepath.Join(dir, ".env"))["FACE_SERVICE_URL"]; got != "http://127.0.0.1:8000" {
+		t.Fatalf("face on: %q", got)
+	}
+}
+
+func TestAuthAudiencesAndDocumentsEnvAreAddedToExistingFiles(t *testing.T) {
+	w := ws(t)
+	auth := w.Repo("auth-api")
+	os.MkdirAll(auth, 0o755)
+	os.WriteFile(filepath.Join(auth, ".env"), []byte("AUTH_RESOURCE_AUDIENCES_JSON=[\"ipalpha:auth\",\"ipalpha:places\"]\n"), 0o600)
+	pers := w.Repo("persons-api")
+	os.MkdirAll(pers, 0o755)
+	os.WriteFile(filepath.Join(pers, ".env"), []byte("PORT=3002\nDOCUMENTS_API_URL=http://127.0.0.1:4000\n"), 0o600)
+	if _, err := Prepare(w); err != nil {
+		t.Fatal(err)
+	}
+	a := envfile.Read(filepath.Join(auth, ".env"))["AUTH_RESOURCE_AUDIENCES_JSON"]
+	if !strings.Contains(a, "ipalpha:places") || !strings.Contains(a, "ipalpha:photos") || !strings.Contains(a, "ipalpha:documents") {
+		t.Fatalf("audiences: %s", a)
+	}
+	p := envfile.Read(filepath.Join(pers, ".env"))
+	if p["DOCUMENTS_API_URL"] != "http://127.0.0.1:4000" || p["MEMBERSHIP_TERM_DOCUMENT_SLUG"] == "" || p["EXCHANGE_PERSON_CONSENT_CHANGED"] == "" || p["DOCUMENTS_API_AUDIENCE"] != "ipalpha:documents" {
+		t.Fatalf("persons env: %v", p)
 	}
 }

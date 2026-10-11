@@ -275,6 +275,9 @@ func apiEnv(w *workspace.Workspace, r catalog.Repo, plan ports.Plan, rw ports.Re
 	vals := envfile.Read(filepath.Join(r.Path(w.Root), ".env"))
 	refs := rw.Env(vals)
 	vals["PORT"] = strconv.Itoa(plan.Port(r.Name))
+	if r.Name == "photos-api" && !w.Settings.Face {
+		vals["FACE_SERVICE_URL"] = "" // face is opt-in: without it photos-api skips face indexing and search
+	}
 	return toEnv(vals), refs
 }
 
@@ -374,7 +377,11 @@ func startScript(dir string) string {
 
 func buildSpecs(w *workspace.Workspace, eng *infra.Engine, plan ports.Plan, rw ports.Rewriter) []*Spec {
 	var specs []*Spec
-	for _, svc := range []string{"mongo", "redis", "rabbitmq", "mailpit"} {
+	infraSvcs := []string{"mongo", "redis", "rabbitmq", "mailpit", "rustfs"}
+	if w.Settings.Face {
+		infraSvcs = append(infraSvcs, "face")
+	}
+	for _, svc := range infraSvcs {
 		var display, url string
 		var port int
 		for _, i := range catalog.InfraServices {

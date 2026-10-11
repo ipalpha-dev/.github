@@ -51,7 +51,8 @@ Non-interactive (CI): `ipalpha setup <folder> --yes` with `IPALPHA_SUPERUSER_PHO
    then it moves to the next free port **for this run only** and every URL handed to the processes follows
    (`.env` files keep the defaults). The panel says which moved and who held the port. The infra keeps a
    moved port across runs while its container lives. Two workspaces can run at the same time.
-3. Infra containers (MongoDB, Redis, RabbitMQ + UI, Mailpit) up and healthy (`docker compose --wait`).
+3. Infra containers (MongoDB, Redis, RabbitMQ + UI, Mailpit, RustFS) up and healthy (`docker compose --wait`),
+   then the `photos` bucket is created in RustFS when missing (one-shot `rustfs-init`, safe to repeat).
 4. `.env` completion, npm installs (shared-js built first, consumers' copies refreshed).
 5. auth-api signing keys, then the **local** auth database is reconciled: drifted client secrets of the local
    services and the `localhost` origins/callbacks of the built-in apps (so sign-in keeps working when a web
@@ -87,6 +88,40 @@ forgets it. Outside the panel: `./ipalpha apps` (menu), `./run apps set oikos-we
 notifications-api always uses Mailpit locally (`MAIL_PROVIDER=mailpit`, `SMS_PROVIDER=mailpit`), even when
 vendor keys exist; SMS appear as `[SMS]` e-mails. Mailpit binds to loopback, keeps ≤ 200 messages for 24 h,
 no persistent volume. Use synthetic recipients only.
+
+### Local photos (RustFS and the face service)
+
+photos-api stores files in **RustFS**, the S3-compatible store production uses (`rustfs/rustfs:1.0.1`). It runs
+with the other infra on `127.0.0.1:9000` (volume `<infra>-rustfs-data`, no console). The keys default to
+`ipalpha` / `ipalpha-secret` and live in `.ipalpha/.env` (`RUSTFS_ACCESS_KEY`, `RUSTFS_SECRET_KEY`); photos-api's
+`S3_ACCESS_KEY` / `S3_SECRET_KEY` follow them, and `S3_ENDPOINT` follows the port of the run.
+
+The **face service** (the Acampa face image, `registry.kevyn.com.br/ip-alpha/kids/acampa-2025-face`, needs registry
+access and downloads a model on first start) is **off by default**. With it off, `FACE_SERVICE_URL` is empty for
+photos-api: uploads work, face indexing and search stay off. Turn it on with `./run --face` (remembered as
+`face=on` in `.ipalpha/settings`; `ipalpha config set face off` turns it off). It then runs on `127.0.0.1:8000`.
+The image only has a `linux/amd64` build, so compose and Apple `container` run it with `--platform linux/amd64`; on Apple
+Silicon it is emulated and noticeably slower (first start and each detection).
+
+Oikos reaches photos-api at `/api/photos` through its Vite proxy; `./run` hands it `PHOTOS_API_URL` for the port of
+the run, like every other API.
+
+### Local documents and consent (documents-api)
+
+documents-api (port 3012, MongoDB `documents`) holds versioned legal texts (membership term, `face-recognition`
+consent). `./run` starts it with the other APIs and hands every consumer `DOCUMENTS_API_URL`; Oikos reaches it
+at `/api/documents`. persons-api verifies the consent version a client sends with a live call to it, so
+consent writes answer 503 while documents-api is down.
+
+Env added for this: persons-api gets the `EXCHANGE_PERSON_PHOTO_*` / `EXCHANGE_PERSON_CONSENT_CHANGED`
+exchanges, `DOCUMENTS_API_URL`, `DOCUMENTS_API_AUDIENCE`, `MEMBERSHIP_TERM_DOCUMENT_SLUG` and
+`FACE_RECOGNITION_DOCUMENT_SLUG`; photos-api gets `TOKEN_AUDIENCE=ipalpha:photos`, `PERSONS_API_URL` /
+`PERSONS_API_AUDIENCE`, the consumed and published exchanges, `FACE_REVIEW_THRESHOLD=0.35` and the two slugs;
+dispatch-api gets `PHOTOS_API_URL` and the `EXCHANGE_PHOTOS_*` exchanges. auth-api's
+`AUTH_RESOURCE_AUDIENCES_JSON` lists `ipalpha:photos` and `ipalpha:documents`. `./pull` and `setup` only add
+missing keys, never overwrite yours; the one exception is that the two new audiences are appended to an existing
+`AUTH_RESOURCE_AUDIENCES_JSON`. The embedded `system-clients.json` grants `persons:links`, `persons:consents`,
+`persons:face-photos`, `persons:access-log` (photos-api, persons-api) and `documents:read` (persons-api).
 
 ## `./publish`
 
@@ -161,7 +196,9 @@ migrated by their next `./pull`.
 | dispatch-api | 3007 | RabbitMQ | 5672 |
 | ai-api | 3008 | RabbitMQ UI | 15672 |
 | developers-api | 3009 | Mailpit | 8025 |
-| places-api | 3011 | | |
+| places-api | 3011 | RustFS (S3) | 9000 |
+| photos-api | 3010 | Face service (optional) | 8000 |
+| documents-api | 3012 | | |
 
 ## Core and apps
 

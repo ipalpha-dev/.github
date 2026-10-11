@@ -441,24 +441,42 @@ func NpmPublish(name, version string) error {
 	return nil
 }
 
-// BuildImage builds and pushes <registry>/<repo>:<version> with Docker or Apple container.
+// imagePlatform is the cluster's architecture; images are built for it from any machine.
+const imagePlatform = "linux/amd64"
+
+// BuildContext is the folder a repository's Dockerfile is written against: core/ for core services,
+// the workspace root for ministry apps (they need core/shared-js), the repository itself for optional apps.
+func BuildContext(root string, r catalog.Repo, dir string) string {
+	switch {
+	case r.Kind == catalog.KindOptional:
+		return dir
+	case r.App != "":
+		return root
+	default:
+		return filepath.Join(root, "core")
+	}
+}
+
+// BuildImage builds (for the cluster's platform) and pushes <registry>/<repo>:<version> with Docker or Apple container.
 func BuildImage(w *workspace.Workspace, r catalog.Repo, version, dir string) error {
 	if !r.HasImage() {
 		return nil
 	}
-	if _, err := os.Stat(filepath.Join(dir, "Dockerfile")); err != nil {
+	dockerfile := filepath.Join(dir, "Dockerfile")
+	if _, err := os.Stat(dockerfile); err != nil {
 		ui.Info(r.Name + ": " + i18n.T("publish_no_dockerfile"))
 		return nil
 	}
 	image := w.Settings.Registry + "/" + r.Name + ":" + version
 	registryHost := strings.SplitN(w.Settings.Registry, "/", 2)[0]
+	context := BuildContext(w.Root, r, dir)
 	var build, push []string
 	switch {
 	case sys.Has("docker"):
-		build = []string{"docker", "build", "-t", image, dir}
+		build = []string{"docker", "build", "--platform", imagePlatform, "-f", dockerfile, "-t", image, context}
 		push = []string{"docker", "push", image}
 	case sys.Has("container"):
-		build = []string{"container", "build", "--tag", image, dir}
+		build = []string{"container", "build", "--platform", imagePlatform, "--file", dockerfile, "--tag", image, context}
 		push = []string{"container", "image", "push", image}
 	default:
 		return ui.NewProblem(i18n.T("publish_image_step", image), i18n.T("infra_no_runtime"), i18n.T("infra_fix_install_docker"))
@@ -474,17 +492,51 @@ func BuildImage(w *workspace.Workspace, r catalog.Repo, version, dir string) err
 	return nil
 }
 
-// BumpDeployment rewrites <registry>/<repo>:<tag> in deployment YAML, commits and pushes.
+// deploymentBranch is the branch the cluster deploys from.
+const deploymentBranch = "master"
+
+// BumpDeployment rewrites <registry>/<repo>:<tag> in deployment YAML on origin/master and pushes it there.
+// It works in a temporary worktree, so the local deployment checkout (its branch and uncommitted work) is untouched.
 func BumpDeployment(w *workspace.Workspace, repo, version string) error {
 	dep := w.Repo("deployment")
 	if !repos.IsGit(dep) {
 		ui.Warning(i18n.T("publish_deployment_missing"))
 		return nil
 	}
-	prefix := w.Settings.Registry + "/" + repo + ":"
-	re := regexp.MustCompile(regexp.QuoteMeta(prefix) + `[^\s"']*`)
+	if err := git(dep, "fetch", "-q", "origin", deploymentBranch); err != nil {
+		return err
+	}
+	tmp, err := os.MkdirTemp("", "ipalpha-deployment-")
+	if err != nil {
+		return err
+	}
+	_ = os.Remove(tmp)
+	if err := git(dep, "worktree", "add", "-q", "--detach", tmp, "origin/"+deploymentBranch); err != nil {
+		return err
+	}
+	defer func() { _ = git(dep, "worktree", "remove", "--force", tmp) }()
+
+	changed := RewriteImageTags(tmp, w.Settings.Registry+"/"+repo+":", version)
+	if len(changed) == 0 {
+		return nil
+	}
+	if err := git(tmp, append([]string{"add", "--"}, changed...)...); err != nil {
+		return err
+	}
+	if sys.GitOK(tmp, "diff", "--cached", "--quiet") {
+		return nil
+	}
+	if err := git(tmp, "commit", "-q", "-m", "bump "+repo+" to "+version); err != nil {
+		return err
+	}
+	return git(tmp, "push", "origin", "HEAD:refs/heads/"+deploymentBranch)
+}
+
+// RewriteImageTags sets every <prefix><tag> in the YAML files under dir to <prefix><version>; it returns the changed files.
+func RewriteImageTags(dir, prefix, version string) []string {
+	re := regexp.MustCompile(regexp.QuoteMeta(prefix) + `[^\s"'@]*(@sha256:[0-9a-f]+)?`)
 	var changed []string
-	_ = filepath.WalkDir(dep, func(p string, d os.DirEntry, err error) error {
+	_ = filepath.WalkDir(dir, func(p string, d os.DirEntry, err error) error {
 		if err != nil {
 			return nil
 		}
@@ -504,25 +556,13 @@ func BumpDeployment(w *workspace.Workspace, repo, version string) error {
 		out := re.ReplaceAll(data, []byte(prefix+version))
 		if string(out) != string(data) {
 			if os.WriteFile(p, out, 0o644) == nil {
-				rel, _ := filepath.Rel(dep, p)
+				rel, _ := filepath.Rel(dir, p)
 				changed = append(changed, filepath.ToSlash(rel))
 			}
 		}
 		return nil
 	})
-	if len(changed) == 0 {
-		return nil
-	}
-	if err := git(dep, append([]string{"add", "--"}, changed...)...); err != nil {
-		return err
-	}
-	if sys.GitOK(dep, "diff", "--cached", "--quiet") {
-		return nil
-	}
-	if err := git(dep, "commit", "-q", "-m", "bump "+repo+" to "+version); err != nil {
-		return err
-	}
-	return git(dep, "push")
+	return changed
 }
 
 // LoadAI reads the AI configuration of a workspace (flags override).

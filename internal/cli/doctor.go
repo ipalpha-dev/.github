@@ -92,7 +92,7 @@ func doctorCmd() *cobra.Command {
 			} else {
 				add(check{name: i18n.T("doctor_runtime"), status: "ok", detail: eng.Runtime})
 				health := eng.Health()
-				for _, s := range []string{"mongo", "redis", "rabbitmq", "mailpit"} {
+				for _, s := range []string{"mongo", "redis", "rabbitmq", "mailpit", "rustfs"} {
 					h := health[s]
 					st := "ok"
 					if h != "healthy" && h != "running" {

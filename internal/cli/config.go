@@ -250,6 +250,8 @@ func setSetting(s *workspace.Settings, key, value string) error {
 		s.SetBrowsers(strings.Fields(value))
 	case "registry":
 		s.Registry = value
+	case "face":
+		s.Face = value == "on" || value == "true" || value == "1"
 	default:
 		if strings.HasSuffix(key, "_port") {
 			p, err := strconv.Atoi(value)

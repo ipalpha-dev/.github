@@ -30,7 +30,7 @@ No Windows use `.\run`, `.\pull`… (PowerShell/cmd) ou `./run.cmd` (Git Bash).
 
 | Comando | Faz |
 | --- | --- |
-| `./run` | Sobe MongoDB, Redis, RabbitMQ e Mailpit, instala dependências e abre o painel com cada API e web app. Porta ocupada? O serviço muda para uma livre nesta execução e tudo continua funcionando. `?` no painel mostra as teclas. |
+| `./run` | Sobe MongoDB, Redis, RabbitMQ, Mailpit e RustFS (S3 das fotos; `--face` liga o serviço de rostos), instala dependências e abre o painel com cada API e web app. Porta ocupada? O serviço muda para uma livre nesta execução e tudo continua funcionando. `?` no painel mostra as teclas. |
 | `./status` · `./logs <serviço> -f` · `./stop` | O que está rodando e em que porta · logs · para a infra |
 | `./pull` | Atualiza a ferramenta, os repositórios e adiciona chaves novas aos `.env` |
 | `./publish` | Repositórios alterados → a IA escolhida propõe versão + mensagem (ou você digita) → commit/push → npm/imagem → `deployment` |

@@ -80,6 +80,69 @@ services:
       retries: 12
       start_period: 5s
 
+  # S3-compatible store for photos-api (same image as production). The bucket is created by
+  # `rustfs-init` after `up` (profile "init": run explicitly by ./run, never part of `up`).
+  rustfs:
+    image: rustfs/rustfs:1.0.1
+    container_name: ${IPALPHA_INFRA_NAME:-ipalpha}-rustfs
+    command: ["/data"]
+    ports:
+      - "127.0.0.1:${RUSTFS_HOST_PORT:-9000}:9000"
+    environment:
+      RUSTFS_VOLUMES: /data
+      RUSTFS_ADDRESS: ":9000"
+      RUSTFS_CONSOLE_ENABLE: "false"
+      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY}
+      RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY}
+    volumes:
+      - rustfs-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:9000/health/ready >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  rustfs-init:
+    profiles: ["init"]
+    image: amazon/aws-cli:2.37.9
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        set -eu
+        aws --endpoint-url http://rustfs:9000 s3api head-bucket --bucket photos \
+          || aws --endpoint-url http://rustfs:9000 s3api create-bucket --bucket photos
+    environment:
+      AWS_ACCESS_KEY_ID: ${RUSTFS_ACCESS_KEY}
+      AWS_SECRET_ACCESS_KEY: ${RUSTFS_SECRET_KEY}
+      AWS_DEFAULT_REGION: us-east-1
+    depends_on:
+      rustfs:
+        condition: service_healthy
+
+  # Optional (profile "face", on with `face=on` in settings or ./run --face): the Acampa face service,
+  # the same image production runs. Stores nothing. Off = photos-api skips face indexing and search.
+  face:
+    profiles: ["face"]
+    image: registry.kevyn.com.br/ip-alpha/kids/acampa-2025-face:0.1.0
+    platform: linux/amd64 # the image has no arm64 manifest; emulated on Apple Silicon
+    container_name: ${IPALPHA_INFRA_NAME:-ipalpha}-face
+    ports:
+      - "127.0.0.1:${FACE_HOST_PORT:-8000}:8000"
+    environment:
+      FACE_MODEL: buffalo_l
+      FACE_MODEL_ROOT: /app/data/insightface
+      FACE_DET_SIZE: "640"
+      FACE_MAX_BYTES: "8388608"
+    volumes:
+      - face-models:/app/data/insightface
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 60
+      start_period: 30s
+
 networks:
   default:
     name: ${IPALPHA_INFRA_NAME:-ipalpha}
@@ -91,3 +154,7 @@ volumes:
     name: ${IPALPHA_INFRA_NAME:-ipalpha}-redis-data
   rabbitmq-data:
     name: ${IPALPHA_INFRA_NAME:-ipalpha}-rabbitmq-data
+  rustfs-data:
+    name: ${IPALPHA_INFRA_NAME:-ipalpha}-rustfs-data
+  face-models:
+    name: ${IPALPHA_INFRA_NAME:-ipalpha}-face-models

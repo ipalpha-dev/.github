@@ -24,7 +24,7 @@ import (
 )
 
 func runCmd() *cobra.Command {
-	var plain, skipDeps, noBrowser bool
+	var plain, skipDeps, noBrowser, face bool
 	var only []string
 	var untilReady time.Duration
 	c := &cobra.Command{
@@ -36,6 +36,12 @@ func runCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if face && !w.Settings.Face {
+				w.Settings.Face = true // remembered: face=on in .ipalpha/settings; `config set face off` turns it off
+				if err := w.Save(); err != nil {
+					return err
+				}
+			}
 			if noBrowser {
 				os.Setenv("IPALPHA_OPEN_BROWSERS", "0")
 			}
@@ -45,6 +51,7 @@ func runCmd() *cobra.Command {
 	c.Flags().BoolVar(&plain, "plain", false, i18n.T("flag_plain"))
 	c.Flags().BoolVar(&skipDeps, "skip-deps", false, i18n.T("flag_skip_deps"))
 	c.Flags().BoolVar(&noBrowser, "no-browser", false, i18n.T("flag_no_browser"))
+	c.Flags().BoolVar(&face, "face", false, i18n.T("flag_face"))
 	c.Flags().StringSliceVar(&only, "only", nil, i18n.T("flag_only"))
 	c.Flags().DurationVar(&untilReady, "until-ready", 0, i18n.T("flag_until_ready"))
 	// ./run stop and ./run apps keep working as before (aliases of ./stop and ./apps).
@@ -148,6 +155,9 @@ func statusCmd() *cobra.Command {
 			ui.Section(i18n.T("panel_section_infra"))
 			for _, s := range catalog.InfraServices {
 				h := health[s.Service]
+				if s.Optional && h == "" && !w.Settings.Face {
+					continue // off by default: shown only when turned on or still around
+				}
 				if h == "" {
 					h = "stopped"
 				}
