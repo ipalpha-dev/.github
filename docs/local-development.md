@@ -37,7 +37,8 @@ Windows). Something wrong? `./doctor` lists what is missing with the fix for eac
    until the repo has one). Re-runs and `./pull` only **add missing keys** and fill blanks; local values are
    never overwritten — except notifications, which always go to Mailpit locally.
 6. **First sign-in**: your name and mobile number become the local superuser. Codes arrive in Mailpit.
-7. **AI for `./publish`**: any installed coding CLI, any model, or your own command (see below).
+7. **AI for `./publish`**: pick one of the coding CLIs already installed (all presets are listed only when none is),
+   then pick its model from the list the CLI itself reports — no slug to type. Or your own command (see below).
 8. **Files**: `.ipalpha/` (settings, compose file, binary, logs) and the wrappers.
 9. **npm dependencies** (failures do not stop setup; `./run` retries).
 
@@ -106,6 +107,10 @@ AI · `-y` no confirmation · `./publish clean` wipes the decision cache. Also `
 ### AI configuration
 
 `./ipalpha ai` (menu, tests the choice), `./ipalpha ai set <cli> [model]`, `./ipalpha ai test`.
+
+Models come from the CLI: `pi --list-models`, `codex debug models`, `opencode models`, `grok models`,
+`ollama list`; `claude`, `gemini` and `copilot` have no list command, so a known list is offered. The list
+filters with `/`; "Other" still lets you type an id, and typing is the fallback when the list cannot be read.
 
 | Preset | Command used | Model examples |
 | --- | --- | --- |

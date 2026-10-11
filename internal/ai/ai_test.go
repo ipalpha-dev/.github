@@ -80,3 +80,52 @@ func TestPresetsArgs(t *testing.T) {
 		}
 	}
 }
+
+func TestParseModelLists(t *testing.T) {
+	cases := []struct {
+		name string
+		got  []string
+		want string
+	}{
+		{"pi", parseTable(true)("provider  model  context\ncpamc  gpt-6-sol  1M\nollama-native  qwen3:8b  32K\n"), "cpamc/gpt-6-sol|ollama-native/qwen3:8b"},
+		{"ollama", parseTable(false)("NAME  ID  SIZE\nqwen2.5:3b  357c  1.9 GB  7 weeks ago\n"), "qwen2.5:3b"},
+		{"opencode", parseLines("cpamc/glm-5.3\n\ncpamc/gpt-6-luna\n"), "cpamc/glm-5.3|cpamc/gpt-6-luna"},
+		{"grok", parseBullets("You are not authenticated.\n\nDefault model: x\n\nAvailable models:\n  - grok-4.7\n  * gpt-6.1-sol (default)\n"), "grok-4.7|gpt-6.1-sol"},
+		{"codex", parseCodex(`{"models":[{"slug":"gpt-6-sol","visibility":"list"},{"slug":"gpt-reserve","visibility":"hide"},{"slug":"gpt-5"}]}`), "gpt-6-sol|gpt-5"},
+	}
+	for _, c := range cases {
+		if strings.Join(c.got, "|") != c.want {
+			t.Errorf("%s: %q", c.name, c.got)
+		}
+	}
+	for _, p := range Presets {
+		if p.ListArgs == nil && len(p.Known) == 0 {
+			t.Errorf("%s has no way to offer models", p.ID)
+		}
+		if p.ListArgs != nil && p.Parse == nil {
+			t.Errorf("%s lists models without a parser", p.ID)
+		}
+	}
+}
+
+// ListModels reads the CLI's own list and drops duplicates.
+func TestListModels(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("uses a POSIX shell script")
+	}
+	dir := t.TempDir()
+	script := filepath.Join(dir, "fake-cli")
+	os.WriteFile(script, []byte("#!/bin/sh\nprintf 'a/m1\\na/m2\\na/m1\\n'\n"), 0o755)
+	got, err := ListModels(Preset{Command: script, ListArgs: []string{"models"}, Parse: parseLines})
+	if err != nil || strings.Join(got, "|") != "a/m1|a/m2" {
+		t.Fatalf("%q %v", got, err)
+	}
+	empty := filepath.Join(dir, "empty-cli")
+	os.WriteFile(empty, []byte("#!/bin/sh\nexit 0\n"), 0o755)
+	if _, err := ListModels(Preset{Command: empty, ListArgs: []string{"models"}, Parse: parseLines}); err == nil {
+		t.Fatal("an empty list must be an error so setup falls back to typing")
+	}
+	if got, _ := ListModels(Preset{Known: []string{"opus", "sonnet"}}); len(got) != 2 {
+		t.Fatalf("known list: %q", got)
+	}
+}

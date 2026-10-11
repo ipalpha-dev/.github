@@ -63,6 +63,10 @@ func Select(title, desc string, opts []Option, def string) (string, error) {
 	if desc != "" {
 		sel.Description(desc)
 	}
+	// Long lists (hundreds of models) scroll inside a fixed window instead of overflowing the terminal.
+	if len(opts) > 14 {
+		sel.Height(18)
+	}
 	err := run(huh.NewForm(huh.NewGroup(sel)))
 	return value, err
 }

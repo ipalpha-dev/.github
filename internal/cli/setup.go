@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -408,14 +409,15 @@ func chooseAI(w *workspace.Workspace, yes, _ bool) error {
 		return w.Save()
 	}
 	ui.Info(i18n.T("ai_explain"))
+	// Only the CLIs already on this computer; every preset only when none is installed.
 	var opts []ui.Option
-	seen := map[string]bool{}
+	desc := i18n.T("ai_choose_desc")
 	for _, p := range installed {
 		opts = append(opts, ui.Option{Value: p.ID, Label: p.Name, Hint: "✔ " + i18n.T("ai_installed")})
-		seen[p.ID] = true
 	}
-	for _, p := range ai.Presets {
-		if !seen[p.ID] {
+	if len(installed) == 0 {
+		desc = i18n.T("ai_choose_desc_none")
+		for _, p := range ai.Presets {
 			opts = append(opts, ui.Option{Value: p.ID, Label: p.Name, Hint: i18n.T("ai_not_installed_hint")})
 		}
 	}
@@ -423,14 +425,14 @@ func chooseAI(w *workspace.Workspace, yes, _ bool) error {
 		ui.Option{Value: "custom", Label: i18n.T("ai_custom"), Hint: i18n.T("ai_custom_hint")},
 		ui.Option{Value: "none", Label: i18n.T("ai_none_option"), Hint: i18n.T("ai_none_hint")})
 	def := s.AICLI
-	if def == "" {
+	if !hasOption(opts, def) {
 		def = "none"
 		if len(installed) > 0 {
 			def = installed[0].ID
 		}
 	}
 	for {
-		cli, err := ui.Select(i18n.T("ai_choose"), i18n.T("ai_choose_desc"), opts, def)
+		cli, err := ui.Select(i18n.T("ai_choose"), desc, opts, def)
 		if err != nil {
 			return err
 		}
@@ -469,9 +471,15 @@ func chooseAI(w *workspace.Workspace, yes, _ bool) error {
 		if cli == s.AICLI {
 			prevModel = s.AIModel
 		}
-		if cli != "custom" || strings.Contains(cfg.Command, "{model}") {
+		if cli == "custom" && strings.Contains(cfg.Command, "{model}") {
+			model, err := ui.Input(i18n.T("ai_model"), "", prevModel, nil)
+			if err != nil {
+				return err
+			}
+			cfg.Model = model
+		} else if cli != "custom" {
 			p, _ := ai.Find(cli)
-			model, err := ui.Input(i18n.T("ai_model"), i18n.T("ai_model_desc", p.Models), prevModel, nil)
+			model, err := chooseModel(p, prevModel)
 			if err != nil {
 				return err
 			}
@@ -508,6 +516,45 @@ func chooseAI(w *workspace.Workspace, yes, _ bool) error {
 		}
 		def = cli
 	}
+}
+
+func hasOption(opts []ui.Option, v string) bool {
+	for _, o := range opts {
+		if o.Value == v {
+			return true
+		}
+	}
+	return false
+}
+
+// modelOther is the select value that falls back to typing a model id.
+const modelOther = "\x00other"
+
+// chooseModel lists the models the CLI offers (the CLI's default first) so nobody has to type a
+// slug. Typing stays available as the last option, and is the fallback when the list is unreadable.
+func chooseModel(p ai.Preset, prev string) (string, error) {
+	var models []string
+	var listErr error
+	_ = ui.Spinner(i18n.T("ai_models_loading", p.Name), func() error { models, listErr = ai.ListModels(p); return nil })
+	if listErr != nil || len(models) == 0 {
+		if listErr != nil {
+			ui.Warning(i18n.T("ai_models_failed", p.Name, firstLine(listErr.Error())))
+		}
+		return ui.Input(i18n.T("ai_model"), i18n.T("ai_model_desc", p.Models), prev, nil)
+	}
+	opts := []ui.Option{{Value: "", Label: i18n.T("ai_default_model"), Hint: i18n.T("ai_model_default_hint")}}
+	if prev != "" && !slices.Contains(models, prev) {
+		opts = append(opts, ui.Option{Value: prev, Label: prev, Hint: i18n.T("ai_model_current")})
+	}
+	for _, m := range models {
+		opts = append(opts, ui.Option{Value: m, Label: m})
+	}
+	opts = append(opts, ui.Option{Value: modelOther, Label: i18n.T("ai_model_other")})
+	model, err := ui.Select(i18n.T("ai_model_choose", p.Name), i18n.T("ai_model_choose_desc", len(models)), opts, prev)
+	if err != nil || model != modelOther {
+		return model, err
+	}
+	return ui.Input(i18n.T("ai_model"), i18n.T("ai_model_desc", p.Models), prev, nil)
 }
 
 func firstLine(s string) string {

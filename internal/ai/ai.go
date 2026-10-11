@@ -25,37 +25,147 @@ type Preset struct {
 	Args     func(prompt, model string) []string
 	Stdin    bool // prompt goes through stdin (no argv length limits)
 	Install  string
-	Models   string // example model ids shown in setup
+	Models   string // example model ids shown when the list cannot be read
 	Login    string // how to sign in
 	NeedsKey bool
+	// ListArgs asks the CLI for the models it can use (nil = the CLI has no list command).
+	ListArgs []string
+	// Parse turns ListArgs' output into model ids.
+	Parse func(out string) []string
+	// Known models offered when the CLI has no list command.
+	Known []string
 }
 
 // Presets in the order offered at setup.
 var Presets = []Preset{
 	{ID: "pi", Name: "Pi", Command: "pi", Stdin: true,
 		Args:    func(_, m string) []string { return opt([]string{"-p", "--no-session"}, "--model", m) },
-		Install: "npm install -g @earendil-works/pi-coding-agent", Models: "anthropic/claude-sonnet-4-5, openai/gpt-5, openrouter/…", Login: "pi (then /login)"},
+		Install: "npm install -g @earendil-works/pi-coding-agent", Models: "anthropic/claude-sonnet-4-5, openai/gpt-5, openrouter/…", Login: "pi (then /login)",
+		ListArgs: []string{"--list-models"}, Parse: parseTable(true)},
 	{ID: "claude", Name: "Claude Code", Command: "claude", Stdin: true,
 		Args:    func(_, m string) []string { return opt([]string{"-p"}, "--model", m) },
-		Install: "npm install -g @anthropic-ai/claude-code", Models: "sonnet, opus, haiku", Login: "claude (first run signs in)"},
+		Install: "npm install -g @anthropic-ai/claude-code", Models: "sonnet, opus, haiku", Login: "claude (first run signs in)",
+		Known: []string{"opus", "sonnet", "haiku", "fable"}},
 	{ID: "codex", Name: "OpenAI Codex", Command: "codex", Stdin: true,
 		Args:    func(_, m string) []string { return opt([]string{"exec", "--skip-git-repo-check"}, "--model", m) },
-		Install: "npm install -g @openai/codex", Models: "gpt-5, gpt-5-codex, o4-mini", Login: "codex login"},
+		Install: "npm install -g @openai/codex", Models: "gpt-5, gpt-5-codex, o4-mini", Login: "codex login",
+		ListArgs: []string{"debug", "models"}, Parse: parseCodex},
 	{ID: "gemini", Name: "Gemini CLI", Command: "gemini", Stdin: true,
 		Args:    func(_, m string) []string { return opt([]string{"-p", " "}, "--model", m) },
-		Install: "npm install -g @google/gemini-cli", Models: "gemini-2.5-pro, gemini-2.5-flash", Login: "gemini (first run signs in)"},
+		Install: "npm install -g @google/gemini-cli", Models: "gemini-2.5-pro, gemini-2.5-flash", Login: "gemini (first run signs in)",
+		Known: []string{"gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite"}},
 	{ID: "opencode", Name: "OpenCode", Command: "opencode", Stdin: true,
 		Args:    func(_, m string) []string { return opt([]string{"run"}, "--model", m) },
-		Install: "npm install -g opencode-ai", Models: "provider/model (anthropic/claude-sonnet-4-5, ollama/qwen3…)", Login: "opencode auth login"},
+		Install: "npm install -g opencode-ai", Models: "provider/model (anthropic/claude-sonnet-4-5, ollama/qwen3…)", Login: "opencode auth login",
+		ListArgs: []string{"models"}, Parse: parseLines},
 	{ID: "copilot", Name: "GitHub Copilot CLI", Command: "copilot", Stdin: false,
 		Args:    func(p, m string) []string { return opt([]string{"-p", p}, "--model", m) },
-		Install: "npm install -g @github/copilot", Models: "claude-sonnet-4.5, gpt-5", Login: "copilot (then /login)"},
+		Install: "npm install -g @github/copilot", Models: "claude-sonnet-4.5, gpt-5", Login: "copilot (then /login)",
+		Known: []string{"claude-sonnet-4.5", "claude-sonnet-4", "gpt-5"}},
 	{ID: "grok", Name: "Grok CLI", Command: "grok", Stdin: false,
 		Args:    func(p, m string) []string { return opt([]string{"-p", p}, "--model", m) },
-		Install: "https://x.ai/cli", Models: "grok-4, grok-code-fast-1", Login: "grok login"},
+		Install: "https://x.ai/cli", Models: "grok-4, grok-code-fast-1", Login: "grok login",
+		ListArgs: []string{"models"}, Parse: parseBullets},
 	{ID: "ollama", Name: "Ollama (local, free)", Command: "ollama", Stdin: true,
 		Args:    func(_, m string) []string { return []string{"run", firstNonEmpty(m, "qwen3:8b")} },
-		Install: "https://ollama.com/download", Models: "qwen3:8b, llama3.1:8b, gemma3", Login: "ollama pull <model>"},
+		Install: "https://ollama.com/download", Models: "qwen3:8b, llama3.1:8b, gemma3", Login: "ollama pull <model>",
+		ListArgs: []string{"list"}, Parse: parseTable(false)},
+}
+
+// ListModels returns the models the CLI offers, read from the CLI itself when it can list them
+// (pi, codex, opencode, grok, ollama) and from a known list otherwise. Order is the CLI's own.
+func ListModels(p Preset) ([]string, error) {
+	if p.ListArgs == nil {
+		return append([]string(nil), p.Known...), nil
+	}
+	name, args := sys.UnwrapShim(p.Command, p.ListArgs)
+	out, errOut, err := sys.RunTimeout(30*time.Second, os.TempDir(), "", name, args...)
+	if err != nil {
+		if d := collapse(errOut); d != "" {
+			return nil, fmt.Errorf("%w — %s", err, d)
+		}
+		return nil, err
+	}
+	models := unique(p.Parse(stripANSI(out)))
+	if len(models) == 0 {
+		return nil, errors.New(i18n.T("ai_models_empty"))
+	}
+	return models, nil
+}
+
+func unique(in []string) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, s := range in {
+		if s = strings.TrimSpace(s); s != "" && !seen[s] {
+			seen[s] = true
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// parseTable reads a table with a header line; withProvider joins the first two columns as
+// provider/model (pi), otherwise the first column is the id (ollama).
+func parseTable(withProvider bool) func(string) []string {
+	return func(out string) []string {
+		var models []string
+		for i, line := range strings.Split(out, "\n") {
+			f := strings.Fields(line)
+			if i == 0 || len(f) == 0 || (withProvider && len(f) < 2) {
+				continue
+			}
+			if withProvider {
+				models = append(models, f[0]+"/"+f[1])
+			} else {
+				models = append(models, f[0])
+			}
+		}
+		return models
+	}
+}
+
+// parseLines reads one model id per line (opencode).
+func parseLines(out string) []string {
+	var models []string
+	for _, line := range strings.Split(out, "\n") {
+		if f := strings.Fields(line); len(f) == 1 {
+			models = append(models, f[0])
+		}
+	}
+	return models
+}
+
+// parseBullets reads "  - id" / "  * id (default)" lines (grok).
+func parseBullets(out string) []string {
+	var models []string
+	for _, line := range strings.Split(out, "\n") {
+		f := strings.Fields(line)
+		if len(f) >= 2 && (f[0] == "-" || f[0] == "*") {
+			models = append(models, f[1])
+		}
+	}
+	return models
+}
+
+// parseCodex reads `codex debug models` (JSON catalog) and keeps the models Codex itself lists.
+func parseCodex(out string) []string {
+	var cat struct {
+		Models []struct {
+			Slug       string `json:"slug"`
+			Visibility string `json:"visibility"`
+		} `json:"models"`
+	}
+	if json.Unmarshal([]byte(out), &cat) != nil {
+		return nil
+	}
+	var models []string
+	for _, m := range cat.Models {
+		if m.Visibility == "" || m.Visibility == "list" {
+			models = append(models, m.Slug)
+		}
+	}
+	return models
 }
 
 func opt(base []string, flag, value string) []string {
