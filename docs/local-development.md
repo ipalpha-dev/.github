@@ -198,7 +198,7 @@ migrated by their next `./pull`.
 | developers-api | 3009 | Mailpit | 8025 |
 | places-api | 3011 | RustFS (S3) | 9000 |
 | photos-api | 3010 | Face service (optional) | 8000 |
-| documents-api | 3012 | | |
+| documents-api | 3012 | schedule-api | 3013 |
 
 ## Core and apps
 

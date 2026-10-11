@@ -49,6 +49,7 @@ var Repos = []Repo{
 	{Name: "places-api", Kind: KindAPI, Port: 3011, Display: "Places"},
 	{Name: "photos-api", Kind: KindAPI, Port: 3010, Display: "Photos"},
 	{Name: "documents-api", Kind: KindAPI, Port: 3012, Display: "Documents"},
+	{Name: "schedule-api", Kind: KindAPI, Port: 3013, Display: "Schedule"},
 	{Name: "notifications-api", Kind: KindAPI, Port: 3004, Display: "Notifications"},
 	{Name: "auth-api", Kind: KindAPI, Port: 3005, Display: "Auth"},
 	{Name: "forms-api", Kind: KindAPI, App: "forms", Port: 3006, Display: "Forms API"},
