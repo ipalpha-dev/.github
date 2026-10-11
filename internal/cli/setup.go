@@ -227,7 +227,13 @@ func ensureTools(yes bool) error {
 			label = ui.Warn.Render("○ " + i18n.T("tool_optional_missing"))
 		}
 		ui.Item(t.Name, label+ui.Muted.Render("  "+firstLine(st.Err.Error())))
-		for {
+		// Unattended (--yes or no terminal) the default is taken once: nobody can install the tool in between,
+		// so a second round would repeat the same answer forever.
+		unattended := yes || !ui.Interactive()
+		for attempt := 0; ; attempt++ {
+			if unattended && attempt > 0 {
+				return toolProblem(t, mgr)
+			}
 			argv := tools.InstallCommand(mgr, t)
 			opts := []ui.Option{}
 			if argv != nil {
