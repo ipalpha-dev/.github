@@ -65,7 +65,7 @@ jobs:
           git config --global user.name ci; git config --global user.email ci@example.invalid
           git config --global init.defaultBranch master
           $o = Join-Path $env:RUNNER_TEMP origins
-          $repos = 'deployment','shared-js','shared-ui','projects-api','persons-api','organizations-api','places-api','notifications-api','auth-api','forms-api','ai-api','developers-api','dispatch-api','auth-webapp','forms-webapp','oikos-webapp','developers-webapp'
+          $repos = 'deployment','shared-js','projects-api','persons-api','organizations-api','places-api','notifications-api','auth-api','forms-api','ai-api','developers-api','dispatch-api','auth-webapp','forms-webapp','oikos-webapp','developers-webapp'
           foreach ($r in $repos) {
             git init -q --bare "$o\$r.git"
             $s = Join-Path $env:RUNNER_TEMP "seed\$r"; git clone -q "$o\$r.git" $s

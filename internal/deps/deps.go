@@ -1,4 +1,4 @@
-// Package deps installs npm dependencies in parallel, building shared-js/shared-ui first because the
+// Package deps installs npm dependencies in parallel, building shared-js first because the
 // services copy them (install-links), and refreshes those copies after a rebuild.
 package deps
 
@@ -75,7 +75,7 @@ func NeedsInstall(dir string) bool {
 	if lock := filepath.Join(dir, "package-lock.json"); exists(lock) && mtime(lock).After(mtime(nm)) {
 		return true
 	}
-	for _, lib := range []string{"shared-js", "shared-ui"} {
+	for _, lib := range []string{"shared-js"} {
 		copyDir := filepath.Join(nm, "@ipalpha", lib)
 		if exists(copyDir) && !exists(filepath.Join(copyDir, "dist")) {
 			return true
@@ -177,7 +177,7 @@ func runTask(t Task, logDir string) error {
 	defer f.Close()
 	var args []string
 	if t.Action == "install" {
-		for _, lib := range []string{"shared-js", "shared-ui"} {
+		for _, lib := range []string{"shared-js"} {
 			os.RemoveAll(filepath.Join(t.Dir, "node_modules", "@ipalpha", lib))
 		}
 		args = []string{"install", "--no-audit", "--no-fund"}
@@ -254,7 +254,7 @@ func npmFix(out string, t Task) []string {
 
 // RefreshSharedCopies copies a rebuilt shared library's dist into the consumers that copied it.
 func RefreshSharedCopies(w *workspace.Workspace, progress func(string)) {
-	for _, lib := range []string{"shared-js", "shared-ui"} {
+	for _, lib := range []string{"shared-js"} {
 		src := filepath.Join(w.Repo(lib), "dist")
 		if !exists(src) {
 			continue

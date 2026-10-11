@@ -137,7 +137,7 @@ func newEnv(t *testing.T) *env {
 	dep := filepath.Join(e.seed, "deployment")
 	baseline := map[string]any{"schemaVersion": 1, "release": "core-deploy-1", "services": services,
 		"deployment": map[string]string{"commit": git(t, dep, "rev-parse", "HEAD")},
-		"libraries":  map[string]any{"shared-ui": map[string]string{"commit": git(t, filepath.Join(e.seed, "shared-ui"), "rev-parse", "HEAD")}}}
+		"libraries":  map[string]any{"shared-js": map[string]string{"commit": git(t, filepath.Join(e.seed, "shared-js"), "rev-parse", "HEAD")}}}
 	data, _ := json.MarshalIndent(baseline, "", "  ")
 	write(t, filepath.Join(dep, "releases", "core-latest.json"), string(data))
 	git(t, dep, "add", "-A")

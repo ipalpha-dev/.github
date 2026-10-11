@@ -23,7 +23,7 @@ type Kind string
 const (
 	KindAPI        Kind = "api"        // NestJS backend run with node (has .env, GET /live + /ready)
 	KindWeb        Kind = "web"        // standalone Vite web app
-	KindLibrary    Kind = "library"    // shared-js / shared-ui
+	KindLibrary    Kind = "library"    // shared-js
 	KindDeployment Kind = "deployment" // k8s manifests
 	KindOptional   Kind = "optional"   // apps outside core with their own registry/TeamCity (Acampa Kids)
 )
@@ -43,7 +43,6 @@ type Repo struct {
 var Repos = []Repo{
 	{Name: "deployment", Kind: KindDeployment},
 	{Name: "shared-js", Kind: KindLibrary},
-	{Name: "shared-ui", Kind: KindLibrary},
 	{Name: "projects-api", Kind: KindAPI, Port: 3001, Display: "Projects"},
 	{Name: "persons-api", Kind: KindAPI, Port: 3002, Display: "Persons"},
 	{Name: "organizations-api", Kind: KindAPI, Port: 3003, Display: "Organizations"},

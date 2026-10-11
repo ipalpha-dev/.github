@@ -51,7 +51,7 @@ Non-interactive (CI): `ipalpha setup <folder> --yes` with `IPALPHA_SUPERUSER_PHO
    (`.env` files keep the defaults). The panel says which moved and who held the port. The infra keeps a
    moved port across runs while its container lives. Two workspaces can run at the same time.
 3. Infra containers (MongoDB, Redis, RabbitMQ + UI, Mailpit) up and healthy (`docker compose --wait`).
-4. `.env` completion, npm installs (shared-js/shared-ui built first, consumers' copies refreshed).
+4. `.env` completion, npm installs (shared-js built first, consumers' copies refreshed).
 5. auth-api signing keys, then the **local** auth database is reconciled: drifted client secrets of the local
    services and the `localhost` origins/callbacks of the built-in apps (so sign-in keeps working when a web
    port moved). Only loopback MongoDB; non-loopback entries are never touched.
@@ -196,8 +196,8 @@ either end, every host ≤ 63 chars.
 | `https://acampa-ipalpha-<slug>.kevyn.com.br` | Acampa Kids — only when an `acampa-kids-*` repo changed |
 
 How it works: main checkouts are never touched (`git worktree`); unchanged services run the baseline images
-(`deployment/releases/core-latest.json`); `shared-js` changes rebuild every core API, `shared-ui` every core
-web app. `./publish` pushes `previews/<slug>/release.json` to deployment master (a throwaway worktree, retried
+(`deployment/releases/core-latest.json`); `shared-js` changes rebuild every core API
+(each web app owns its UI kit, so no library rebuilds them). `./publish` pushes `previews/<slug>/release.json` to deployment master (a throwaway worktree, retried
 on races, CI fields kept) and waits for CI's record commit — no CI token on laptops. Pushes use
 `--force-with-lease` against the tip this workspace pushed, so a teammate's push is never overwritten.
 `.env` files are kept out of commits. Acampa repos start at the `v<version>` tag their production manifest

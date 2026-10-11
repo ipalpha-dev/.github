@@ -250,7 +250,7 @@ func (r Record) Repositories() map[string]map[string]any {
 func str(v any) string { s, _ := v.(string); return s }
 
 // Changed services: featureCommit ≠ baseCommit plus the dependency closure (shared-js → every core
-// API, shared-ui → every core web app). Apps outside core join only when one of their repos changed.
+// API). Apps outside core join only when one of their repos changed.
 func (r Record) Changed() []string {
 	repos := r.Repositories()
 	changed := map[string]bool{}
@@ -268,13 +268,10 @@ func (r Record) Changed() []string {
 		if changed["shared-js"] && strings.HasSuffix(k, "-api") {
 			changed[k] = true
 		}
-		if changed["shared-ui"] && strings.HasSuffix(k, "-webapp") {
-			changed[k] = true
-		}
 	}
 	var out []string
 	for k := range changed {
-		if k != "shared-js" && k != "shared-ui" && k != "deployment" {
+		if k != "shared-js" && k != "deployment" {
 			out = append(out, k)
 		}
 	}
