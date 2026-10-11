@@ -50,6 +50,7 @@ go run ./cmd/ipalpha   # rodar sem instalar
 
 Código em `internal/` (um pacote por assunto), catálogo de repositórios e portas em
 `internal/catalog`, textos nos 5 idiomas em `internal/i18n` (um teste falha se faltar algum),
-arquivos gerados no workspace em `internal/assets/files`. O CI testa em Windows, Linux e macOS e
-publica os binários a cada push em `master`; os desenvolvedores recebem no próximo `./pull`.
+arquivos gerados no workspace em `internal/assets/files`. O TeamCity
+(`Tooling — Test and release`, em `deployment/.teamcity`) testa no Linux, compila para Windows e macOS e publica
+os binários a cada push em `master`; os desenvolvedores recebem no próximo `./pull`. Sem GitHub Actions.
 Referência completa: [docs/local-development.md](docs/local-development.md).
