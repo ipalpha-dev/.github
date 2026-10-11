@@ -1,6 +1,6 @@
 // Package publish is ./publish: pick the changed repositories, let the configured AI propose the
 // semver bump and commit message (or type them when the AI is unavailable), then commit, tag
-// libraries, push, publish shared-js to npm, build images and bump deployment.
+// libraries, push, publish libraries to npm, build images and bump deployment.
 package publish
 
 import (
@@ -377,8 +377,8 @@ func git(dir string, args ...string) error {
 // Apply commits, tags, pushes and ships one repository.
 func Apply(w *workspace.Workspace, p Plan, ciMode bool) error {
 	dir := p.Dir
-	if p.Repo.Name == "shared-js" && p.Bump != "none" && !npmLoggedIn(dir) {
-		return ui.NewProblem(i18n.T("publish_npm_step"), i18n.T("publish_npm_login"), "npm login")
+	if p.Repo.Kind == catalog.KindLibrary && p.Bump != "none" && !npmLoggedIn(dir) {
+		return ui.NewProblem(i18n.T("publish_npm_step", p.Repo.Name), i18n.T("publish_npm_login"), "npm login")
 	}
 	if p.Bump != "none" {
 		if err := SetVersion(dir, p.Next); err != nil {
@@ -416,10 +416,8 @@ func Apply(w *workspace.Workspace, p Plan, ciMode bool) error {
 		return nil
 	}
 	switch {
-	case p.Repo.Name == "shared-js":
-		return NpmPublish(dir)
 	case p.Repo.Kind == catalog.KindLibrary:
-		return nil
+		return NpmPublish(p.Repo.Name, dir)
 	}
 	if !ciMode {
 		if err := BuildImage(w, p.Repo, p.Next, dir); err != nil {
@@ -429,15 +427,15 @@ func Apply(w *workspace.Workspace, p Plan, ciMode bool) error {
 	return BumpDeployment(w, p.Repo.Name, p.Next)
 }
 
-// NpmPublish publishes shared-js (dist rebuilt by prepublishOnly; deleted modules never survive).
-func NpmPublish(dir string) error {
+// NpmPublish publishes a library (dist rebuilt by prepublishOnly; deleted modules never survive).
+func NpmPublish(name, dir string) error {
 	if !npmLoggedIn(dir) {
-		return ui.NewProblem(i18n.T("publish_npm_step"), i18n.T("publish_npm_login"), "npm login")
+		return ui.NewProblem(i18n.T("publish_npm_step", name), i18n.T("publish_npm_login"), "npm login")
 	}
 	os.RemoveAll(filepath.Join(dir, "dist"))
 	res := sys.Cmd{Dir: dir, Env: sys.NodeEnv(), Name: sys.Npm(), Args: []string{"publish"}, Log: ui.LogWriter()}.Run()
 	if res.Err != nil {
-		return &ui.Problem{Step: i18n.T("publish_npm_step"), Cause: strings.Join(ui.Tail(res.Output, 1), ""), Tail: ui.Tail(res.Output, 12)}
+		return &ui.Problem{Step: i18n.T("publish_npm_step", name), Cause: strings.Join(ui.Tail(res.Output, 1), ""), Tail: ui.Tail(res.Output, 12)}
 	}
 	return nil
 }

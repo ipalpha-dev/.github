@@ -96,7 +96,7 @@ no persistent volume. Use synthetic recipients only.
    changes never bump. When the AI fails, the engine's own error is shown and you choose the bump and type
    the message.
 4. Confirm → `package.json`/lock version, commit, push; libraries are tagged `v<version>` here, image repos by
-   CI when they reach production. shared-js → npm (`npm login` checked before any commit); images are built
+   CI when they reach production. libraries → npm (`npm login` checked before any commit); images are built
    and pushed (Docker or Apple container) and `deployment` image tags bumped.
 
 `-d` shows the plan and offers to apply exactly that plan · `-f <repo>` one repo · `--engine/--model` one-off

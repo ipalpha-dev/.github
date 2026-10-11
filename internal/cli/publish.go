@@ -282,10 +282,11 @@ func publishable() []string {
 }
 
 func npmOnly(w *workspace.Workspace, folder string, dry bool) error {
-	if folder != "shared-js" {
+	r, ok := catalog.Get(folder)
+	if !ok || r.Kind != catalog.KindLibrary {
 		return ui.NewProblem(i18n.T("cmd_publish"), i18n.T("publish_npm_only_folder"), "./publish --npm-only -f shared-js")
 	}
-	dir := w.Repo("shared-js")
+	dir := w.Repo(folder)
 	v := publish.CurrentVersion(dir)
 	if st, _ := sys.Git(dir, "status", "--porcelain"); st != "" {
 		return ui.NewProblem(i18n.T("cmd_publish"), i18n.T("publish_must_be_clean", folder))
@@ -293,13 +294,13 @@ func npmOnly(w *workspace.Workspace, folder string, dry bool) error {
 	tag, _ := sys.Git(dir, "rev-parse", "v"+v+"^{commit}")
 	head, _ := sys.Git(dir, "rev-parse", "HEAD")
 	if tag == "" || tag != head {
-		return ui.NewProblem(i18n.T("cmd_publish"), i18n.T("publish_head_tag", v))
+		return ui.NewProblem(i18n.T("cmd_publish"), i18n.T("publish_head_tag", folder, v))
 	}
-	ui.Info(i18n.T("publish_npm_only_plan", v))
+	ui.Info(i18n.T("publish_npm_only_plan", folder, v))
 	if dry {
 		return nil
 	}
-	return publish.NpmPublish(dir)
+	return publish.NpmPublish(folder, dir)
 }
 
 func resume(w *workspace.Workspace, folder string, dry, ci bool) error {
