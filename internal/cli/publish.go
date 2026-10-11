@@ -300,7 +300,15 @@ func npmOnly(w *workspace.Workspace, folder string, dry bool) error {
 	if dry {
 		return nil
 	}
-	return publish.NpmPublish(w.Settings.Org, folder, v, dir)
+	// A tag new to origin triggers the TeamCity publish; one already there needs a manual run.
+	if remote, _ := sys.Git(dir, "ls-remote", "--tags", "origin", "refs/tags/v"+v); remote != "" {
+		ui.Info(i18n.T("publish_npm_only_rerun", folder, v, publish.NpmBuildURL(folder)))
+		return nil
+	}
+	if res := (sys.Cmd{Name: "git", Args: []string{"-C", dir, "push", "origin", "v" + v}, Log: ui.LogWriter()}).Run(); res.Err != nil {
+		return &ui.Problem{Step: "git push origin v" + v + " (" + folder + ")", Tail: ui.Tail(res.Output, 6)}
+	}
+	return publish.NpmPublish(folder, v)
 }
 
 func resume(w *workspace.Workspace, folder string, dry, ci bool) error {

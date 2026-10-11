@@ -96,7 +96,7 @@ no persistent volume. Use synthetic recipients only.
    changes never bump. When the AI fails, the engine's own error is shown and you choose the bump and type
    the message.
 4. Confirm → `package.json`/lock version, commit, push; libraries are tagged `v<version>` here, image repos by
-   CI when they reach production. libraries → npm through GitHub Actions Trusted Publishing (no npm token, no one-time password); images are built
+   CI when they reach production. libraries → npm by TeamCity (the pushed `v<version>` tag triggers "<lib> — Publish to npm"; no npm login on your machine); images are built
    and pushed (Docker or Apple container) and `deployment` image tags bumped.
 
 `-d` shows the plan and offers to apply exactly that plan · `-f <repo>` one repo · `--engine/--model` one-off

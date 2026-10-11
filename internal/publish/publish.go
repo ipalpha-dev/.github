@@ -409,7 +409,7 @@ func Apply(w *workspace.Workspace, p Plan, ciMode bool) error {
 	}
 	switch {
 	case p.Repo.Kind == catalog.KindLibrary:
-		return NpmPublish(w.Settings.Org, p.Repo.Name, p.Next, dir)
+		return NpmPublish(p.Repo.Name, p.Next)
 	}
 	if !ciMode {
 		if err := BuildImage(w, p.Repo, p.Next, dir); err != nil {
@@ -419,17 +419,25 @@ func Apply(w *workspace.Workspace, p Plan, ciMode bool) error {
 	return BumpDeployment(w, p.Repo.Name, p.Next)
 }
 
-// NpmPublish ships a library through GitHub Actions Trusted Publishing (OIDC): no npm token
-// and no one-time password. The workflow checks out the tag and runs npm publish.
-func NpmPublish(org, name, version, dir string) error {
-	res := sys.Cmd{Dir: dir, Name: "gh", Args: []string{
-		"workflow", "run", "publish.yml", "--ref", "master", "-f", "version=" + version,
-	}, Log: ui.LogWriter()}.Run()
-	if res.Err != nil {
-		return &ui.Problem{Step: i18n.T("publish_npm_step", name), Cause: strings.Join(ui.Tail(res.Output, 1), ""),
-			Tail: ui.Tail(res.Output, 12), Fix: []string{i18n.T("publish_npm_trusted_fix", org+"/"+name)}}
+// TeamCityURL is the project's CI. Libraries reach npm only from there (no GitHub Actions).
+const TeamCityURL = "https://devops.kevyn.com.br"
+
+// NpmBuildURL is the TeamCity build that publishes a library: "<lib> — Publish to npm" in
+// Ip Alpha / Core (deployment/.teamcity/settings.kts), triggered by the library's v<version> tags.
+func NpmBuildURL(name string) string {
+	short := ""
+	for _, part := range strings.Split(name, "-") {
+		if part != "" {
+			short += strings.ToUpper(part[:1]) + part[1:]
+		}
 	}
-	ui.Info(i18n.T("publish_npm_trusted_started", name, version))
+	return TeamCityURL + "/buildConfiguration/IpAlpha_Core_" + short + "_Publish"
+}
+
+// NpmPublish: the v<version> tag is already on origin; TeamCity publishes it to npm. Nothing runs
+// here, so a release needs no npm login, token or one-time password on the developer's machine.
+func NpmPublish(name, version string) error {
+	ui.Info(i18n.T("publish_npm_teamcity", name, version, NpmBuildURL(name)))
 	return nil
 }
 

@@ -53,3 +53,9 @@ func TestSetVersionKeepsFormatting(t *testing.T) {
 		t.Fatalf("lock:\n%s", gotLock)
 	}
 }
+
+func TestNpmBuildURL(t *testing.T) {
+	if got := NpmBuildURL("shared-js"); got != "https://devops.kevyn.com.br/buildConfiguration/IpAlpha_Core_SharedJs_Publish" {
+		t.Fatalf("NpmBuildURL = %s", got)
+	}
+}
