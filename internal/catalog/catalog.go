@@ -31,6 +31,7 @@ const (
 	KindLibrary    Kind = "library"    // shared-js
 	KindDeployment Kind = "deployment" // k8s manifests
 	KindOptional   Kind = "optional"   // apps outside core with their own registry/TeamCity (Acampa Kids)
+	KindDesktop    Kind = "desktop"    // native desktop app (Xcode / Visual Studio): cloned and given feature worktrees only; no port, no .env, not run, not published
 	KindService    Kind = "service"    // core service that is not a Node app: own image built by Core (face-service, Python); not a ./run process
 )
 
@@ -66,6 +67,9 @@ var Repos = []Repo{
 	{Name: "ai-api", Kind: KindAPI, Port: 3008, Display: "AI"},
 	{Name: "developers-api", Kind: KindAPI, Port: 3009, Display: "Developers"},
 	{Name: "services-photo-api", Kind: KindAPI, App: "services-photo", Port: 3016, Display: "Services Photo API"},
+	// Services Photo desktop apps (private repos): ./pull and ./feature handle them, ./run and ./publish never do.
+	{Name: "services-photo-macos", Kind: KindDesktop, App: "services-photo", Display: "Services Photo macOS"},
+	{Name: "services-photo-windows", Kind: KindDesktop, App: "services-photo", Display: "Services Photo Windows"},
 	// Services Kids (app outside core).
 	{Name: "services-kids-api", Kind: KindAPI, App: "services-kids", Port: 3017, Display: "Services Kids API"},
 	// Virtual assistant (core). Repo name has no "-api" suffix.
@@ -176,7 +180,7 @@ func (r Repo) HasImage() bool {
 // SkippedWhenMissing: repositories a developer may not have (no access, or not created yet) are skipped
 // quietly by ./pull, ./doctor and ./feature instead of failing them.
 func (r Repo) SkippedWhenMissing() bool {
-	return r.Kind == KindOptional || r.Kind == KindService
+	return r.Kind == KindOptional || r.Kind == KindService || r.Kind == KindDesktop
 }
 
 // Publishable by ./publish (release mode): core services, web apps, libraries and the images of

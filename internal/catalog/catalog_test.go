@@ -36,9 +36,24 @@ func TestDrivePortsAreUniqueAndCore(t *testing.T) {
 	}
 }
 
-func TestVirtualAssistantIsACoreAPIWithoutRemote(t *testing.T) {
+func TestVirtualAssistantIsACoreAPI(t *testing.T) {
 	r, ok := Get("virtual-assistant")
 	if !ok || r.Kind != KindAPI || r.Port != 3019 || r.Rel() != "core/virtual-assistant" || r.SkippedWhenMissing() {
 		t.Fatalf("virtual-assistant: %+v", r)
+	}
+}
+
+func TestServicesPhotoDesktopReposAreCloneOnly(t *testing.T) {
+	for name, rel := range map[string]string{
+		"services-photo-macos":   "apps/services-photo/services-photo-macos",
+		"services-photo-windows": "apps/services-photo/services-photo-windows",
+	} {
+		r, ok := Get(name)
+		if !ok || r.Kind != KindDesktop || r.Rel() != rel || r.Port != 0 {
+			t.Fatalf("%s: %+v", name, r)
+		}
+		if r.Runs() || r.HasEnv() || r.HasImage() || r.Publishable() || !r.SkippedWhenMissing() {
+			t.Fatalf("%s must be clone-only: %+v", name, r)
+		}
 	}
 }
