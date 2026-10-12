@@ -105,8 +105,9 @@ Non-interactive (CI): `ipalpha setup <folder> --yes` with `IPALPHA_SUPERUSER_PHO
    then the `photos`, `church-email-images` and `documents` buckets are created in RustFS when missing (one-shot
    `rustfs-init`, safe to repeat).
 4. `.env` completion, npm installs (shared-js built first, consumers' copies refreshed).
-5. auth-api signing keys, then the **local** auth database is reconciled: drifted client secrets of the local
-   services and the `localhost` origins/callbacks of the built-in apps (so sign-in keeps working when a web
+5. auth-api signing keys, then the **local** auth database is reconciled: drifted client secrets, `allowedScopes`
+   (exactly the `SEED_CLIENTS_JSON` entry, so new grants reach clients auth-api seeded earlier) and the `appId` of
+   app-bound clients of the local services and the `localhost` origins/callbacks of the built-in apps (so sign-in keeps working when a web
    port moved). Only loopback MongoDB; non-loopback entries are never touched.
 6. Every API and the remembered web apps start at once — nothing waits on a peer. Each API's `GET /ready`
    drives its dot: ● ready, ◐ starting/not ready, ✖ failed, ○ stopped.
@@ -170,8 +171,27 @@ Do not publish a preview for this pre-launch change; verify locally.
 
 Audience targets are multiple `{projectId,roleKeys?}` entries. Permissions come live from
 `GET /projects/:id/me/access`; the picker uses `GET /projects/me/managed`. Current-edition changes
-change eligibility. The Forms provider contract is `GET /projects/:projectId/forms`, with paginated,
-caller-filtered cards. Oikos's provider registry belongs in its runtime configuration, not projects-api.
+change eligibility. Forms exposes paginated `/projects/:projectId/forms` for answerable discovery and `/forms/managed`
+for administrative metadata from every creator. Oikos registers the optional provider in runtime
+`projectContentProviders`; local `VITE_PROJECT_CONTENT_PROVIDERS_JSON` is emitted by `./run` and honors
+overrides (`[]` disables it). The app-owned provider ingress and Vite proxy serve `/api/forms` on Oikos,
+including the websocket at `/api/forms/socket.io`.
+
+Never forward Oikos's broad tokens or its Projects token to the provider. Oikos sends its auth proof
+only to auth-api `POST /oauth/delegate` and forwards only a one-project, one-audience, metadata-only
+`delegated_access` JWT (role person, ≤60 s, capped by the proof expiry). Existing public JWKS verifies
+it; no browser/shared secret, new system permission, database collection or shared-js release.
+Required auth `PROJECT_CONTENT_DELEGATES_JSON` matches source app/entry, target app, audience and
+`project-content:read` scope. Forms requires exact `PROJECT_CONTENT_ORIGINS`. Setup/pull add missing
+keys and preserve local values. Generic run/feature host/port rewriting handles provider records and
+websocket origins; publish consumes these canonical manifests without a new catalog service/port.
+
+The provider owns Socket.IO and own Redis pub/sub of affected project ids; no dispatch/core business
+integration. `project-content-invalidated` is an empty invalidation, not form/person data. Reconnects
+refetch authoritative lists; credential expiry/permission refusal clears them and a provider outage
+never prevents loading the project. Delegation is renewed lazily while the section is visible, roughly
+once per 50 s. Oikos's public catalog includes the full provider family and phone/desktop rare states.
+No feature preview or production deployment is authorized by implementing this change.
 
 ### Local notifications
 
@@ -235,7 +255,8 @@ Env added for this (`./pull` and `setup` only add missing keys and fill blanks; 
   `SIGN_ENTRY_POINT_ID`, `SIGN_WEBAPP_URL=http://localhost:5113`, optional `SIGN_WEBHOOK_SECRET` (empty = app channel only).
 - documents-api: `PERSONS_API_URL` / `PROJECTS_API_URL` + audiences, `EXCHANGE_PERSON_DELETED`,
   `EXCHANGE_SIGNED_DOCUMENTS_CHANGED`, `SIGNING_MAX_AUTH_AGE_SEC`, `S3_*` (`S3_BUCKET=documents`; keys follow
-  `.ipalpha/.env` like photos-api), `SEAL_DEV_SELF_SIGNED=true`, empty `SEAL_CERT_*`, `SIGN_WEBAPP_URL`.
+  `.ipalpha/.env` like photos-api), `SEAL_DEV_SELF_SIGNED=true`, empty `SEAL_CERT_*`, `SIGN_WEBAPP_URL`,
+  `TRUST_PROXY_HOPS=1`.
 - dispatch-api: `EXCHANGE_SIGNED_DOCUMENTS_CHANGED`; `http://localhost:5113` is appended to an existing
   `SOCKET_ALLOWED_ORIGINS` (the one value `./pull` extends).
 - notifications-api: `SIGN_APP_ID`, `SIGN_WEBAPP_URL`. persons-api: `SIGNING_FIELDS_CALLER_SERVICE_IDS=documents-api`.

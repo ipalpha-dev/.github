@@ -499,7 +499,7 @@ func bootstrapKeys(w *workspace.Workspace, rw ports.Rewriter, plan ports.Plan) e
 
 var builtinEntries = []string{"OIKOS", "FORMS_CREATOR", "FORMS_RESPONDENT", "DEVELOPERS", "SIGN"}
 
-// reconcileDB syncs drifted local client secrets and the loopback addresses of built-in apps.
+// reconcileDB syncs the local seeded clients (secret, allowedScopes, appId) and the loopback addresses of built-in apps.
 func reconcileDB(w *workspace.Workspace, rw ports.Rewriter, plan ports.Plan) (localdb.Result, error) {
 	auth := envfile.Read(filepath.Join(w.Repo("auth-api"), ".env"))
 	rw.Env(auth)

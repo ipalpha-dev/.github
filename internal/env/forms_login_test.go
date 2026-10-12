@@ -38,7 +38,9 @@ func TestFormsRespondentLoginAddsMissingKeysWithoutReplacingDeveloperValues(t *t
 		if forms["PROJECTS_API_URL"] != "http://localhost:6301" || forms["FORMS_RESPONDENT_LOGIN_ENTRY_POINT_ID"] != "operator-entry" {
 			t.Fatal("Forms developer values replaced")
 		}
-		if forms["PROJECT_CONTENT_ORIGINS"] != "http://localhost:5110,http://localhost:5106" { t.Fatal("provider websocket origins missing") }
+		if forms["PROJECT_CONTENT_ORIGINS"] != "http://localhost:5110,http://localhost:5106" {
+			t.Fatal("provider websocket origins missing")
+		}
 		projects := envfile.Read(filepath.Join(w.Repo("projects-api"), ".env"))
 		if projects["SELF_ONLY_ENTRY_POINT_IDS"] != "ep-ipalpha-forms-respondent-login" {
 			t.Fatal("self-only permission boundary missing")
