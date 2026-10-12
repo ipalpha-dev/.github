@@ -350,3 +350,19 @@ func TestVirtualAssistantEnvAndPeerKeys(t *testing.T) {
 		t.Fatalf("audiences: %s", a)
 	}
 }
+
+// auth-api refuses to boot without the Drive built-in client keys: an existing .env gets them added, values kept.
+func TestAuthAPIGetsDriveBuiltinKeys(t *testing.T) {
+	w := ws(t)
+	auth := filepath.Join(w.Repo("auth-api"), ".env")
+	os.MkdirAll(filepath.Dir(auth), 0o755)
+	os.WriteFile(auth, []byte("BUILTIN_SIGN_CLIENT_ID=sign-web\nBUILTIN_DRIVE_ORIGINS=http://localhost:6116\n"), 0o600)
+	if _, err := Prepare(w); err != nil {
+		t.Fatal(err)
+	}
+	a := envfile.Read(auth)
+	if a["BUILTIN_DRIVE_CLIENT_ID"] != "drive-web" || a["BUILTIN_DRIVE_ORIGINS"] != "http://localhost:6116" ||
+		a["BUILTIN_DRIVE_REDIRECT_URIS"] != "http://localhost:5116/auth/callback" || !strings.Contains(a["AUTH_RESOURCE_AUDIENCES_JSON"], "ipalpha:drive") {
+		t.Fatalf("auth-api env: %v", a)
+	}
+}
