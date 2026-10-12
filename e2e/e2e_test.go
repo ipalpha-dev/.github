@@ -471,7 +471,10 @@ func TestSeedChoiceIsToolOwned(t *testing.T) {
 		t.Fatal("setup --yes must seed with data")
 	}
 	a, p := envfile.Read(authEnv), envfile.Read(personsEnv)
-	if a["SEED_DATA"] != "true" || a["IPALPHA_ENV"] != "dev" || len(a["SEED_KEY"]) != 64 || a["SEED_KEY"] != p["SEED_KEY"] {
+	if a["SEED_DATA"] != "true" || a["IPALPHA_ENV"] != "dev" || len(a["SEED_KEY"]) != 64 {
+		t.Fatalf("seed keys on: %v", a)
+	}
+	if _, ok := p["SEED_KEY"]; ok {
 		t.Fatalf("seed keys on: %v %v", a, p)
 	}
 	for _, retired := range []string{"SEED_OWNER_PERSON_ID", "SEED_PERSON_IDS_JSON"} {

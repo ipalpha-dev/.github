@@ -30,8 +30,9 @@ var seedServices = map[string]bool{
 	"forms-api": true, "acampa-kids-backend": true,
 }
 
-// seedKeyServices also honor SEED_KEY (the same value everywhere) while seeding is on.
-var seedKeyServices = map[string]bool{"auth-api": true, "persons-api": true, "sign-api": true, "acampa-kids-backend": true}
+// seedKeyServices also get SEED_KEY (the same value everywhere) while seeding is on: auth-api honors it, the others
+// use it to get a seed-actor token. persons-api seeds in-process and no longer takes it (a stale one is removed).
+var seedKeyServices = map[string]bool{"auth-api": true, "sign-api": true, "acampa-kids-backend": true}
 
 // retiredKeys are no longer read by any service: ids are fixed (5eed...) now. Removed from existing .env files.
 var retiredKeys = []string{"SEED_PERSON_IDS_JSON", "SEED_OWNER_PERSON_ID"}
@@ -43,6 +44,9 @@ func applySeed(w *workspace.Workspace, r catalog.Repo, f *envfile.File) []string
 		if f.Delete(k) {
 			changed = append(changed, k)
 		}
+	}
+	if !seedKeyServices[r.Name] && f.Delete("SEED_KEY") {
+		changed = append(changed, "SEED_KEY")
 	}
 	if !seedServices[r.Name] || !w.Settings.SeedAsked() {
 		return changed

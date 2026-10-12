@@ -424,7 +424,7 @@ them when it is off (nothing is written while the workspace has not chosen):
 | --- | --- | --- |
 | `SEED_DATA` | `true` | all of the services above |
 | `IPALPHA_ENV` | `dev` (previews use `preview:<slug>` in their configmaps) | all of the services above |
-| `SEED_KEY` | 32 random bytes in hex, generated once per workspace (`.ipalpha/seed.env`), the same value everywhere | auth-api, persons-api, sign-api, Acampa Kids backend |
+| `SEED_KEY` | 32 random bytes in hex, generated once per workspace (`.ipalpha/seed.env`), the same value everywhere | auth-api, sign-api, Acampa Kids backend (not persons-api: it seeds in-process; a stale `SEED_KEY` in its `.env` is removed by setup/`./pull`) |
 
 A service refuses to boot with `SEED_DATA=true` unless `IPALPHA_ENV` is `dev` or `preview*`; production never gets either
 key. For the Acampa Kids backend, while seeding is on, setup also generates once (same values the app's seed sends to auth-api,

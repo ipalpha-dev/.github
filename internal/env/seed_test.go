@@ -44,7 +44,7 @@ func TestSeedChoiceOwnsSeedKeys(t *testing.T) {
 		t.Fatal("SEED_PERSON_IDS_JSON not retired")
 	}
 
-	// On: SEED_DATA/IPALPHA_ENV in the seeding services, SEED_KEY (same value) in the four that honor it.
+	// On: SEED_DATA/IPALPHA_ENV in the seeding services, SEED_KEY (same value) in the three that take it (persons-api no longer does).
 	reload("on")
 	os.WriteFile(auth, append(mustRead(t, auth), []byte("SEED_DATA=false\nIPALPHA_ENV=production\n")...), 0o600)
 	prep()
@@ -54,8 +54,11 @@ func TestSeedChoiceOwnsSeedKeys(t *testing.T) {
 			t.Fatalf("%s: SEED_DATA/IPALPHA_ENV not owned by the tool: %v %v", name, v["SEED_DATA"], v["IPALPHA_ENV"])
 		}
 	}
-	if len(a["SEED_KEY"]) != 64 || a["SEED_KEY"] != p["SEED_KEY"] || a["SEED_KEY"] != ap["SEED_KEY"] {
-		t.Fatalf("SEED_KEY not shared: %q %q %q", a["SEED_KEY"], p["SEED_KEY"], ap["SEED_KEY"])
+	if len(a["SEED_KEY"]) != 64 || a["SEED_KEY"] != ap["SEED_KEY"] {
+		t.Fatalf("SEED_KEY not shared: %q %q", a["SEED_KEY"], ap["SEED_KEY"])
+	}
+	if _, ok := p["SEED_KEY"]; ok {
+		t.Fatal("persons-api must not get SEED_KEY (and a stale one is removed)")
 	}
 	if _, ok := f["SEED_KEY"]; ok && f["SEED_KEY"] != "" {
 		t.Fatal("forms-api must not get SEED_KEY")
@@ -83,7 +86,7 @@ func TestSeedChoiceOwnsSeedKeys(t *testing.T) {
 	reload("off")
 	prep()
 	a, p, ap = envfile.Read(auth), envfile.Read(persons), envfile.Read(app)
-	if a["SEED_DATA"] != "" || a["IPALPHA_ENV"] != "" || a["SEED_KEY"] != "" || p["SEED_KEY"] != "" || ap["SEED_DATA"] != "" || ap["SEED_KEY"] != "" {
+	if a["SEED_DATA"] != "" || a["IPALPHA_ENV"] != "" || a["SEED_KEY"] != "" || ap["SEED_DATA"] != "" || ap["SEED_KEY"] != "" {
 		t.Fatalf("seed keys not blanked: %v %v %v", a, p, ap)
 	}
 	if ap["IPALPHA_CLIENT_SECRET"] != secret {
