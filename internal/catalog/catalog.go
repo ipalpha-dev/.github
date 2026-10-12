@@ -31,6 +31,7 @@ const (
 	KindLibrary    Kind = "library"    // shared-js
 	KindDeployment Kind = "deployment" // k8s manifests
 	KindOptional   Kind = "optional"   // apps outside core with their own registry/TeamCity (Acampa Kids)
+	KindService    Kind = "service"    // core service that is not a Node app: own image built by Core (face-service, Python); not a ./run process
 )
 
 // Repo describes one repository of the workspace.
@@ -75,8 +76,14 @@ var Repos = []Repo{
 	{Name: "photo-services-webapp", Kind: KindWeb, App: "photo-services", Port: 5114, Display: "Photo Services Web"},
 	{Name: "acampa-kids-backend", Kind: KindOptional, App: "acampa-kids", Image: "backend"},
 	{Name: "acampa-kids-frontend", Kind: KindOptional, App: "acampa-kids", Image: "frontend"},
-	{Name: "acampa-kids-face-service", Kind: KindOptional, App: "acampa-kids", Image: "face"},
+	// Moved from Acampa Kids (ipalpha-dev/acampa-kids-face-service): only photos-api calls it. ./run starts its
+	// image as the optional "face" infra container (settings face=on); the repo is only cloned for its code.
+	{Name: "face-service", Kind: KindService, Display: "Face service"},
 }
+
+// FaceImage is the face service container ./run starts when face=on (built by Core's TeamCity from
+// ipalpha-dev/face-service; the same text is in internal/assets/files/compose.yaml).
+const FaceImage = "registry.kevyn.com.br/ip-alpha/core/face-service:0.1.0"
 
 // Infra service with a host port published by the container runtime.
 type Infra struct {
@@ -136,7 +143,7 @@ func (r Repo) Rel() string {
 	switch {
 	case r.Kind == KindDeployment:
 		return r.Name
-	case r.Kind == KindOptional:
+	case r.Kind == KindOptional && r.App != "":
 		return "apps/" + r.App + "/" + strings.TrimPrefix(r.Name, r.App+"-")
 	case r.App != "":
 		return "apps/" + r.App + "/" + r.Name
@@ -156,8 +163,12 @@ func (r Repo) Runs() bool { return r.Kind == KindAPI || r.Kind == KindWeb }
 
 // Image: everything but libraries and deployment ships a container image.
 func (r Repo) HasImage() bool {
-	return r.Kind == KindAPI || r.Kind == KindWeb || r.Kind == KindOptional
+	return r.Kind == KindAPI || r.Kind == KindWeb || r.Kind == KindOptional || r.Kind == KindService
 }
+
+// SkippedWhenMissing: repositories a developer may not have (no access, or not created yet) are skipped
+// quietly by ./pull, ./doctor and ./feature instead of failing them.
+func (r Repo) SkippedWhenMissing() bool { return r.Kind == KindOptional || r.Kind == KindService || r.NoRemote }
 
 // Publishable by ./publish (release mode): core services, web apps and libraries.
 func (r Repo) Publishable() bool {

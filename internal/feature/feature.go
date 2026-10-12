@@ -221,7 +221,7 @@ func New(w *workspace.Workspace, slug string, self string, materialize func(*wor
 	pushed := map[string]string{}
 	for _, r := range catalog.Repos {
 		src := r.Path(main)
-		if r.Kind == catalog.KindOptional && !repos.IsGit(src) {
+		if r.SkippedWhenMissing() && !repos.IsGit(src) {
 			ui.Info(i18n.T("feature_optional_skipped", r.Name))
 			continue
 		}

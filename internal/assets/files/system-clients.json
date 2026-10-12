@@ -10,7 +10,7 @@
     "dispatch-api": ["revocations:read", "apps:read", "apps:webhook-secret", "persons:import-results", "projects:read"],
     "ai-api": ["revocations:read", "projects:read", "skills:mint", "grants:read", "app-features:read"],
     "developers-api": ["revocations:read", "apps:provision", "apps:read", "projects:provision", "persons:eligibility", "app-features:provision"],
-    "photos-api": ["revocations:read", "projects:read", "persons:links", "persons:consents", "persons:face-photos", "persons:access-log"],
+    "photos-api": ["revocations:read", "projects:read", "persons:links", "persons:consents", "persons:face-photos", "persons:access-log", "documents:read", "schedule:read"],
     "documents-api": ["revocations:read", "persons:signing-fields", "persons:access-log", "projects:read"],
     "sign-api": ["revocations:read", "notifications:send-template"],
     "places-api": ["revocations:read", "projects:read", "organizations:snapshot"],

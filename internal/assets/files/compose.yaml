@@ -137,11 +137,11 @@ services:
       rustfs:
         condition: service_healthy
 
-  # Optional (profile "face", on with `face=on` in settings or ./run --face): the Acampa face service,
-  # the same image production runs. Stores nothing. Off = photos-api skips face indexing and search.
+  # Optional (profile "face", on with `face=on` in settings or ./run --face): the core face service
+  # (ipalpha-dev/face-service), the same image production runs. Stores nothing. Off = photos-api skips face indexing and search.
   face:
     profiles: ["face"]
-    image: registry.kevyn.com.br/ip-alpha/kids/acampa-2025-face:0.1.0
+    image: registry.kevyn.com.br/ip-alpha/core/face-service:0.1.0
     platform: linux/amd64 # the image has no arm64 manifest; emulated on Apple Silicon
     container_name: ${IPALPHA_INFRA_NAME:-ipalpha}-face
     ports:

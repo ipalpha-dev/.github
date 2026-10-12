@@ -63,7 +63,7 @@ func (e *Engine) appleUp(plan ports.Plan) error {
 			ready []string
 		}{"face", []string{"--network", n, "--platform", "linux/amd64", "--publish", fmt.Sprintf("127.0.0.1:%d:8000", plan.Port("face")),
 			"--env", "FACE_MODEL=buffalo_l", "--env", "FACE_MODEL_ROOT=/app/data/insightface", "--env", "FACE_DET_SIZE=640", "--env", "FACE_MAX_BYTES=8388608",
-			"--volume", n + "-face-models:/app/data/insightface", "registry.kevyn.com.br/ip-alpha/kids/acampa-2025-face:0.1.0"},
+			"--volume", n + "-face-models:/app/data/insightface", catalog.FaceImage},
 			[]string{"python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4)"}})
 	}
 	status := map[string]string{}

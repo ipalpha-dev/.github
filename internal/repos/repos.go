@@ -128,7 +128,7 @@ func CloneAll(org, root string, a Access, progress func(Outcome)) []Outcome {
 			return Outcome{Repo: r, Status: "kept"}
 		}
 		if err := Clone(org, r.Name, dest, a); err != nil {
-			if r.Kind == catalog.KindOptional || r.NoRemote {
+			if r.SkippedWhenMissing() {
 				return Outcome{Repo: r, Status: "skipped", Detail: i18n.T("repos_optional_skipped")}
 			}
 			return Outcome{Repo: r, Status: "failed", Detail: err.Error()}
@@ -154,7 +154,7 @@ func PullAll(org, root string, fetchOnly bool, a Access, progress func(Outcome))
 				return Outcome{Repo: r, Status: "skipped"}
 			}
 			if err := Clone(org, r.Name, dir, a); err != nil {
-				if r.Kind == catalog.KindOptional || r.NoRemote {
+				if r.SkippedWhenMissing() {
 					return Outcome{Repo: r, Status: "skipped", Detail: i18n.T("repos_optional_skipped")}
 				}
 				return Outcome{Repo: r, Status: "failed", Detail: err.Error()}
