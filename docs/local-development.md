@@ -230,8 +230,7 @@ the run, like every other API.
 
 apps-api (port 3015, MongoDB `apps`, audience `ipalpha:apps`) owns per-app features, skills, directory listings, links
 and banner grants. `./run` starts it and hands auth-api, ai-api, developers-api and dispatch-api `APPS_API_URL`; Oikos
-and Developers reach it at `/api/apps`. Its repository has no remote yet: `./pull` and `setup` skip it quietly until one
-exists. ai-api also gets `AI_TRANSCRIBE_URL` / `_MODEL` / `_KEY`; the directory and banner-grant exchanges moved from
+and Developers reach it at `/api/apps`. Its repository has an origin, so `./pull` and `setup` clone it like any other core service. ai-api also gets `AI_TRANSCRIBE_URL` / `_MODEL` / `_KEY`; the directory and banner-grant exchanges moved from
 `developers-api.*` to `apps-api.*`.
 
 ### Local documents and consent (documents-api)
@@ -258,7 +257,7 @@ remove readiness checks or bypass authentication to hide this failure. The embed
 ### IPAlpha Drive (core tool)
 
 `core/drive-api` (port **3018**, MongoDB `drive`, audience `ipalpha:drive`, RustFS bucket `drive`) and
-`core/drive-webapp` (**5116**). Both repos are `NoRemote` until they have an origin (a missing clone is skipped quietly).
+`core/drive-webapp` (**5116**). Both repos have an origin and are cloned by `./pull` and `setup`.
 `drive-api.env` follows the Sign pattern (`EXCHANGE_AUTH_REVOCATIONS`, `EXCHANGE_DRIVE_ITEMS_CHANGED=drive-api.items.changed`,
 `EXCHANGE_PERSON_DELETED`, `PROJECTS_API_*`, `S3_*` with keys from `.ipalpha/.env`, `S3_PUBLIC_ENDPOINT` for presigned
 browser URLs). The `drive-api` system client has `revocations:read` and `projects:read`. Added keys only: dispatch-api
@@ -478,8 +477,7 @@ work stay; it only renames, and does nothing but warn when the new folder alread
 HTTP with the signed-in person's tokens, its own socket.io (no `dispatch-api` origin needed). Start it from the panel or
 `./run apps set services-kids-webapp`. Single API instance.
 
-The repositories have no remote yet (they live only in `features/services-kids/apps/services-kids/`), so `./pull`,
-`setup` and `./feature` skip them quietly when missing, like `apps-api`.
+The repositories have an origin, so `./pull`, `setup` and `./feature` clone them like every other repo.
 
 `./pull` and `setup` write `services-kids-api/.env` from `.env.example` (else the embedded fallback), only adding
 missing keys and filling blanks: `SESSION_TOKEN_KEY` (64 hex), `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` (one Web Push P-256
