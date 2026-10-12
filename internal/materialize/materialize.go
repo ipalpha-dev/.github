@@ -19,7 +19,7 @@ import (
 )
 
 // Commands get a wrapper at the workspace root.
-var Commands = []string{"run", "stop", "status", "logs", "pull", "publish", "feature", "set-keys", "doctor", "ipalpha"}
+var Commands = []string{"run", "stop", "status", "logs", "envs", "pull", "publish", "feature", "set-keys", "doctor", "ipalpha"}
 
 // BinPath is the workspace copy of the binary.
 func BinPath(w *workspace.Workspace) string {

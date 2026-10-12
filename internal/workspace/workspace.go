@@ -33,6 +33,7 @@ type Settings struct {
 	InfraName   string
 	Registry    string
 	Face        bool           // run the optional face service (settings face=on); off = photos-api skips face work
+	Tmux        bool           // settings tmux=on: ./run starts inside the workspace tmux session (off by default)
 	Ports       map[string]int // preferred ports (port key → port)
 	extra       []string       // unknown lines, kept as written
 }
@@ -167,6 +168,8 @@ func LoadSettings(path string) (*Settings, error) {
 			}
 		case "face":
 			s.Face = v == "on" || v == "true" || v == "1"
+		case "tmux":
+			s.Tmux = v == "on" || v == "true" || v == "1"
 		case "runner":
 			// Removed (the panel and --plain replace mprocs/background runners).
 		default:
@@ -263,6 +266,9 @@ func (s *Settings) Render() string {
 	}
 	if s.Face {
 		b.WriteString("face=on\n")
+	}
+	if s.Tmux {
+		b.WriteString("tmux=on\n")
 	}
 	for _, k := range catalog.PortKeys() {
 		fmt.Fprintf(&b, "%s_port=%d\n", settingsPortKey(k), s.Port(k))

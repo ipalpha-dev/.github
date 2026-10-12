@@ -24,7 +24,7 @@ import (
 )
 
 func runCmd() *cobra.Command {
-	var plain, skipDeps, noBrowser, face bool
+	var plain, skipDeps, noBrowser, face, inTmux bool
 	var only []string
 	var untilReady time.Duration
 	c := &cobra.Command{
@@ -42,6 +42,11 @@ func runCmd() *cobra.Command {
 					return err
 				}
 			}
+			if (inTmux || w.Settings.Tmux) && len(os.Args) > 1 && os.Args[1] == "run" && !plain && untilReady == 0 && ui.Interactive() {
+				if handled, err := startRunInTmux(w, inTmux); handled || err != nil {
+					return err
+				}
+			}
 			if noBrowser {
 				os.Setenv("IPALPHA_OPEN_BROWSERS", "0")
 			}
@@ -51,6 +56,7 @@ func runCmd() *cobra.Command {
 	c.Flags().BoolVar(&plain, "plain", false, i18n.T("flag_plain"))
 	c.Flags().BoolVar(&skipDeps, "skip-deps", false, i18n.T("flag_skip_deps"))
 	c.Flags().BoolVar(&noBrowser, "no-browser", false, i18n.T("flag_no_browser"))
+	c.Flags().BoolVar(&inTmux, "tmux", false, i18n.T("flag_tmux"))
 	c.Flags().BoolVar(&face, "face", false, i18n.T("flag_face"))
 	c.Flags().StringSliceVar(&only, "only", nil, i18n.T("flag_only"))
 	c.Flags().DurationVar(&untilReady, "until-ready", 0, i18n.T("flag_until_ready"))

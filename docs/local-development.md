@@ -404,6 +404,7 @@ migrated by their next `./pull`.
 | `runtime` | `docker`, `container` (Apple) or empty (auto) |
 | `<service>_port` | preferred port (moves automatically when busy) |
 | `infra_name` | container/volume prefix |
+| `tmux` | `on`: `./run` starts inside the workspace's tmux session (same as `./run --tmux`); off by default |
 
 ## Ports (defaults)
 
@@ -481,6 +482,30 @@ into `services-kids-api/.env`; the tooling does not seed them.
 `apps/<app>/`. **Acampa Kids** (`apps/acampa-kids/{backend,frontend}`; its former face service is now `core/face-service`)
 has its own repositories, registry and TeamCity project; `./run` does not start it and its repos are optional.
 In a feature environment every core service runs; an app joins only when one of its own repos changed.
+
+## Environments picker: `./envs`
+
+One terminal screen over every IPAlpha environment on this computer: the main workspace and each
+`features/<slug>`. Per row: `./run` state (services up/total and the Oikos URL, the assigned one when ports moved),
+whether the tmux session `ipalpha-<slug>` (`ipalpha-main` for the main workspace) exists, the agents (claude, pi, codex,
+grok) whose working folder is inside it, uncommitted files and commits ahead of the default branch (all repositories),
+the branches checked out, and the open warden requests filed `from: <slug>` (skipped when `~/src/ipalpha-qa` is missing;
+override with `IPALPHA_QA_DIR`). It works from the main workspace or from any `features/<slug>`.
+
+```sh
+./envs                 # picker: arrows, type to filter (name, branch, agent)
+./envs forms           # hop straight into features/forms (./envs main for the main workspace)
+./envs --list          # plain table for scripts (also what a non-interactive terminal gets)
+```
+
+Keys: `Enter` hop, `Ctrl+T` open a shell window in that workspace, `Ctrl+L` open `./logs` in a `logs` window,
+`Ctrl+R` start `./run` in a `run` window, `F5` refresh (it also refreshes every few seconds), `Esc` clears the
+filter, then quits. Hop is `tmux switch-client` inside tmux and `tmux attach` outside; a missing session is created
+(`tmux new -d -s ipalpha-<slug> -c <workspace>`). Without tmux (`brew install tmux`) the list still works.
+
+To reach the `./run` panel from the picker, run it with `./run --tmux` (or set `tmux=on` in `.ipalpha/settings`, which is
+local and ignored by git): outside tmux it restarts itself in the `run` window of the workspace session and attaches
+there; inside tmux, or when tmux is missing, it runs where it is. Off by default.
 
 ## Feature environments: `./feature`
 

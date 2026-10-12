@@ -252,6 +252,8 @@ func setSetting(s *workspace.Settings, key, value string) error {
 		s.Registry = value
 	case "face":
 		s.Face = value == "on" || value == "true" || value == "1"
+	case "tmux":
+		s.Tmux = value == "on" || value == "true" || value == "1"
 	default:
 		if strings.HasSuffix(key, "_port") {
 			p, err := strconv.Atoi(value)

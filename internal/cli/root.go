@@ -73,7 +73,7 @@ func newRoot() *cobra.Command {
 	root.SetFlagErrorFunc(func(c *cobra.Command, err error) error {
 		return ui.NewProblem(c.CommandPath(), err.Error(), c.CommandPath()+" --help")
 	})
-	root.AddCommand(setupCmd(), runCmd(), stopCmd(), statusCmd(), logsCmd(), pullCmd(), publishCmd(), featureCmd(),
+	root.AddCommand(setupCmd(), runCmd(), stopCmd(), statusCmd(), logsCmd(), envsCmd(), pullCmd(), publishCmd(), featureCmd(),
 		aiCmd(), configCmd(), doctorCmd(), setKeysCmd(), appsCmd(), updateCmd())
 	return root
 }

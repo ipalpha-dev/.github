@@ -194,7 +194,7 @@ func TestSetupPullAndWrappers(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		wrapper = "run.cmd"
 	}
-	for _, c := range []string{"run", "pull", "publish", "feature", "doctor", "status", "stop"} {
+	for _, c := range []string{"run", "pull", "publish", "feature", "doctor", "status", "stop", "envs"} {
 		name := c
 		if runtime.GOOS == "windows" {
 			name += ".cmd"
