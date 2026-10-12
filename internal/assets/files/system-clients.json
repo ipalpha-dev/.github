@@ -2,16 +2,18 @@
   "_comment": "Fallback snapshot of deployment/base/core/auth-api/system-clients.json. Prefer the workspace's canonical manifest; these are existing approved scopes, not new grants.",
   "clients": {
     "projects-api": ["revocations:read", "apps:read", "organizations:snapshot"],
+    "auth-api": ["app-features:read"],
     "persons-api": ["revocations:read", "projects:read", "ai:invoke", "projects:import-memberships", "documents:read"],
     "organizations-api": ["revocations:read"],
     "notifications-api": ["revocations:read", "projects:read", "persons:contact", "persons:birthdays"],
     "forms-api": ["revocations:read", "prefill:redeem", "prefill:read", "persons:read", "persons:write", "dispatch:events"],
     "dispatch-api": ["revocations:read", "apps:read", "apps:webhook-secret", "persons:import-results", "projects:read"],
-    "ai-api": ["revocations:read", "projects:read"],
-    "developers-api": ["revocations:read", "apps:provision", "apps:read", "projects:provision", "persons:eligibility"],
+    "ai-api": ["revocations:read", "projects:read", "skills:mint", "grants:read", "app-features:read"],
+    "developers-api": ["revocations:read", "apps:provision", "apps:read", "projects:provision", "persons:eligibility", "app-features:provision"],
     "photos-api": ["revocations:read", "projects:read", "persons:links", "persons:consents", "persons:face-photos", "persons:access-log"],
     "documents-api": ["revocations:read"],
     "places-api": ["revocations:read", "projects:read", "organizations:snapshot"],
-    "schedule-api": ["revocations:read", "projects:read", "organizations:snapshot", "places:read", "notifications:schedule-reminder", "notifications:send-template"]
+    "schedule-api": ["revocations:read", "projects:read", "organizations:snapshot", "places:read", "notifications:schedule-reminder", "notifications:send-template"],
+    "apps-api": ["revocations:read", "apps:read"]
   }
 }

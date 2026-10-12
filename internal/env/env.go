@@ -97,7 +97,7 @@ func Complete(w *workspace.Workspace, r catalog.Repo) (Change, error) {
 	return ch, nil
 }
 
-var peers = []string{"projects", "persons", "organizations", "notifications", "forms", "ai", "developers", "dispatch", "places", "photos", "documents", "schedule"}
+var peers = []string{"projects", "persons", "organizations", "notifications", "forms", "ai", "developers", "dispatch", "places", "photos", "documents", "schedule", "apps"}
 
 // Stable ids owned by auth-api (src/builtin-apps.ts).
 var builtinIDs = [][2]string{

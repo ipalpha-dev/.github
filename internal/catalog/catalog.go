@@ -37,6 +37,9 @@ type Repo struct {
 	Display string // panel label
 	// Image is the image name of an optional app repo (registry …/apps/<app>/<image>).
 	Image string
+	// NoRemote marks a repo that exists only locally for now (no origin yet): clone and fetch
+	// failures are skipped quietly instead of failing pull/setup.
+	NoRemote bool
 }
 
 // Repos in run order: nothing waits for a peer (GET /ready), the order only reads peers-first.
@@ -50,6 +53,7 @@ var Repos = []Repo{
 	{Name: "photos-api", Kind: KindAPI, Port: 3010, Display: "Photos"},
 	{Name: "documents-api", Kind: KindAPI, Port: 3012, Display: "Documents"},
 	{Name: "schedule-api", Kind: KindAPI, Port: 3013, Display: "Schedule"},
+	{Name: "apps-api", Kind: KindAPI, Port: 3015, Display: "Apps", NoRemote: true},
 	{Name: "notifications-api", Kind: KindAPI, Port: 3004, Display: "Notifications"},
 	{Name: "auth-api", Kind: KindAPI, Port: 3005, Display: "Auth"},
 	{Name: "forms-api", Kind: KindAPI, App: "forms", Port: 3006, Display: "Forms API"},
