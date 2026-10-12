@@ -38,7 +38,7 @@ func TestDrivePortsAreUniqueAndCore(t *testing.T) {
 
 func TestVirtualAssistantIsACoreAPIWithoutRemote(t *testing.T) {
 	r, ok := Get("virtual-assistant")
-	if !ok || r.Kind != KindAPI || r.Port != 3019 || r.Rel() != "core/virtual-assistant" || !r.NoRemote {
+	if !ok || r.Kind != KindAPI || r.Port != 3019 || r.Rel() != "core/virtual-assistant" || r.SkippedWhenMissing() {
 		t.Fatalf("virtual-assistant: %+v", r)
 	}
 }

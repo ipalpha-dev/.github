@@ -164,11 +164,6 @@ func PullAll(org, root string, fetchOnly bool, a Access, progress func(Outcome))
 		if !IsGit(dir) {
 			return Outcome{Repo: r, Status: "skipped", Detail: i18n.T("repos_not_git")}
 		}
-		if r.NoRemote {
-			if out, err := sys.Git(dir, "remote"); err != nil || strings.TrimSpace(out) == "" {
-				return Outcome{Repo: r, Status: "skipped", Detail: i18n.T("repos_no_upstream")}
-			}
-		}
 		if res := (sys.Cmd{Name: "git", Args: []string{"-C", dir, "fetch", "--prune"}, Env: []string{"GIT_TERMINAL_PROMPT=0"}}).Run(); res.Err != nil {
 			return Outcome{Repo: r, Status: "failed", Detail: i18n.T("repos_fetch_failed") + ": " + lastLine(res.Output)}
 		}

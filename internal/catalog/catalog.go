@@ -43,9 +43,6 @@ type Repo struct {
 	Display string // panel label
 	// Image is the image name of an optional app repo (registry …/apps/<app>/<image>).
 	Image string
-	// NoRemote marks a repo that exists only locally for now (no origin yet): clone and fetch
-	// failures are skipped quietly instead of failing pull/setup.
-	NoRemote bool
 }
 
 // Repos in run order: nothing waits for a peer (GET /ready), the order only reads peers-first.
@@ -64,24 +61,24 @@ var Repos = []Repo{
 	{Name: "auth-api", Kind: KindAPI, Port: 3005, Display: "Auth"},
 	{Name: "forms-api", Kind: KindAPI, Port: 3006, Display: "Forms API"},
 	{Name: "sign-api", Kind: KindAPI, Port: 3014, Display: "Sign API"},
-	// IPAlpha Drive (core tool): no origin yet, so a missing clone is skipped quietly until the repos exist.
-	{Name: "drive-api", Kind: KindAPI, Port: 3018, Display: "Drive API", NoRemote: true},
+	// IPAlpha Drive (core tool).
+	{Name: "drive-api", Kind: KindAPI, Port: 3018, Display: "Drive API"},
 	{Name: "ai-api", Kind: KindAPI, Port: 3008, Display: "AI"},
 	{Name: "developers-api", Kind: KindAPI, Port: 3009, Display: "Developers"},
 	{Name: "services-photo-api", Kind: KindAPI, App: "services-photo", Port: 3016, Display: "Services Photo API"},
-	// Services Kids: repos exist only locally for now (no origin yet), so a missing clone is skipped quietly.
-	{Name: "services-kids-api", Kind: KindAPI, App: "services-kids", Port: 3017, Display: "Services Kids API", NoRemote: true},
-	// Virtual assistant (core): no origin yet, so a missing clone is skipped quietly. Repo name has no "-api" suffix.
-	{Name: "virtual-assistant", Kind: KindAPI, Port: 3019, Display: "Virtual Assistant", NoRemote: true},
+	// Services Kids (app outside core).
+	{Name: "services-kids-api", Kind: KindAPI, App: "services-kids", Port: 3017, Display: "Services Kids API"},
+	// Virtual assistant (core). Repo name has no "-api" suffix.
+	{Name: "virtual-assistant", Kind: KindAPI, Port: 3019, Display: "Virtual Assistant"},
 	{Name: "dispatch-api", Kind: KindAPI, Port: 3007, Display: "Dispatch"},
 	{Name: "auth-webapp", Kind: KindWeb, Port: 5100, Display: "Auth Web"},
 	{Name: "forms-webapp", Kind: KindWeb, Port: 5106, Display: "Forms Web"},
 	{Name: "sign-webapp", Kind: KindWeb, Port: 5113, Display: "Sign Web"},
-	{Name: "drive-webapp", Kind: KindWeb, Port: 5116, Display: "Drive Web", NoRemote: true},
+	{Name: "drive-webapp", Kind: KindWeb, Port: 5116, Display: "Drive Web"},
 	{Name: "oikos-webapp", Kind: KindWeb, Port: 5110, Display: "Oikos Web"},
 	{Name: "developers-webapp", Kind: KindWeb, Port: 5111, Display: "Developers Web"},
 	{Name: "services-photo-webapp", Kind: KindWeb, App: "services-photo", Port: 5114, Display: "Services Photo Web"},
-	{Name: "services-kids-webapp", Kind: KindWeb, App: "services-kids", Port: 5115, Display: "Services Kids Web", NoRemote: true},
+	{Name: "services-kids-webapp", Kind: KindWeb, App: "services-kids", Port: 5115, Display: "Services Kids Web"},
 	{Name: "acampa-kids-backend", Kind: KindOptional, App: "acampa-kids", Image: "backend"},
 	{Name: "acampa-kids-frontend", Kind: KindOptional, App: "acampa-kids", Image: "frontend"},
 	// Moved from Acampa Kids (ipalpha-dev/acampa-kids-face-service): only photos-api calls it. ./run starts its
@@ -179,7 +176,7 @@ func (r Repo) HasImage() bool {
 // SkippedWhenMissing: repositories a developer may not have (no access, or not created yet) are skipped
 // quietly by ./pull, ./doctor and ./feature instead of failing them.
 func (r Repo) SkippedWhenMissing() bool {
-	return r.Kind == KindOptional || r.Kind == KindService || r.NoRemote
+	return r.Kind == KindOptional || r.Kind == KindService
 }
 
 // Publishable by ./publish (release mode): core services, web apps, libraries and the images of
