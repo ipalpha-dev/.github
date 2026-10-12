@@ -334,8 +334,8 @@ sign-api's old `appId` from `SEED_CLIENTS_JSON`; every other scope you added is 
    **Acampa Kids** (`-f acampa-kids-backend|acampa-kids-frontend`, also picked up by a bare run) goes the same way:
    image `registry.kevyn.com.br/ip-alpha/apps/acampa-kids/{backend,frontend}:<version>` built with the repository
    as context, and only the tag in `deployment/base/apps/acampa-kids` is bumped (never `base/core`). With `--ci`
-   no local build runs; the pushed commit starts TeamCity `IpAlpha_AcampaKids_{Backend,Frontend}_Build`. `./publish`
-   never triggers an app's or Core's Deploy. `face-service` (`core/face-service`) is not published here: Core's
+   no local build runs and the push starts no TeamCity build (`IpAlpha_AcampaKids_{Backend,Frontend}_Build` has no VCS trigger):
+   the manual `IpAlpha_AcampaKids` Deploy builds the images. `./publish` never triggers an app's or Core's Deploy. `face-service` (`core/face-service`) is not published here: Core's
    TeamCity builds its image.
 
 `-d` shows the plan and offers to apply exactly that plan · `-f <repo>` one repo · `--engine/--model` one-off

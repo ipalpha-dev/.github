@@ -526,8 +526,8 @@ func ImageName(w *workspace.Workspace, r catalog.Repo) string {
 	return w.Settings.Registry + "/" + r.Name
 }
 
-// AppBuildURL is the TeamCity build of an app image (IpAlpha_AcampaKids_Backend_Build). ./publish --ci only
-// points to it: the pushed commit starts the build, and the app's Deploy configuration is never triggered here.
+// AppBuildURL is the TeamCity build configuration of an app image (IpAlpha_AcampaKids_Backend_Build). ./publish --ci
+// only points to it: the push starts no build (no VCS trigger); the manual app Deploy builds the image.
 func AppBuildURL(r catalog.Repo) string {
 	return TeamCityURL + "/buildConfiguration/IpAlpha_" + pascal(r.App) + "_" + pascal(r.Image) + "_Build"
 }
