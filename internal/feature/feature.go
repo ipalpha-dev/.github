@@ -735,8 +735,12 @@ func Destroy(w *workspace.Workspace, slug string, yes, wait, force bool, stopInf
 	if !yes && !ui.TypeToConfirm(i18n.T("feature_confirm"), slug) {
 		return ui.ErrCancelled
 	}
-	if err := Request(w, slug, "destroy", wait); err != nil {
-		return err
+	if published(main, slug) {
+		if err := Request(w, slug, "destroy", wait); err != nil {
+			return err
+		}
+	} else {
+		ui.Info(i18n.T("feature_destroy_local_only", slug))
 	}
 	if fw, err := workspace.Open(froot); err == nil && stopInfra != nil {
 		_ = stopInfra(fw)
@@ -750,6 +754,17 @@ func Destroy(w *workspace.Workspace, slug string, yes, wait, force bool, stopInf
 	os.RemoveAll(froot)
 	ui.Done(i18n.T("feature_destroyed", slug))
 	return nil
+}
+
+// published reports whether deployment master holds previews/<slug>. When master cannot be
+// read it answers true, so a real preview is never left running by a network hiccup.
+func published(main, slug string) bool {
+	dep := filepath.Join(main, "deployment")
+	if err := (sys.Cmd{Name: "git", Args: []string{"-C", dep, "fetch", "-q", "origin", "master"}}).Run().Err; err != nil {
+		return true
+	}
+	_, err := sys.Git(dep, "cat-file", "-e", "origin/master:previews/"+slug+"/release.json")
+	return err == nil
 }
 
 func same(a, b string) bool {
