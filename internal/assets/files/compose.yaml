@@ -95,7 +95,7 @@ services:
       retries: 12
       start_period: 5s
 
-  # S3-compatible store for photos-api, notifications-api and documents-api (same image as production). Buckets are created by
+  # S3-compatible store for photos-api, notifications-api, documents-api and drive-api (same image as production). Buckets are created by
   # `rustfs-init` after `up` (profile "init": run explicitly by ./run, never part of `up`).
   rustfs:
     image: rustfs/rustfs:1.0.1
@@ -125,10 +125,13 @@ services:
     command:
       - |
         set -eu
-        for bucket in photos church-email-images documents; do
+        for bucket in photos church-email-images documents drive; do
           aws --endpoint-url http://rustfs:9000 s3api head-bucket --bucket "$$bucket" \
             || aws --endpoint-url http://rustfs:9000 s3api create-bucket --bucket "$$bucket"
         done
+        # Browser PUT/GET with presigned URLs (IPAlpha Drive): drive-webapp (5116) and Oikos (5110). Not fatal if the store ignores CORS.
+        aws --endpoint-url http://rustfs:9000 s3api put-bucket-cors --bucket drive --cors-configuration '{"CORSRules":[{"AllowedOrigins":["http://localhost:5116","http://localhost:5110"],"AllowedMethods":["GET","PUT","HEAD"],"AllowedHeaders":["*"],"ExposeHeaders":["ETag"],"MaxAgeSeconds":3000}]}' \
+          || echo "rustfs: CORS for the drive bucket was not applied"
     environment:
       AWS_ACCESS_KEY_ID: ${RUSTFS_ACCESS_KEY}
       AWS_SECRET_ACCESS_KEY: ${RUSTFS_SECRET_KEY}

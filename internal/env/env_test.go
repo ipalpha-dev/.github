@@ -295,7 +295,7 @@ func TestSignClientsAndEnv(t *testing.T) {
 	if d["S3_BUCKET"] != "documents" || d["S3_ACCESS_KEY"] == "" || d["SEAL_DEV_SELF_SIGNED"] != "true" || d["EXCHANGE_SIGNED_DOCUMENTS_CHANGED"] != "documents-api.signed-document.changed" {
 		t.Fatalf("documents-api env: %v", d)
 	}
-	if o := envfile.Read(dispatch)["SOCKET_ALLOWED_ORIGINS"]; o != "http://localhost:5106,http://localhost:5110,http://localhost:5113" {
+	if o := envfile.Read(dispatch)["SOCKET_ALLOWED_ORIGINS"]; o != "http://localhost:5106,http://localhost:5110,http://localhost:5113,http://localhost:5116" {
 		t.Fatalf("dispatch origins: %q", o)
 	}
 }

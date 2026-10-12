@@ -255,6 +255,17 @@ process receives the repaired environment. Persons' projects cache can recover o
 remove readiness checks or bypass authentication to hide this failure. The embedded `system-clients.json` grants `persons:links`, `persons:consents`,
 `persons:face-photos`, `persons:access-log` (photos-api, persons-api) and `documents:read` (persons-api).
 
+### IPAlpha Drive (core tool)
+
+`core/drive-api` (port **3018**, MongoDB `drive`, audience `ipalpha:drive`, RustFS bucket `drive`) and
+`core/drive-webapp` (**5116**). Both repos are `NoRemote` until they have an origin (a missing clone is skipped quietly).
+`drive-api.env` follows the Sign pattern (`EXCHANGE_AUTH_REVOCATIONS`, `EXCHANGE_DRIVE_ITEMS_CHANGED=drive-api.items.changed`,
+`EXCHANGE_PERSON_DELETED`, `PROJECTS_API_*`, `S3_*` with keys from `.ipalpha/.env`, `S3_PUBLIC_ENDPOINT` for presigned
+browser URLs). The `drive-api` system client has `revocations:read` and `projects:read`. Added keys only: dispatch-api
+gets `DRIVE_API_URL`, `EXCHANGE_DRIVE_ITEMS_CHANGED` and `http://localhost:5116` in `SOCKET_ALLOWED_ORIGINS`; auth-api
+gets `ipalpha:drive` in `AUTH_RESOURCE_AUDIENCES_JSON`. The `rustfs-init` job also creates the `drive` bucket and applies
+CORS for `http://localhost:5116` and Oikos (`5110`). Oikos' Vite proxy reads `DRIVE_API_URL` like every other API.
+
 ### Forms and IPAlpha Sign (core tools)
 
 Forms and IPAlpha Sign are **core tools** (Kevyn, 2026-10-12): `core/forms-api` (port **3006**, MongoDB `forms`,
@@ -411,6 +422,7 @@ migrated by their next `./pull`.
 | photos-api | 3010 | Face service (optional) | 8000 |
 | documents-api | 3012 | schedule-api | 3013 |
 | sign-api | 3014 | sign-webapp | 5113 |
+| drive-api | 3018 | drive-webapp | 5116 |
 | services-photo-api | 3016 | services-photo-webapp | 5114 |
 | apps-api | 3015 | services-kids-api | 3017 |
 | | | services-kids-webapp | 5115 |

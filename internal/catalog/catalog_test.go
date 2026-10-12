@@ -17,3 +17,21 @@ func TestFaceServiceLivesInCore(t *testing.T) {
 		t.Fatalf("face image: %s", FaceImage)
 	}
 }
+
+func TestDrivePortsAreUniqueAndCore(t *testing.T) {
+	api, ok1 := Get("drive-api")
+	web, ok2 := Get("drive-webapp")
+	if !ok1 || !ok2 || api.Port != 3018 || web.Port != 5116 || api.Rel() != "core/drive-api" || web.Rel() != "core/drive-webapp" || WebBackend["drive-webapp"] != "drive-api" {
+		t.Fatalf("drive: %+v %+v", api, web)
+	}
+	seen := map[int]string{}
+	for _, r := range Repos {
+		if r.Port == 0 {
+			continue
+		}
+		if other, dup := seen[r.Port]; dup {
+			t.Fatalf("port %d used by %s and %s", r.Port, other, r.Name)
+		}
+		seen[r.Port] = r.Name
+	}
+}
