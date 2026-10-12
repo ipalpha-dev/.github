@@ -17,6 +17,8 @@ func TestSeedChoiceOwnsSeedKeys(t *testing.T) {
 	auth := filepath.Join(w.Repo("auth-api"), ".env")
 	persons := filepath.Join(w.Repo("persons-api"), ".env")
 	forms := filepath.Join(w.Repo("forms-api"), ".env")
+	os.MkdirAll(w.Repo("services-kids-api"), 0o755)
+	sk := filepath.Join(w.Repo("services-kids-api"), ".env")
 	notif := filepath.Join(w.Repo("notifications-api"), ".env")
 	app := filepath.Join(acampa.Path(w.Root), ".env")
 	prep := func() {
@@ -49,13 +51,16 @@ func TestSeedChoiceOwnsSeedKeys(t *testing.T) {
 	os.WriteFile(auth, append(mustRead(t, auth), []byte("SEED_DATA=false\nIPALPHA_ENV=production\n")...), 0o600)
 	prep()
 	a, p, f, n, ap := envfile.Read(auth), envfile.Read(persons), envfile.Read(forms), envfile.Read(notif), envfile.Read(app)
-	for name, v := range map[string]map[string]string{"auth": a, "persons": p, "forms": f, "acampa": ap} {
+	for name, v := range map[string]map[string]string{"auth": a, "persons": p, "forms": f, "acampa": ap, "kids": envfile.Read(sk)} {
 		if v["SEED_DATA"] != "true" || v["IPALPHA_ENV"] != "dev" {
 			t.Fatalf("%s: SEED_DATA/IPALPHA_ENV not owned by the tool: %v %v", name, v["SEED_DATA"], v["IPALPHA_ENV"])
 		}
 	}
 	if len(a["SEED_KEY"]) != 64 || a["SEED_KEY"] != ap["SEED_KEY"] {
 		t.Fatalf("SEED_KEY not shared: %q %q", a["SEED_KEY"], ap["SEED_KEY"])
+	}
+	if k := envfile.Read(sk); len(k["SEED_KEY"]) != 64 || k["SEED_KEY"] != a["SEED_KEY"] {
+		t.Fatalf("services-kids-api SEED_KEY not shared: %q", k["SEED_KEY"])
 	}
 	if _, ok := p["SEED_KEY"]; ok {
 		t.Fatal("persons-api must not get SEED_KEY (and a stale one is removed)")
@@ -88,6 +93,9 @@ func TestSeedChoiceOwnsSeedKeys(t *testing.T) {
 	a, p, ap = envfile.Read(auth), envfile.Read(persons), envfile.Read(app)
 	if a["SEED_DATA"] != "" || a["IPALPHA_ENV"] != "" || a["SEED_KEY"] != "" || ap["SEED_DATA"] != "" || ap["SEED_KEY"] != "" {
 		t.Fatalf("seed keys not blanked: %v %v %v", a, p, ap)
+	}
+	if k := envfile.Read(sk); k["SEED_DATA"] != "" || k["IPALPHA_ENV"] != "" || k["SEED_KEY"] != "" {
+		t.Fatalf("services-kids-api seed keys not blanked: %v", k)
 	}
 	if ap["IPALPHA_CLIENT_SECRET"] != secret {
 		t.Fatal("off must not touch the app's registration secrets")

@@ -27,12 +27,12 @@ const (
 var seedServices = map[string]bool{
 	"auth-api": true, "persons-api": true, "organizations-api": true, "places-api": true, "projects-api": true,
 	"schedule-api": true, "drive-api": true, "photos-api": true, "documents-api": true, "sign-api": true,
-	"forms-api": true, "acampa-kids-backend": true,
+	"forms-api": true, "acampa-kids-backend": true, "services-kids-api": true,
 }
 
 // seedKeyServices also get SEED_KEY (the same value everywhere) while seeding is on: auth-api honors it, the others
 // use it to get a seed-actor token. persons-api seeds in-process and no longer takes it (a stale one is removed).
-var seedKeyServices = map[string]bool{"auth-api": true, "sign-api": true, "acampa-kids-backend": true}
+var seedKeyServices = map[string]bool{"auth-api": true, "sign-api": true, "acampa-kids-backend": true, "services-kids-api": true}
 
 // retiredKeys are no longer read by any service: ids are fixed (5eed...) now. Removed from existing .env files.
 var retiredKeys = []string{"SEED_PERSON_IDS_JSON", "SEED_OWNER_PERSON_ID"}

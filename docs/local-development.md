@@ -408,7 +408,7 @@ The choice is per workspace (`ai_cli`, `ai_model`, `ai_command` in `.ipalpha/set
 
 ## Sample data
 
-Core services (and the Acampa Kids backend) seed fictitious people, places, events and files at their first boot, so you
+Core services (and the Acampa Kids backend and Services Kids API) seed fictitious people, places, events and files at their first boot, so you
 can click through the screens. It is a per-workspace choice, `seed=on|off` in `.ipalpha/settings`, asked **once** in
 `setup` (right after the first sign-in step), in `./feature new <slug>` (a new feature copies main's value; main asks only
 if it never chose; `--no-seed` makes that feature `off` without touching main) and in the preview request
@@ -416,7 +416,7 @@ if it never chose; `--no-seed` makes that feature `off` without touching main) a
 `deployment`). The default is **yes**; change it later with `ipalpha config set seed on|off` (which rewrites the keys at once).
 
 The choice owns these keys in the `.env` of auth-api, persons-api, organizations-api, places-api, projects-api, schedule-api,
-drive-api, photos-api, documents-api, sign-api, forms-api and the Acampa Kids backend. **This is the one explicit exception to
+drive-api, photos-api, documents-api, sign-api, forms-api, services-kids-api and the Acampa Kids backend. **This is the one explicit exception to
 "never overwrite a local value"**: setup, `./pull` and `config set seed` rewrite them whenever the choice differs, and blank
 them when it is off (nothing is written while the workspace has not chosen):
 
@@ -424,14 +424,14 @@ them when it is off (nothing is written while the workspace has not chosen):
 | --- | --- | --- |
 | `SEED_DATA` | `true` | all of the services above |
 | `IPALPHA_ENV` | `dev` (previews use `preview:<slug>` in their configmaps) | all of the services above |
-| `SEED_KEY` | 32 random bytes in hex, generated once per workspace (`.ipalpha/seed.env`), the same value everywhere | auth-api, sign-api, Acampa Kids backend (not persons-api: it seeds in-process; a stale `SEED_KEY` in its `.env` is removed by setup/`./pull`) |
+| `SEED_KEY` | 32 random bytes in hex, generated once per workspace (`.ipalpha/seed.env`), the same value everywhere | auth-api, sign-api, services-kids-api, Acampa Kids backend (not persons-api: it seeds in-process; a stale `SEED_KEY` in its `.env` is removed by setup/`./pull`) |
 
 A service refuses to boot with `SEED_DATA=true` unless `IPALPHA_ENV` is `dev` or `preview*`; production never gets either
 key. For the Acampa Kids backend, while seeding is on, setup also generates once (same values the app's seed sends to auth-api,
 filled only where blank): `IPALPHA_CLIENT_ID` (`acampa-kids-<hex>`), `IPALPHA_CLIENT_SECRET`, `IPALPHA_SYSTEM_CLIENT_SECRET`
 (64 hex characters each), plus `IPALPHA_SYSTEM_CLIENT_ID=acampa-kids`, `IPALPHA_DEVELOPERS_API_URL` and
-`SUPER_ADMIN_PERSON_IDS=5eed0000000000000000a001` (Marina Duarte (exemplo)). The first `./run` boot applies the seeds; setup
-prints the sample phones once: `+55 11 90000-0001`..`0006` (core, not verified) and `0011`..`0020` (Acampa Kids, verified).
+`SUPER_ADMIN_PERSON_IDS=5eed0000000000000000a001` (Marina Duarte (exemplo)). Services Kids API (`SERVICES_KIDS_PROJECT_ID` may stay blank while seeding: its seed creates the `services-kids` project and keeps the id in its own `seedState`; with seed off you set it) references persons-api's sample people Ana..Gabriel (`5eed...0001`..`0007`) and needs `AUTH_API_URL`, `PROJECTS_API_URL` and optionally `PLACES_API_URL`. The first `./run` boot applies the seeds; setup
+prints the sample phones once: `+55 11 90000-0001`..`0006` (core and Services Kids, not verified) and `0011`..`0020` (Acampa Kids, verified).
 `SEED_PERSON_IDS_JSON` and `SEED_OWNER_PERSON_ID` are retired (ids are fixed `5eed...`): `./pull` removes them from your `.env`.
 The matching developer guide is `/docs/local-seeding` in the developer portal.
 
