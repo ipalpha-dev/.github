@@ -66,14 +66,14 @@ var Repos = []Repo{
 	{Name: "sign-api", Kind: KindAPI, Port: 3014, Display: "Sign API"},
 	{Name: "ai-api", Kind: KindAPI, Port: 3008, Display: "AI"},
 	{Name: "developers-api", Kind: KindAPI, Port: 3009, Display: "Developers"},
-	{Name: "photo-services-api", Kind: KindAPI, App: "photo-services", Port: 3016, Display: "Photo Services API"},
+	{Name: "services-photo-api", Kind: KindAPI, App: "services-photo", Port: 3016, Display: "Services Photo API"},
 	{Name: "dispatch-api", Kind: KindAPI, Port: 3007, Display: "Dispatch"},
 	{Name: "auth-webapp", Kind: KindWeb, Port: 5100, Display: "Auth Web"},
 	{Name: "forms-webapp", Kind: KindWeb, Port: 5106, Display: "Forms Web"},
 	{Name: "sign-webapp", Kind: KindWeb, Port: 5113, Display: "Sign Web"},
 	{Name: "oikos-webapp", Kind: KindWeb, Port: 5110, Display: "Oikos Web"},
 	{Name: "developers-webapp", Kind: KindWeb, Port: 5111, Display: "Developers Web"},
-	{Name: "photo-services-webapp", Kind: KindWeb, App: "photo-services", Port: 5114, Display: "Photo Services Web"},
+	{Name: "services-photo-webapp", Kind: KindWeb, App: "services-photo", Port: 5114, Display: "Services Photo Web"},
 	{Name: "acampa-kids-backend", Kind: KindOptional, App: "acampa-kids", Image: "backend"},
 	{Name: "acampa-kids-frontend", Kind: KindOptional, App: "acampa-kids", Image: "frontend"},
 	// Moved from Acampa Kids (ipalpha-dev/acampa-kids-face-service): only photos-api calls it. ./run starts its
@@ -122,7 +122,7 @@ var WebBackend = map[string]string{
 	"sign-webapp":           "sign-api",
 	"oikos-webapp":          "persons-api",
 	"developers-webapp":     "developers-api",
-	"photo-services-webapp": "photo-services-api",
+	"services-photo-webapp": "services-photo-api",
 }
 
 // SystemClientScopes is the fallback of deployment/base/core/auth-api/system-clients.json (approved scopes only).

@@ -405,29 +405,34 @@ migrated by their next `./pull`.
 | photos-api | 3010 | Face service (optional) | 8000 |
 | documents-api | 3012 | schedule-api | 3013 |
 | sign-api | 3014 | sign-webapp | 5113 |
-| photo-services-api | 3016 | photo-services-webapp | 5114 |
+| services-photo-api | 3016 | services-photo-webapp | 5114 |
 | apps-api | 3015 | | |
 
-## Photo Services (app outside core)
+## Services Photo (app outside core)
 
-`apps/photo-services/photo-services-api` (port **3016**, MongoDB `photo_services` on the shared local Mongo) and
-`apps/photo-services/photo-services-webapp` (**5114**, Vite; `/api` goes to the API, WebSocket `/api/socket.io`
+`apps/services-photo/services-photo-api` (port **3016**, MongoDB `services_photo` on the shared local Mongo) and
+`apps/services-photo/services-photo-webapp` (**5114**, Vite; `/api` goes to the API, WebSocket `/api/socket.io`
 included). It is an app, not a core tool: it talks to core only over HTTP with the signed-in person's tokens.
-Start it from the panel (or `./run apps set photo-services-webapp`). The API runs as a **single instance** (live
+Start it from the panel (or `./run apps set services-photo-webapp`). The API runs as a **single instance** (live
 updates are in-process websockets).
 
-`./pull` and `setup` write `photo-services-api/.env` from `.env.example` (else the embedded fallback), only adding
+`./pull` and `setup` write `services-photo-api/.env` from `.env.example` (else the embedded fallback), only adding
 missing keys and filling blanks: `SESSION_TOKEN_KEY` (64 hex, generated), `MONGO_URI`, `WEB_ORIGINS` /
 `PUBLIC_WEB_URL` (`http://localhost:5114`), `COOKIE_SECURE=false`, `AUTH_API_URL`, `PROJECTS|PERSONS|SCHEDULE|PHOTOS|PLACES_API_URL`.
 
 Sign-in uses auth-api's login relay, so the app needs an **app-bound client with `login:relay`** and a relay
 entry point. The tooling does not seed these (no local app id exists): register the app in the Developers portal /
 Oikos, then paste `AUTH_CLIENT_ID`, `AUTH_CLIENT_SECRET`, `RELAY_CLIENT_ID` and `RELAY_ENTRY_POINT` into
-`photo-services-api/.env`. Until then the API boots but sign-in answers unavailable.
+`services-photo-api/.env`. Until then the API boots but sign-in answers unavailable.
 
 New core env for this feature (added, never overwritten): schedule-api `PERSONS_API_URL`, `PERSONS_API_AUDIENCE=ipalpha:persons`
 (and the system-client scope `persons:coordination`); persons-api `PROFILE_CALLER_SERVICE_IDS=auth-api`,
-`COORDINATION_CALLER_SERVICE_IDS=schedule-api`. Previews are not built for Photo Services before launch.
+`COORDINATION_CALLER_SERVICE_IDS=schedule-api`. Previews are not built for Services Photo before launch.
+
+The app used to be called Photo Services (`apps/photo-services/photo-services-*`). `./pull` moves those folders once to
+`apps/services-photo/services-photo-*`, together with their `features/<slug>/` worktrees (branches, `.env` and uncommitted
+work stay; it only renames, and does nothing but warn when the new folder already exists). Rename
+`PHOTO_SERVICES_API_URL` to `SERVICES_PHOTO_API_URL` in a webapp `.env` by hand if you set it; the Mongo database is now `services_photo`.
 
 ## Core and apps
 

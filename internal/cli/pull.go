@@ -111,6 +111,9 @@ var formerLayouts = map[string][]string{
 	"forms-webapp": {"apps/forms/forms-webapp"},
 	"sign-api":     {"apps/sign/sign-api"},
 	"sign-webapp":  {"apps/sign/sign-webapp"},
+	// Photo Services was renamed Services Photo (2026-10-12): folder and repository names change.
+	"services-photo-api":    {"apps/photo-services/photo-services-api"},
+	"services-photo-webapp": {"apps/photo-services/photo-services-webapp"},
 }
 
 func formerRels(r catalog.Repo) []string {
