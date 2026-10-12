@@ -328,6 +328,18 @@ func (w *Workspace) Present(kinds ...catalog.Kind) []catalog.Repo {
 	return out
 }
 
+// PresentRuns lists the ./run processes whose folder exists: core APIs and web apps, plus the apps outside core
+// that ./run starts (Acampa Kids), in catalog order.
+func (w *Workspace) PresentRuns() []catalog.Repo {
+	var out []catalog.Repo
+	for _, r := range w.Present(catalog.KindAPI, catalog.KindWeb, catalog.KindOptional) {
+		if r.Runs() {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
 // HasPackage reports whether a repo folder has a package.json.
 func (w *Workspace) HasPackage(name string) bool {
 	_, err := os.Stat(filepath.Join(w.Repo(name), "package.json"))

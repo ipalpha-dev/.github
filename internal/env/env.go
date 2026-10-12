@@ -38,7 +38,8 @@ type Change struct {
 // Prepare completes the .env of every API present in the workspace.
 func Prepare(w *workspace.Workspace) ([]Change, error) {
 	var out []Change
-	for _, r := range w.Present(catalog.KindAPI) {
+	runs := append(w.Present(catalog.KindAPI), appBackends(w)...)
+	for _, r := range runs {
 		ch, err := Complete(w, r)
 		if err != nil {
 			return out, fmt.Errorf("%s/.env: %w", r.Rel(), err)
@@ -49,6 +50,17 @@ func Prepare(w *workspace.Workspace) ([]Change, error) {
 		return out, err
 	}
 	return out, nil
+}
+
+// appBackends are the apps outside core that ./run starts with their own .env (Acampa Kids backend, Bun).
+func appBackends(w *workspace.Workspace) []catalog.Repo {
+	var out []catalog.Repo
+	for _, r := range w.Present(catalog.KindOptional) {
+		if r.Runtime != "" {
+			out = append(out, r)
+		}
+	}
+	return out
 }
 
 // Template returns the env template of an API: its .env.example, else the embedded fallback.
@@ -87,7 +99,11 @@ func Complete(w *workspace.Workspace, r catalog.Repo) (Change, error) {
 			ch.Added = append(ch.Added, strings.TrimSpace(k))
 		}
 	}
-	ch.Filled = fillLocal(w, r, f)
+	if r.Runtime != "" {
+		ch.Filled = fillApp(r, f)
+	} else {
+		ch.Filled = fillLocal(w, r, f)
+	}
 	if ch.Created || len(ch.Added) > 0 || len(ch.Filled) > 0 {
 		if err := f.Save(); err != nil {
 			return ch, err
@@ -96,6 +112,50 @@ func Complete(w *workspace.Workspace, r catalog.Repo) (Change, error) {
 		_ = os.Chmod(path, 0o600)
 	}
 	return ch, nil
+}
+
+var appExampleDefaults = map[string]string{
+	"PORT":        "3000",
+	"CORS_ORIGIN": "http://localhost:5173",
+	"MONGODB_URI": "mongodb://camping:camping-local-only@localhost:27019/camping?authSource=admin",
+}
+
+// fillApp fills the blanks of an app backend's .env (Acampa Kids): the local core URLs from the embedded fallback,
+// the ./run MongoDB, and the secrets the app owns (a session key and the worker secret). Blanks only, never a value
+// the developer chose. The ids and secrets that come from registering the app in core (IPALPHA_CLIENT_*,
+// IPALPHA_SYSTEM_CLIENT_*, IPALPHA_PROJECT_ID, IPALPHA_APP_ID) stay as they are: nothing seeds an external app in
+// auth-api, so they are pasted once (docs/local-development.md, "Acampa Kids").
+func fillApp(r catalog.Repo, f *envfile.File) []string {
+	var changed []string
+	fill := func(k, v string) {
+		if v == "" {
+			return
+		}
+		if cur, ok := f.Get(k); !ok || strings.TrimSpace(cur) == "" {
+			f.Set(k, envfile.Quote(v))
+			changed = append(changed, k)
+		}
+	}
+	fallback := envfile.Parse(assets.EnvFallback(r.Name))
+	// The repo's .env.example is written for a standalone run (its own Mongo on 27019, port 3000, Vite on 5173):
+	// those exact values are replaced by the ./run ones, anything else the developer typed stays.
+	for k, example := range appExampleDefaults {
+		if cur, ok := f.Get(k); ok && envfile.Unquote(strings.TrimSpace(cur)) == example && fallback[k] != "" {
+			f.Set(k, envfile.Quote(fallback[k]))
+			changed = append(changed, k)
+		}
+	}
+	keys := make([]string, 0, len(fallback))
+	for k := range fallback {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		fill(k, fallback[k])
+	}
+	fill("SESSION_TOKEN_KEY", randomHex(32))
+	fill("WORKER_SECRET", randomHex(24))
+	return changed
 }
 
 var peers = []string{"projects", "persons", "organizations", "notifications", "forms", "ai", "developers", "dispatch", "places", "photos", "documents", "schedule", "sign", "apps", "drive", "assistant"}

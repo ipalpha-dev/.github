@@ -365,6 +365,13 @@ func webEnv(w *workspace.Workspace, r catalog.Repo, plan ports.Plan, rw ports.Re
 		vals[key] = urlOf(plan.Port(api.Name))
 		refs[plan.Port(api.Name)] = true
 	}
+	if r.Name == "acampa-kids-frontend" {
+		// Its vite.config proxies /api to a fixed localhost:3000: web-dev.mjs overrides the target with this run's
+		// backend, so the app repository needs no local-only change.
+		backend := plan.Port("acampa-kids-backend")
+		vals["IPALPHA_WEB_PROXY_API"] = urlOf(backend)
+		refs[backend] = true
+	}
 	vals["IPALPHA_WEB_PORT"] = strconv.Itoa(port)
 	vals["IPALPHA_WEB_URL"] = self
 	vals["IPALPHA_VITE_CACHE"] = filepath.Join(w.Dir(), ".vite", r.Name)
@@ -436,11 +443,16 @@ func buildSpecs(w *workspace.Workspace, eng *infra.Engine, plan ports.Plan, rw p
 		}
 		dir := r.Path(w.Root)
 		sp := &Spec{ID: r.Name, Name: r.Label(), Group: r.App, Dir: dir, Port: plan.Port(r.Name), PortKey: r.Name}
-		if r.Kind == catalog.KindAPI {
+		if !r.IsWeb() {
 			sp.Kind = KindAPI
 			sp.Env, sp.Refs = apiEnv(w, r, plan, rw)
-			sp.Env = append(sp.Env, sys.NodeEnv()...)
-			sp.Command, sp.Args = sys.Npm(), []string{"run", "--silent", startScript(dir)}
+			if r.Runtime == "bun" {
+				// Acampa Kids backend: Bun (Hono), `bun run dev` (watch mode), no Node environment.
+				sp.Command, sp.Args = "bun", []string{"run", "dev"}
+			} else {
+				sp.Env = append(sp.Env, sys.NodeEnv()...)
+				sp.Command, sp.Args = sys.Npm(), []string{"run", "--silent", startScript(dir)}
+			}
 			sp.ReadyURL = urlOf(sp.Port) + "/ready"
 			sp.Autostart = true
 		} else {
@@ -463,6 +475,9 @@ func buildSpecs(w *workspace.Workspace, eng *infra.Engine, plan ports.Plan, rw p
 			sp.Autostart = false
 		case !exists(filepath.Join(dir, "package.json")):
 			sp.Missing = i18n.T("run_missing_package", r.Rel())
+			sp.Autostart = false
+		case r.Runtime == "bun" && !deps.BunInstalled():
+			sp.Missing = i18n.T("run_missing_bun", r.Label())
 			sp.Autostart = false
 		}
 		specs = append(specs, sp)

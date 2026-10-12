@@ -57,3 +57,35 @@ func TestServicesPhotoDesktopReposAreCloneOnly(t *testing.T) {
 		}
 	}
 }
+
+func TestAcampaKidsRunsAsABunBackendAndAViteFrontend(t *testing.T) {
+	api, ok1 := Get("acampa-kids-backend")
+	web, ok2 := Get("acampa-kids-frontend")
+	if !ok1 || !ok2 || api.Runtime != "bun" || !api.Runs() || !api.IsBackend() || !api.HasEnv() || api.Label() != "Acampa Kids API" ||
+		!web.Runs() || !web.IsWeb() || web.HasEnv() || web.Label() != "Acampa Kids Web" ||
+		api.Rel() != "apps/acampa-kids/backend" || web.Rel() != "apps/acampa-kids/frontend" {
+		t.Fatalf("acampa: %+v %+v", api, web)
+	}
+	// Still published (images) and skipped quietly when the developer cannot read them.
+	if !api.IsAppImage() || !web.IsAppImage() || !api.SkippedWhenMissing() || !api.Publishable() {
+		t.Fatalf("acampa image flags: %+v %+v", api, web)
+	}
+	keys := PortKeys()
+	has := func(k string) bool {
+		for _, v := range keys {
+			if v == k {
+				return true
+			}
+		}
+		return false
+	}
+	if !has("acampa-kids-backend") || !has("acampa-kids-frontend") {
+		t.Fatalf("port keys: %v", keys)
+	}
+	for _, w := range Webs() {
+		if w.Name == "acampa-kids-frontend" {
+			return
+		}
+	}
+	t.Fatal("Webs() lacks the Acampa frontend")
+}

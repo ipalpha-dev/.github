@@ -25,12 +25,15 @@ const publicUrl = origin ? new URL(origin) : null;
 if (publicUrl && (publicUrl.origin !== origin || (cert ? publicUrl.protocol !== 'https:' : publicUrl.protocol !== 'http:') || Number(publicUrl.port || (cert ? 443 : 80)) !== port)) {
   throw new Error('IPALPHA_WEB_ORIGIN must be a bare origin with the protocol and actual port selected by ./run.');
 }
+// An app whose vite.config proxies /api to a fixed address: ./run hands this run's backend (merged over the config).
+const proxyApi = process.env.IPALPHA_WEB_PROXY_API;
 const server = await createServer({
   root,
   // node_modules can be shared across worktrees: never rewrite another workspace's optimizer cache.
   cacheDir: process.env.IPALPHA_VITE_CACHE || undefined,
   server: {
     port, strictPort: true,
+    ...(proxyApi ? { proxy: { '/api': { target: proxyApi, changeOrigin: true, ws: true } } } : {}),
     ...(publicUrl ? { host: '127.0.0.1', origin: publicUrl.origin, allowedHosts: [publicUrl.hostname] } : {}),
     ...(cert && key ? { https: { cert: readFileSync(cert), key: readFileSync(key) } } : {}),
   },

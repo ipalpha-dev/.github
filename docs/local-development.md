@@ -220,8 +220,8 @@ The face service repository is optional for `./pull` and `./doctor` (skipped qui
 `SCHEDULE_API_URL` / `SCHEDULE_API_AUDIENCE` (the span of an album event linked to a programme entry) and the consumed
 `EXCHANGE_DOCUMENTS_CHANGED`, `EXCHANGE_SCHEDULE_ENTRY_CHANGED`, `EXCHANGE_SCHEDULE_ENTRY_DELETED`; its system client
 gains `documents:read` and `schedule:read`. places-api gets `AUDIT_RETENTION_DAYS=365` (how long `placeAudits` rows
-are kept). Acampa Kids' backend is not an `./run` process; its `IPALPHA_SCHEDULE_API_URL`, `IPALPHA_PLACES_API_URL`
-and `IPALPHA_PHOTOS_API_URL` are set in its own `.env` (see its `.env.example`).
+are kept). Acampa Kids' backend is an `./run` process (see "Acampa Kids" below); its `IPALPHA_SCHEDULE_API_URL`,
+`IPALPHA_PLACES_API_URL` and `IPALPHA_PHOTOS_API_URL` are filled in its own `.env`.
 
 Oikos reaches photos-api at `/api/photos` through its Vite proxy; `./run` hands it `PHOTOS_API_URL` for the port of
 the run, like every other API.
@@ -442,6 +442,7 @@ migrated by their next `./pull`.
 | services-photo-api | 3016 | services-photo-webapp | 5114 |
 | apps-api | 3015 | services-kids-api | 3017 |
 | virtual-assistant | 3019 | services-kids-webapp | 5115 |
+| acampa-kids-backend | 3020 | acampa-kids-frontend | 5117 |
 
 ## Services Photo (app outside core)
 
@@ -489,12 +490,31 @@ As with Services Photo, register the app in the Developers portal / Oikos and pa
 (app-bound, `login:relay` + `notifications:send-template`), `RELAY_CLIENT_ID`, `RELAY_ENTRY_POINT` and `OAUTH_CLIENT_ID`
 into `services-kids-api/.env`; the tooling does not seed them.
 
+## Acampa Kids (app outside core)
+
+`apps/acampa-kids/backend` (**Acampa Kids API**, port **3020**, Bun + Hono, MongoDB `camping` on the shared local Mongo,
+`GET /live` + `/ready`) and `apps/acampa-kids/frontend` (**Acampa Kids Web**, **5117**, Vite) appear under "Apps" in `./run`
+and `./status`, like Services Photo. The repositories stay optional: without access the rows say why they cannot start.
+The backend runs with **Bun** (`bun run dev`): install it from https://bun.sh; `./run` installs the dependencies with
+`bun install` (the frontend with npm) and, without Bun, shows the row as unable to start. The frontend's `/api` proxy
+points to this run's backend (`IPALPHA_WEB_PROXY_API`, applied by `web-dev.mjs`; the app's own `vite.config.ts` is not touched).
+Start the pages from the panel or `./run apps set acampa-kids-frontend`.
+
+`./pull` and `setup` write `apps/acampa-kids/backend/.env` from `.env.example`, only adding missing keys and filling blanks
+(never overwriting your values): the ./run Mongo (`MONGODB_URI`, `MONGODB_DB=camping`), `PORT`, `CORS_ORIGIN` / `APP_URL` /
+`IPALPHA_REDIRECT_URI` for the frontend, every `IPALPHA_*_API_URL` of the local core, `IPALPHA_AUTH_ORIGIN`, `IPALPHA_TOKEN_ISSUER`,
+`IPALPHA_ENTRY_POINT=login`, `AI_API_URL`, and the app's own secrets `SESSION_TOKEN_KEY` and `WORKER_SECRET`. The values that
+come from registering the app in core are **not** seeded (auth-api has no seed for an app outside core, and it refuses to boot on
+a client bound to an unknown app): register Acampa in the Developers portal / Oikos and paste `IPALPHA_CLIENT_ID`,
+`IPALPHA_CLIENT_SECRET`, `IPALPHA_SYSTEM_CLIENT_ID`, `IPALPHA_SYSTEM_CLIENT_SECRET`, `IPALPHA_PROJECT_ID` and `IPALPHA_APP_ID`.
+Until then the API boots and "Entrar com IPAlpha" answers unavailable (`GET /api/auth/ipalpha/config` is not enabled).
+
 ## Core and apps
 
 `core/` holds the shared capabilities, the core UIs and the core tools Forms (`core/forms-api`,
 `core/forms-webapp`) and IPAlpha Sign (`core/sign-api`, `core/sign-webapp`); apps that consume core live in
 `apps/<app>/`. **Acampa Kids** (`apps/acampa-kids/{backend,frontend}`; its former face service is now `core/face-service`)
-has its own repositories, registry and TeamCity project; `./run` does not start it and its repos are optional.
+has its own repositories, registry and TeamCity project; `./run` starts its backend and frontend (see "Acampa Kids") and its repos are optional.
 In a feature environment every core service runs; an app joins only when one of its own repos changed.
 
 ## Environments picker: `./envs`

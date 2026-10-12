@@ -44,6 +44,11 @@ type Repo struct {
 	Display string // panel label
 	// Image is the image name of an optional app repo (registry …/apps/<app>/<image>).
 	Image string
+	// Runtime is how ./run starts a repo that is not a Node/NestJS core API: "bun" (Acampa Kids backend,
+	// `bun run dev`). Empty for everything else.
+	Runtime string
+	// Frontend marks an optional app repo that ./run serves with Vite like a web app.
+	Frontend bool
 }
 
 // Repos in run order: nothing waits for a peer (GET /ready), the order only reads peers-first.
@@ -83,8 +88,10 @@ var Repos = []Repo{
 	{Name: "developers-webapp", Kind: KindWeb, Port: 5111, Display: "Developers Web"},
 	{Name: "services-photo-webapp", Kind: KindWeb, App: "services-photo", Port: 5114, Display: "Services Photo Web"},
 	{Name: "services-kids-webapp", Kind: KindWeb, App: "services-kids", Port: 5115, Display: "Services Kids Web"},
-	{Name: "acampa-kids-backend", Kind: KindOptional, App: "acampa-kids", Image: "backend"},
-	{Name: "acampa-kids-frontend", Kind: KindOptional, App: "acampa-kids", Image: "frontend"},
+	// Acampa Kids (app outside core, own registry/TeamCity): also ./run processes. The backend is Bun (Hono), the
+	// frontend Vite; ports follow the catalog like every other app.
+	{Name: "acampa-kids-backend", Kind: KindOptional, App: "acampa-kids", Image: "backend", Runtime: "bun", Port: 3020, Display: "Acampa Kids API"},
+	{Name: "acampa-kids-frontend", Kind: KindOptional, App: "acampa-kids", Image: "frontend", Frontend: true, Port: 5117, Display: "Acampa Kids Web"},
 	// Moved from Acampa Kids (ipalpha-dev/acampa-kids-face-service): only photos-api calls it. ./run starts its
 	// image as the optional "face" infra container (settings face=on); the repo is only cloned for its code.
 	{Name: "face-service", Kind: KindService, Display: "Face service"},
@@ -134,6 +141,7 @@ var WebBackend = map[string]string{
 	"developers-webapp":     "developers-api",
 	"services-photo-webapp": "services-photo-api",
 	"services-kids-webapp":  "services-kids-api",
+	"acampa-kids-frontend":  "acampa-kids-backend",
 }
 
 // SystemClientScopes is the fallback of deployment/base/core/auth-api/system-clients.json (approved scopes only).
@@ -166,11 +174,20 @@ func (r Repo) Rel() string {
 // Path is the absolute folder of a repository inside root.
 func (r Repo) Path(root string) string { return filepath.Join(root, filepath.FromSlash(r.Rel())) }
 
-// HasEnv: APIs get a .env completed from .env.example / fallback templates.
-func (r Repo) HasEnv() bool { return r.Kind == KindAPI }
+// HasEnv: APIs (and the Bun backend of an app) get a .env completed from .env.example / fallback templates.
+func (r Repo) HasEnv() bool { return r.Kind == KindAPI || r.Runtime != "" }
 
-// Runs: APIs and web apps are processes of ./run.
-func (r Repo) Runs() bool { return r.Kind == KindAPI || r.Kind == KindWeb }
+// Runs: APIs and web apps are processes of ./run, and so are the optional app repos that have a port
+// (Acampa Kids backend + frontend).
+func (r Repo) Runs() bool {
+	return r.Kind == KindAPI || r.Kind == KindWeb || (r.Kind == KindOptional && r.Port != 0)
+}
+
+// IsWeb: served with Vite (web apps and an app's frontend).
+func (r Repo) IsWeb() bool { return r.Kind == KindWeb || r.Frontend }
+
+// IsBackend: a ./run process that is an API (core APIs and an app's Bun backend).
+func (r Repo) IsBackend() bool { return r.Runs() && !r.IsWeb() }
 
 // Image: everything but libraries and deployment ships a container image.
 func (r Repo) HasImage() bool {
@@ -220,8 +237,16 @@ func ByKind(kinds ...Kind) []Repo {
 // APIs in run order.
 func APIs() []Repo { return ByKind(KindAPI) }
 
-// Webs in catalog order.
-func Webs() []Repo { return ByKind(KindWeb) }
+// Webs in catalog order: web apps and the frontend of apps outside core (Acampa Kids).
+func Webs() []Repo {
+	var out []Repo
+	for _, r := range Repos {
+		if r.IsWeb() {
+			out = append(out, r)
+		}
+	}
+	return out
+}
 
 // AppGroupTitle turns "acampa-kids" into "Acampa Kids".
 func AppGroupTitle(app string) string {
@@ -255,12 +280,12 @@ func PortKeys() []string {
 		out = append(out, i.Key)
 	}
 	for _, r := range Repos {
-		if r.Port != 0 && r.Kind == KindAPI {
+		if r.Port != 0 && r.IsBackend() {
 			out = append(out, r.Name)
 		}
 	}
 	for _, r := range Repos {
-		if r.Port != 0 && r.Kind == KindWeb {
+		if r.Port != 0 && r.IsWeb() {
 			out = append(out, r.Name)
 		}
 	}

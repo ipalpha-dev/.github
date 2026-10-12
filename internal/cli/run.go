@@ -164,7 +164,7 @@ func statusCmd() *cobra.Command {
 					continue
 				}
 				kind := run.KindAPI
-				if repo.Kind == catalog.KindWeb {
+				if repo.IsWeb() {
 					kind = run.KindWeb
 				}
 				specs = append(specs, &run.Spec{ID: repo.Name, Name: repo.Label(), Kind: kind, Group: repo.App, Port: plan.Port(repo.Name)})

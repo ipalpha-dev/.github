@@ -41,7 +41,7 @@ func Plan(w *workspace.Workspace) [][]Task {
 			libsBuild = append(libsBuild, Task{r, dir, "build"})
 		}
 	}
-	for _, r := range w.Present(catalog.KindAPI, catalog.KindWeb) {
+	for _, r := range w.PresentRuns() {
 		dir := r.Path(w.Root)
 		if exists(filepath.Join(dir, "package.json")) && NeedsInstall(dir) {
 			rest = append(rest, Task{r, dir, "install"})
@@ -175,6 +175,9 @@ func runTask(t Task, logDir string) error {
 		return err
 	}
 	defer f.Close()
+	if t.Repo.Runtime == "bun" {
+		return runBunInstall(t, f, logPath)
+	}
 	var args []string
 	if t.Action == "install" {
 		for _, lib := range []string{"shared-js"} {
@@ -200,6 +203,34 @@ func runTask(t Task, logDir string) error {
 		target = filepath.Join(t.Dir, "dist")
 	}
 	_ = os.Chtimes(target, now, now)
+	return nil
+}
+
+// BunInstalled reports whether the bun runtime is on PATH (the Acampa Kids backend needs it).
+func BunInstalled() bool { return sys.Has("bun") }
+
+// runBunInstall installs a Bun app's dependencies (`bun install`; node_modules, like npm).
+func runBunInstall(t Task, f *os.File, logPath string) error {
+	if !BunInstalled() {
+		return &ui.Problem{
+			Step:  i18n.T("deps_failed", "bun "+t.Action, t.Repo.Rel()),
+			Cause: i18n.T("deps_bun_missing"),
+			Log:   logPath,
+			Fix:   []string{i18n.T("deps_bun_fix")},
+		}
+	}
+	res := sys.Cmd{Dir: t.Dir, Name: "bun", Args: []string{"install"}, Log: io.Writer(f)}.Run()
+	if res.Err != nil {
+		return &ui.Problem{
+			Step:  i18n.T("deps_failed", "bun "+t.Action, t.Repo.Rel()),
+			Cause: strings.ReplaceAll(i18n.T("deps_cause_generic"), "npm", "bun"),
+			Tail:  ui.Tail(res.Output, 20),
+			Log:   logPath,
+			Fix:   []string{i18n.T("deps_fix_clean", filepath.Join(t.Repo.Rel(), "node_modules"))},
+		}
+	}
+	now := time.Now()
+	_ = os.Chtimes(filepath.Join(t.Dir, "node_modules"), now, now)
 	return nil
 }
 
@@ -259,7 +290,7 @@ func RefreshSharedCopies(w *workspace.Workspace, progress func(string)) {
 		if !exists(src) {
 			continue
 		}
-		for _, r := range w.Present(catalog.KindAPI, catalog.KindWeb) {
+		for _, r := range w.PresentRuns() {
 			cp := filepath.Join(r.Path(w.Root), "node_modules", "@ipalpha", lib)
 			st, err := os.Lstat(cp)
 			if err != nil || st.Mode()&os.ModeSymlink != 0 || !exists(filepath.Join(cp, "dist")) {

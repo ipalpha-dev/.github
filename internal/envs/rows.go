@@ -238,7 +238,7 @@ func RunInfoOf(root string) RunInfo {
 		port = plan.Port("oikos-webapp")
 	}
 	info := RunInfo{Owner: run.RunningOwner(w), URL: "http://localhost:" + strconv.Itoa(port)}
-	for _, repo := range w.Present(catalog.KindAPI, catalog.KindWeb) {
+	for _, repo := range w.PresentRuns() {
 		info.Total++
 		p := w.Settings.Port(repo.Name)
 		if ok {
