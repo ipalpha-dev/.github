@@ -67,6 +67,8 @@ var Repos = []Repo{
 	{Name: "ai-api", Kind: KindAPI, Port: 3008, Display: "AI"},
 	{Name: "developers-api", Kind: KindAPI, Port: 3009, Display: "Developers"},
 	{Name: "services-photo-api", Kind: KindAPI, App: "services-photo", Port: 3016, Display: "Services Photo API"},
+	// Services Kids: repos exist only locally for now (no origin yet), so a missing clone is skipped quietly.
+	{Name: "services-kids-api", Kind: KindAPI, App: "services-kids", Port: 3017, Display: "Services Kids API", NoRemote: true},
 	{Name: "dispatch-api", Kind: KindAPI, Port: 3007, Display: "Dispatch"},
 	{Name: "auth-webapp", Kind: KindWeb, Port: 5100, Display: "Auth Web"},
 	{Name: "forms-webapp", Kind: KindWeb, Port: 5106, Display: "Forms Web"},
@@ -74,6 +76,7 @@ var Repos = []Repo{
 	{Name: "oikos-webapp", Kind: KindWeb, Port: 5110, Display: "Oikos Web"},
 	{Name: "developers-webapp", Kind: KindWeb, Port: 5111, Display: "Developers Web"},
 	{Name: "services-photo-webapp", Kind: KindWeb, App: "services-photo", Port: 5114, Display: "Services Photo Web"},
+	{Name: "services-kids-webapp", Kind: KindWeb, App: "services-kids", Port: 5115, Display: "Services Kids Web", NoRemote: true},
 	{Name: "acampa-kids-backend", Kind: KindOptional, App: "acampa-kids", Image: "backend"},
 	{Name: "acampa-kids-frontend", Kind: KindOptional, App: "acampa-kids", Image: "frontend"},
 	// Moved from Acampa Kids (ipalpha-dev/acampa-kids-face-service): only photos-api calls it. ./run starts its
@@ -123,6 +126,7 @@ var WebBackend = map[string]string{
 	"oikos-webapp":          "persons-api",
 	"developers-webapp":     "developers-api",
 	"services-photo-webapp": "services-photo-api",
+	"services-kids-webapp":  "services-kids-api",
 }
 
 // SystemClientScopes is the fallback of deployment/base/core/auth-api/system-clients.json (approved scopes only).
@@ -168,7 +172,9 @@ func (r Repo) HasImage() bool {
 
 // SkippedWhenMissing: repositories a developer may not have (no access, or not created yet) are skipped
 // quietly by ./pull, ./doctor and ./feature instead of failing them.
-func (r Repo) SkippedWhenMissing() bool { return r.Kind == KindOptional || r.Kind == KindService || r.NoRemote }
+func (r Repo) SkippedWhenMissing() bool {
+	return r.Kind == KindOptional || r.Kind == KindService || r.NoRemote
+}
 
 // Publishable by ./publish (release mode): core services, web apps, libraries and the images of
 // apps outside core (Acampa Kids backend/frontend). face-service (KindService) is built by TeamCity only.

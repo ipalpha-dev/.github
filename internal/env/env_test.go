@@ -1,6 +1,7 @@
 package env
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -296,5 +297,27 @@ func TestSignClientsAndEnv(t *testing.T) {
 	}
 	if o := envfile.Read(dispatch)["SOCKET_ALLOWED_ORIGINS"]; o != "http://localhost:5106,http://localhost:5110,http://localhost:5113" {
 		t.Fatalf("dispatch origins: %q", o)
+	}
+}
+
+func TestServicesKidsAPIGetsStableVAPIDKeys(t *testing.T) {
+	w := ws(t)
+	dir := w.Repo("services-kids-api")
+	os.MkdirAll(dir, 0o755)
+	os.WriteFile(filepath.Join(dir, ".env.example"), []byte("SESSION_TOKEN_KEY=\nVAPID_PUBLIC_KEY=\nVAPID_PRIVATE_KEY=\nVAPID_SUBJECT=\n"), 0o644)
+	if _, err := Prepare(w); err != nil {
+		t.Fatal(err)
+	}
+	e := envfile.Read(filepath.Join(dir, ".env"))
+	pub, err := base64.RawURLEncoding.DecodeString(e["VAPID_PUBLIC_KEY"])
+	priv, err2 := base64.RawURLEncoding.DecodeString(e["VAPID_PRIVATE_KEY"])
+	if err != nil || err2 != nil || len(pub) != 65 || pub[0] != 4 || len(priv) != 32 || len(e["SESSION_TOKEN_KEY"]) != 64 || e["VAPID_SUBJECT"] != "mailto:dev@example.test" {
+		t.Fatalf("keys: %v", e)
+	}
+	if _, err := Prepare(w); err != nil {
+		t.Fatal(err)
+	}
+	if again := envfile.Read(filepath.Join(dir, ".env")); again["VAPID_PUBLIC_KEY"] != e["VAPID_PUBLIC_KEY"] || again["VAPID_PRIVATE_KEY"] != e["VAPID_PRIVATE_KEY"] {
+		t.Fatal("VAPID pair must be generated once and kept")
 	}
 }

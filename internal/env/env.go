@@ -4,6 +4,7 @@
 package env
 
 import (
+	"crypto/ecdh"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
@@ -207,6 +208,19 @@ func fillLocal(w *workspace.Workspace, r catalog.Repo, f *envfile.File) []string
 	if r.Name == "services-photo-api" {
 		fill("SESSION_TOKEN_KEY", randomHex(32)) // seals the per-role core tokens of a session: 64 hex characters
 	}
+	if r.Name == "services-kids-api" {
+		fill("SESSION_TOKEN_KEY", randomHex(32))
+		// One Web Push (VAPID) P-256 key pair, generated once and kept: a new pair would drop every subscription.
+		pub, _ := f.Get("VAPID_PUBLIC_KEY")
+		priv, _ := f.Get("VAPID_PRIVATE_KEY")
+		if pub == "" || priv == "" {
+			if pub, priv, err := newVAPIDKeys(); err == nil {
+				set("VAPID_PUBLIC_KEY", pub)
+				set("VAPID_PRIVATE_KEY", priv)
+			}
+		}
+		fill("VAPID_SUBJECT", "mailto:dev@example.test")
+	}
 	if r.Name == "dispatch-api" {
 		// An existing list is kept; only the local origins of newer web apps are appended (IPAlpha Sign).
 		if cur, ok := f.Get("SOCKET_ALLOWED_ORIGINS"); ok {
@@ -245,6 +259,17 @@ func randomB64(n int) string {
 	b := make([]byte, n)
 	_, _ = rand.Read(b)
 	return base64.StdEncoding.EncodeToString(b)
+}
+
+// newVAPIDKeys returns a P-256 Web Push key pair, base64url without padding: the public key as the
+// 65-byte uncompressed point, the private key as the 32-byte scalar.
+func newVAPIDKeys() (pub, priv string, err error) {
+	k, err := ecdh.P256().GenerateKey(rand.Reader)
+	if err != nil {
+		return "", "", err
+	}
+	enc := base64.RawURLEncoding
+	return enc.EncodeToString(k.PublicKey().Bytes()), enc.EncodeToString(k.Bytes()), nil
 }
 
 func randomHex(n int) string {

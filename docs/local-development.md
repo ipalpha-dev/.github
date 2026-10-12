@@ -412,7 +412,8 @@ migrated by their next `./pull`.
 | documents-api | 3012 | schedule-api | 3013 |
 | sign-api | 3014 | sign-webapp | 5113 |
 | services-photo-api | 3016 | services-photo-webapp | 5114 |
-| apps-api | 3015 | | |
+| apps-api | 3015 | services-kids-api | 3017 |
+| | | services-kids-webapp | 5115 |
 
 ## Services Photo (app outside core)
 
@@ -439,6 +440,27 @@ The app used to be called Photo Services (`apps/photo-services/photo-services-*`
 `apps/services-photo/services-photo-*`, together with their `features/<slug>/` worktrees (branches, `.env` and uncommitted
 work stay; it only renames, and does nothing but warn when the new folder already exists). Rename
 `PHOTO_SERVICES_API_URL` to `SERVICES_PHOTO_API_URL` in a webapp `.env` by hand if you set it; the Mongo database is now `services_photo`.
+
+## Services Kids (app outside core)
+
+`apps/services-kids/services-kids-api` (port **3017**, MongoDB `services_kids`) and
+`apps/services-kids/services-kids-webapp` (**5115**, Vite; `/api` goes to the API via `SERVICES_KIDS_API_URL`, default
+`http://localhost:3017`). Kids ministry Sunday service (design: `.ipalpha/design/services-kids.md`); an app outside core,
+HTTP with the signed-in person's tokens, its own socket.io (no `dispatch-api` origin needed). Start it from the panel or
+`./run apps set services-kids-webapp`. Single API instance.
+
+The repositories have no remote yet (they live only in `features/services-kids/apps/services-kids/`), so `./pull`,
+`setup` and `./feature` skip them quietly when missing, like `apps-api`.
+
+`./pull` and `setup` write `services-kids-api/.env` from `.env.example` (else the embedded fallback), only adding
+missing keys and filling blanks: `SESSION_TOKEN_KEY` (64 hex), `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` (one Web Push P-256
+pair, base64url, generated once and kept), `VAPID_SUBJECT=mailto:dev@example.test`, `MONGO_URI`, `WEB_ORIGINS` /
+`PUBLIC_WEB_URL` (`http://localhost:5115`), `COOKIE_SECURE=false`, `AUTH_API_URL`,
+`PROJECTS|PERSONS|PLACES|SCHEDULE|NOTIFICATIONS_API_URL`, `WHATSAPP_ENABLED=false`.
+
+As with Services Photo, register the app in the Developers portal / Oikos and paste `AUTH_CLIENT_ID`, `AUTH_CLIENT_SECRET`
+(app-bound, `login:relay` + `notifications:send-template`), `RELAY_CLIENT_ID`, `RELAY_ENTRY_POINT` and `OAUTH_CLIENT_ID`
+into `services-kids-api/.env`; the tooling does not seed them.
 
 ## Core and apps
 
