@@ -205,9 +205,6 @@ func fillLocal(w *workspace.Workspace, r catalog.Repo, f *envfile.File) []string
 	if r.Name == "persons-api" {
 		fill("IMPORT_ROWS_KEY", randomB64(32))
 	}
-	if r.Name == "services-photo-api" {
-		fill("SESSION_TOKEN_KEY", randomHex(32)) // seals the per-role core tokens of a session: 64 hex characters
-	}
 	if r.Name == "services-kids-api" {
 		fill("SESSION_TOKEN_KEY", randomHex(32))
 		// One Web Push (VAPID) P-256 key pair, generated once and kept: a new pair would drop every subscription.
