@@ -401,7 +401,7 @@ func TestFeatureLifecycle(t *testing.T) {
 	raw = git(t, filepath.Join(e.origins, "deployment.git"), "show", "master:previews/hello-test/release.json")
 	json.Unmarshal([]byte(raw), &rec)
 	images = rec["images"].(map[string]any)
-	for _, s := range []string{"auth-api", "persons-api", "places-api", "photos-api", "schedule-api", "dispatch-api", "ai-api", "developers-api", "forms-api", "sign-api"} {
+	for _, s := range []string{"auth-api", "persons-api", "places-api", "photos-api", "schedule-api", "apps-api", "dispatch-api", "ai-api", "developers-api", "forms-api", "sign-api"} {
 		if images[s] == nil {
 			t.Errorf("closure misses %s", s)
 		}

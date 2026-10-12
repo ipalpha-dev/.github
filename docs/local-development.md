@@ -216,6 +216,14 @@ Silicon it is emulated and noticeably slower (first start and each detection).
 Oikos reaches photos-api at `/api/photos` through its Vite proxy; `./run` hands it `PHOTOS_API_URL` for the port of
 the run, like every other API.
 
+### Local app features and directory (apps-api)
+
+apps-api (port 3015, MongoDB `apps`, audience `ipalpha:apps`) owns per-app features, skills, directory listings, links
+and banner grants. `./run` starts it and hands auth-api, ai-api, developers-api and dispatch-api `APPS_API_URL`; Oikos
+and Developers reach it at `/api/apps`. Its repository has no remote yet: `./pull` and `setup` skip it quietly until one
+exists. ai-api also gets `AI_TRANSCRIBE_URL` / `_MODEL` / `_KEY`; the directory and banner-grant exchanges moved from
+`developers-api.*` to `apps-api.*`.
+
 ### Local documents and consent (documents-api)
 
 documents-api (port 3012, MongoDB `documents`) holds versioned legal texts (membership term, `face-recognition`
@@ -388,6 +396,7 @@ migrated by their next `./pull`.
 | documents-api | 3012 | schedule-api | 3013 |
 | sign-api | 3014 | sign-webapp | 5113 |
 | photo-services-api | 3016 | photo-services-webapp | 5114 |
+| apps-api | 3015 | | |
 
 ## Photo Services (app outside core)
 

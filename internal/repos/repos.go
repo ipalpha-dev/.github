@@ -128,7 +128,7 @@ func CloneAll(org, root string, a Access, progress func(Outcome)) []Outcome {
 			return Outcome{Repo: r, Status: "kept"}
 		}
 		if err := Clone(org, r.Name, dest, a); err != nil {
-			if r.Kind == catalog.KindOptional {
+			if r.Kind == catalog.KindOptional || r.NoRemote {
 				return Outcome{Repo: r, Status: "skipped", Detail: i18n.T("repos_optional_skipped")}
 			}
 			return Outcome{Repo: r, Status: "failed", Detail: err.Error()}
@@ -154,7 +154,7 @@ func PullAll(org, root string, fetchOnly bool, a Access, progress func(Outcome))
 				return Outcome{Repo: r, Status: "skipped"}
 			}
 			if err := Clone(org, r.Name, dir, a); err != nil {
-				if r.Kind == catalog.KindOptional {
+				if r.Kind == catalog.KindOptional || r.NoRemote {
 					return Outcome{Repo: r, Status: "skipped", Detail: i18n.T("repos_optional_skipped")}
 				}
 				return Outcome{Repo: r, Status: "failed", Detail: err.Error()}
@@ -163,6 +163,11 @@ func PullAll(org, root string, fetchOnly bool, a Access, progress func(Outcome))
 		}
 		if !IsGit(dir) {
 			return Outcome{Repo: r, Status: "skipped", Detail: i18n.T("repos_not_git")}
+		}
+		if r.NoRemote {
+			if out, err := sys.Git(dir, "remote"); err != nil || strings.TrimSpace(out) == "" {
+				return Outcome{Repo: r, Status: "skipped", Detail: i18n.T("repos_no_upstream")}
+			}
 		}
 		if res := (sys.Cmd{Name: "git", Args: []string{"-C", dir, "fetch", "--prune"}, Env: []string{"GIT_TERMINAL_PROMPT=0"}}).Run(); res.Err != nil {
 			return Outcome{Repo: r, Status: "failed", Detail: i18n.T("repos_fetch_failed") + ": " + lastLine(res.Output)}
