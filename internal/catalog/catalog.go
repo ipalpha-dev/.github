@@ -17,6 +17,11 @@ const ToolingRepo = ".github"
 // DefaultRegistry is where ./publish pushes images when it builds them locally.
 const DefaultRegistry = "registry.kevyn.com.br/ip-alpha/core"
 
+// Public, version-pinned development infrastructure; never a production core service.
+const CPAMCSimulatorImage = "docker.io/kevynsax/cpamc-simulator:0.1.0"
+const CPAMCSimulatorClientKey = "simulator-client-key"
+const CPAMCSimulatorManagementKey = "simulator-management-key"
+
 // Kind of repository.
 type Kind string
 
@@ -53,11 +58,13 @@ var Repos = []Repo{
 	{Name: "notifications-api", Kind: KindAPI, Port: 3004, Display: "Notifications"},
 	{Name: "auth-api", Kind: KindAPI, Port: 3005, Display: "Auth"},
 	{Name: "forms-api", Kind: KindAPI, App: "forms", Port: 3006, Display: "Forms API"},
+	{Name: "sign-api", Kind: KindAPI, App: "sign", Port: 3014, Display: "Sign API"},
 	{Name: "ai-api", Kind: KindAPI, Port: 3008, Display: "AI"},
 	{Name: "developers-api", Kind: KindAPI, Port: 3009, Display: "Developers"},
 	{Name: "dispatch-api", Kind: KindAPI, Port: 3007, Display: "Dispatch"},
 	{Name: "auth-webapp", Kind: KindWeb, Port: 5100, Display: "Auth Web"},
 	{Name: "forms-webapp", Kind: KindWeb, App: "forms", Port: 5106, Display: "Forms Web"},
+	{Name: "sign-webapp", Kind: KindWeb, App: "sign", Port: 5113, Display: "Sign Web"},
 	{Name: "oikos-webapp", Kind: KindWeb, Port: 5110, Display: "Oikos Web"},
 	{Name: "developers-webapp", Kind: KindWeb, Port: 5111, Display: "Developers Web"},
 	{Name: "acampa-kids-backend", Kind: KindOptional, App: "acampa-kids", Image: "backend"},
@@ -79,6 +86,7 @@ type Infra struct {
 
 // InfraServices are the containers every workspace runs.
 var InfraServices = []Infra{
+	{Key: "cpamc", Service: "cpamc", Port: 8317, Container: 8317, Display: "cpamc simulator", EnvKey: "CPAMC_HOST_PORT"},
 	{Key: "mongo", Service: "mongo", Port: 27017, Container: 27017, Display: "MongoDB", EnvKey: "MONGO_HOST_PORT"},
 	{Key: "redis", Service: "redis", Port: 6379, Container: 6379, Display: "Redis", EnvKey: "REDIS_HOST_PORT"},
 	{Key: "rabbitmq", Service: "rabbitmq", Port: 5672, Container: 5672, Display: "RabbitMQ", EnvKey: "RABBITMQ_HOST_PORT"},
@@ -89,7 +97,7 @@ var InfraServices = []Infra{
 }
 
 // DefaultBrowserApps start (web apps) and open (pages) on ./run until the developer changes them.
-var DefaultBrowserApps = []string{"auth-webapp", "oikos-webapp", "mailpit"}
+var DefaultBrowserApps = []string{"auth-webapp", "oikos-webapp", "sign-webapp", "mailpit"}
 
 // NeverAutoOpen pages start but never get their own tab (auth is a popup the other apps open).
 var NeverAutoOpen = map[string]bool{"auth-webapp": true}
@@ -98,6 +106,7 @@ var NeverAutoOpen = map[string]bool{"auth-webapp": true}
 var WebBackend = map[string]string{
 	"auth-webapp":       "auth-api",
 	"forms-webapp":      "forms-api",
+	"sign-webapp":       "sign-api",
 	"oikos-webapp":      "persons-api",
 	"developers-webapp": "developers-api",
 }

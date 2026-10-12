@@ -181,7 +181,7 @@ func TestSetupPullAndWrappers(t *testing.T) {
 		}
 	}
 	s := envfile.Read(filepath.Join(e.root, ".ipalpha", "settings"))
-	if s["infra_name"] != "ipalpha-test" || s["auth-api_port"] != "3005" || s["browser_apps"] != "auth-webapp oikos-webapp mailpit" || s["ai_cli"] != "none" {
+	if s["infra_name"] != "ipalpha-test" || s["auth-api_port"] != "3005" || s["browser_apps"] != "auth-webapp oikos-webapp sign-webapp mailpit" || s["ai_cli"] != "none" {
 		t.Fatalf("settings: %v", s)
 	}
 	auth := envfile.Read(filepath.Join(e.root, "core", "auth-api", ".env"))

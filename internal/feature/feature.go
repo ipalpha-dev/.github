@@ -51,8 +51,10 @@ func Hosts(slug string) []string {
 // DevelopersHost is served when the baseline includes developers-webapp.
 func DevelopersHost(slug string) string { return "developers-ipalpha-" + slug + "." + Domain() }
 
-// AppHosts are served only when the app changed.
-func AppHosts(slug string) []string { return []string{"acampa-ipalpha-" + slug + "." + Domain()} }
+// AppHosts are served only when the app changed (Acampa Kids, IPAlpha Sign).
+func AppHosts(slug string) []string {
+	return []string{"acampa-ipalpha-" + slug + "." + Domain(), "sign-ipalpha-" + slug + "." + Domain()}
+}
 
 var slugRe = regexp.MustCompile(`^[a-z0-9-]{3,30}$`)
 

@@ -33,28 +33,15 @@ type Controller struct {
 	autoOpen bool
 }
 
-// NewController builds the rows (infra, core APIs, web apps, then apps outside core).
+// NewController builds rows: core APIs, core frontends, grouped apps, then infrastructure.
 func NewController(s *Session) *Controller {
 	ctx, cancel := context.WithCancel(context.Background())
 	c := &Controller{S: s, Events: make(chan Event, 512), LogDir: s.W.LogsDir() + string(os.PathSeparator) + "run",
 		opened: map[string]bool{}, ctx: ctx, cancel: cancel,
 		autoOpen: os.Getenv("IPALPHA_OPEN_BROWSERS") != "0" && os.Getenv("CI") == ""}
-	var infra, core, web, apps []*Proc
-	for _, sp := range s.Specs {
-		p := NewProc(sp)
-		switch {
-		case sp.Group != "":
-			apps = append(apps, p)
-		case sp.Kind == KindInfra:
-			infra = append(infra, p)
-		case sp.Kind == KindAPI:
-			core = append(core, p)
-		default:
-			web = append(web, p)
-		}
+	for _, sp := range OrderSpecs(s.Specs) {
+		c.Procs = append(c.Procs, NewProc(sp))
 	}
-	// Apps outside core: API rows before their web rows, grouped by app in catalog order.
-	c.Procs = append(append(append(infra, core...), web...), apps...)
 	return c
 }
 

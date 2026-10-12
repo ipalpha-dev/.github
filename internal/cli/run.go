@@ -152,35 +152,58 @@ func statusCmd() *cobra.Command {
 			owner := run.RunningOwner(w)
 			eng := infra.New(w)
 			health := eng.Health()
-			ui.Section(i18n.T("panel_section_infra"))
-			for _, s := range catalog.InfraServices {
-				h := health[s.Service]
-				if s.Optional && h == "" && !w.Settings.Face {
+			var specs []*run.Spec
+			for _, repo := range catalog.Repos {
+				if !repo.Runs() {
+					continue
+				}
+				kind := run.KindAPI
+				if repo.Kind == catalog.KindWeb {
+					kind = run.KindWeb
+				}
+				specs = append(specs, &run.Spec{ID: repo.Name, Name: repo.Label(), Kind: kind, Group: repo.App, Port: plan.Port(repo.Name)})
+			}
+			for _, service := range catalog.InfraServices {
+				if service.Optional && health[service.Service] == "" && !w.Settings.Face {
 					continue // off by default: shown only when turned on or still around
 				}
-				if h == "" {
-					h = "stopped"
-				}
-				ui.Item(s.Display, fmt.Sprintf(":%d  %s", plan.Port(s.Key), i18n.T("health_"+h)))
+				specs = append(specs, &run.Spec{ID: service.Key, Name: service.Display, Kind: run.KindInfra, Service: service.Service, Port: plan.Port(service.Key)})
 			}
-			for _, group := range []struct {
-				title string
-				kind  catalog.Kind
-			}{{i18n.T("panel_section_core"), catalog.KindAPI}, {i18n.T("panel_section_web"), catalog.KindWeb}} {
-				ui.Section(group.title)
-				for _, r := range catalog.ByKind(group.kind) {
-					p := plan.Port(r.Name)
-					state := ui.Muted.Render(i18n.T("state_stopped"))
-					if sys.PortBusy(p) {
-						if owner != 0 {
-							state = ui.OK.Render(i18n.T("state_listening"))
-						} else {
-							state = ui.Warn.Render(i18n.T("state_port_other"))
-						}
-					}
-					url := fmt.Sprintf("http://localhost:%d", p)
-					ui.Item(r.Label(), fmt.Sprintf("%-28s %s", url, state))
+			previous := ""
+			for _, spec := range run.OrderSpecs(specs) {
+				section, title := "core", i18n.T("panel_section_core")
+				switch {
+				case spec.Kind == run.KindInfra:
+					section, title = "infra", i18n.T("panel_section_infra")
+				case spec.Group != "":
+					section, title = "app:"+spec.Group, catalog.AppGroupTitle(spec.Group)
+				case spec.Kind == run.KindWeb:
+					section, title = "web", i18n.T("panel_section_web")
 				}
+				if section != previous {
+					if strings.HasPrefix(section, "app:") && !strings.HasPrefix(previous, "app:") {
+						ui.Section(i18n.T("panel_section_apps"))
+					}
+					ui.Section(title)
+					previous = section
+				}
+				if spec.Kind == run.KindInfra {
+					h := health[spec.Service]
+					if h == "" {
+						h = "stopped"
+					}
+					ui.Item(spec.Name, fmt.Sprintf(":%d  %s", spec.Port, i18n.T("health_"+h)))
+					continue
+				}
+				state := ui.Muted.Render(i18n.T("state_stopped"))
+				if sys.PortBusy(spec.Port) {
+					if owner != 0 {
+						state = ui.OK.Render(i18n.T("state_listening"))
+					} else {
+						state = ui.Warn.Render(i18n.T("state_port_other"))
+					}
+				}
+				ui.Item(spec.Name, fmt.Sprintf("%-28s %s", fmt.Sprintf("http://localhost:%d", spec.Port), state))
 			}
 			for _, m := range plan.Moves {
 				ui.Warning(i18n.T("run_port_moved", m.Key, m.Preferred, m.Actual))

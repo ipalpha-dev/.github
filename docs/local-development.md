@@ -13,6 +13,56 @@ Everything below is done by one program, `ipalpha` (Go, no runtime dependencies)
 copy in `.ipalpha/bin/` and small wrappers at its root (`run`, `pull`, … on macOS/Linux; `run.cmd`, … on
 Windows). Something wrong? `./doctor` lists what is missing with the fix for each item.
 
+## Hosted One Tap SDK and local HTTPS/FedCM
+
+The auth-webapp development server and image both serve `/sdk/v1/client.js` and `/sdk/v1/client.css`.
+Forms uses this SDK for recognized accounts while keeping creator tokens and one-time form exchanges
+in its own client. Normal HTTP development still works; FedCM is optional and disabled when
+`auth-api/.env` has a blank `FEDCM_PROVIDER_ORIGIN`. `./pull`, setup and `./run` add this new key without
+replacing a developer's values. No extra service, port, seed client or Mongo collection is required.
+
+For browser-level cross-site testing, use two genuinely different registrable HTTPS domains and trusted
+local certificates (not certificates with browser warnings). In the auth webapp `.env`:
+
+```dotenv
+IPALPHA_WEB_TLS_CERT=<absolute trusted certificate path>
+IPALPHA_WEB_TLS_KEY=<absolute private key path>
+IPALPHA_WEB_ORIGIN=https://auth.ipalpha.test:5100
+```
+
+Use the actual port selected by `./run`; a mismatch fails startup rather than silently producing bad
+callbacks. These values are local-only and forwarded to Vite, not browser bundle secrets or container
+assets. The runner shows and checks the configured HTTPS URL and continues to verify its certificate.
+Configure the application webapp similarly for its own trusted HTTPS domain. Existing app `VITE_*`
+settings must point to that auth host; auth APIs remain `/api/auth` on **only** the auth host.
+
+In `auth-api/.env`, include that HTTPS origin in `AUTH_FRONTEND_ORIGINS`, set
+`FEDCM_PROVIDER_ORIGIN` to it, and use the matching `WEBAUTHN_RP_ID` (e.g. `ipalpha.test`). Preserve any
+other origins needed by the local run. Register exact HTTPS app origins and callbacks; passkey RP
+changes also require corresponding webapp origins. Choose the final RP before real-user enrollment.
+
+Serve `https://ipalpha.test/.well-known/web-identity` through a separate trusted local HTTPS reverse
+proxy, with the JSON returned by the auth host's `/api/auth/fedcm/discovery`. Route **only that exact
+public discovery path**, never normal sign-in APIs through the apex. Set local DNS/hosts entries for
+both sites and the discovery host. The final public IPAlpha domain is undecided; public apex deployment
+is deliberately not included. The SDK supports configured domains, not one hard-coded host.
+
+Check fresh proof → current/new consent, cancelled or unavailable passkeys, explicit SMS fallback,
+blocked popups, wrong origin/source/state, expired/replayed bootstrap tickets and account removal.
+FedCM selection is only a 120-second bootstrap ticket, never proof or permission consent. Independent
+domains/browser versions without FedCM retain ordinary sign-in. Portal recipes: `/docs/one-tap` in all
+five languages, including browser tokens, backend PAR and application-owned code adapters.
+
+## Church campaign emails and AI writing
+
+Oikos Comunicação now stores campaign drafts and queues test/immediate/scheduled email delivery. Local delivery remains Mailpit-only; no provider keys or paid sends are needed. The existing RustFS instance holds chosen images in `church-email-images`. Node 22.12+ is required by the patched server HTML sanitizer; setup/doctor enforce it, and the existing `node@22` install instruction stays valid.
+
+Setup and `./pull` add missing notifications keys: `ORGANIZATIONS_API_URL`, `ORGANIZATIONS_API_AUDIENCE`, `EXCHANGE_CHURCH_EMAIL_CHANGED`, `CHURCH_EMAIL_PUBLIC_URL`, `CHURCH_EMAIL_UNSUBSCRIBE_KEY`, `S3_ENDPOINT`, `S3_REGION`, `CHURCH_EMAIL_IMAGES_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`. The unsubscribe key is generated from 32 random bytes and kept; the S3 credentials follow the local RustFS credentials without overwriting custom values. Dispatch gets `NOTIFICATIONS_API_URL` and the same exchange. The notifications system client gains `organizations:snapshot`; no third-party scope or new microservice is added. Run/publish/feature use these normal env/catalog paths; do not add custom startup scripts.
+
+`CHURCH_EMAIL_PUBLIC_URL` defaults to Oikos at `http://localhost:5110/api/notifications/church-emails`; the run-time port rewriter follows remapped ports. Use the actual Oikos HTTPS origin when configuring local TLS. Outside development/test the base must be HTTPS, on the Oikos host; its origin serves `/church-email-unsubscribe`. All notifications replicas share the private unsubscribe key. Public image URLs contain only opaque asset IDs. GET validates an unsubscribe without mutating it; browser confirmation and RFC 8058 provider POST disable campaigns only.
+
+Writing uses `aiSettings.assist` in the existing AI service (defaults to the current completion model); images and reference edits use its existing image-model priority list. The person reviews all suggestions and explicitly sends. No AI action chooses recipients or sends email. A 202 means queued, not delivered; provider acceptance is not an inbox receipt. Uncertain acceptance is never automatically retried. Draft content remains only in the open screen when offline; never persist it or person data in browser storage. Portal reference: `/docs/church-emails`, in all five languages.
+
 ## Supported platforms
 
 | Platform | Notes |
@@ -28,7 +78,7 @@ Windows). Something wrong? `./doctor` lists what is missing with the fix for eac
 
 1. **Folder** (default `./IpAlpha`). The container prefix comes from its name (`IpAlpha` → `ipalpha`,
    `ipalpha-2` → `ipalpha-2`), so two workspaces never share a database.
-2. **Tools**: Git, Node.js ≥ 20, Docker (+ Compose v2); optional GitHub CLI and kubectl. A missing tool can
+2. **Tools**: Git, Node.js ≥ 22.12, Docker (+ Compose v2); optional GitHub CLI and kubectl. A missing tool can
    be installed after confirmation with winget (Windows), Homebrew (macOS) or apt/dnf/pacman (Linux).
 3. **GitHub**: an SSH key works; without one the GitHub CLI signs in through the browser (`gh auth login`).
 4. **Repositories** cloned in parallel into `core/`, `apps/<app>/` and `deployment/`. Optional app repos
@@ -51,14 +101,20 @@ Non-interactive (CI): `ipalpha setup <folder> --yes` with `IPALPHA_SUPERUSER_PHO
    then it moves to the next free port **for this run only** and every URL handed to the processes follows
    (`.env` files keep the defaults). The panel says which moved and who held the port. The infra keeps a
    moved port across runs while its container lives. Two workspaces can run at the same time.
-3. Infra containers (MongoDB, Redis, RabbitMQ + UI, Mailpit, RustFS) up and healthy (`docker compose --wait`),
-   then the `photos` bucket is created in RustFS when missing (one-shot `rustfs-init`, safe to repeat).
+3. Infra containers (MongoDB, Redis, RabbitMQ + UI, Mailpit, RustFS, cpamc simulator) up and healthy (`docker compose --wait`),
+   then the `photos`, `church-email-images` and `documents` buckets are created in RustFS when missing (one-shot
+   `rustfs-init`, safe to repeat).
 4. `.env` completion, npm installs (shared-js built first, consumers' copies refreshed).
 5. auth-api signing keys, then the **local** auth database is reconciled: drifted client secrets of the local
    services and the `localhost` origins/callbacks of the built-in apps (so sign-in keeps working when a web
    port moved). Only loopback MongoDB; non-loopback entries are never touched.
 6. Every API and the remembered web apps start at once — nothing waits on a peer. Each API's `GET /ready`
    drives its dot: ● ready, ◐ starting/not ready, ✖ failed, ○ stopped.
+
+The panel and `./status` list **core APIs → core frontends → apps → infrastructure**. Each app stays
+in one group, with its backend immediately before its frontend (for example, Forms API + Forms Web,
+then Sign API + Sign Web). This is display order: infrastructure is prepared before application
+processes start.
 
 Processes left behind by a closed terminal are stopped by the next `./run`.
 
@@ -78,10 +134,44 @@ Logs: `.ipalpha/logs/run/<service>.log` (one per process, rewritten on each star
 
 ### Browser pages
 
+Forms creator image generation uses the creator's `ipalpha:ai` church token and the same-origin
+`/api/ai/images` route. `./run` already supplies `AI_API_URL` (and `FORMS_API_URL` / `DISPATCH_API_URL`)
+with this run's assigned ports; the Forms Vite proxy reads those values. No new required environment
+variable or system-client scope is introduced. Setup and `./pull` continue to preserve local values.
+The production Forms host routes `/api/ai` to core ai-api, never `/api/auth`.
+
+Church-only forms return through the existing respondent callback after full-page sign-in. Only PKCE
+and transaction metadata cross that redirect in session storage; person values and respondent receipts
+stay in memory and are never persisted on the device. Guests forms never invoke church prefill or emit
+`forms.person.requested`. Image redo replaces its MongoDB slot, max 700,000 bytes of compressed WebP.
+
 Remembered pages start (web apps) and open once their server answers. Default: Auth Web (starts, never gets
 a tab — it is the sign-in popup), Oikos, Mailpit. Starting/opening a page in the panel remembers it, `x`
 forgets it. Outside the panel: `./ipalpha apps` (menu), `./run apps set oikos-webapp mailpit`,
 `./run apps defaults`. `IPALPHA_OPEN_BROWSERS=0` or `--no-browser` skips opening once.
+
+### Project-restricted Forms
+
+Forms has a separate identity-only `respondent-login` entry; the existing `respondent` entry is still
+prefill-only. Setup/pull add these keys without overwriting a developer's values:
+
+- auth-api: `BUILTIN_FORMS_RESPONDENT_LOGIN_CLIENT_ID`, `_ORIGINS`, `_REDIRECT_URIS`
+  (local callback `http://localhost:5106/respond/login/callback`).
+- forms-api: `PROJECTS_API_URL`, `FORMS_RESPONDENT_LOGIN_ENTRY_POINT_ID`.
+- projects-api: `SELF_ONLY_ENTRY_POINT_IDS` (restricts the respondent entry to explicit self-read APIs).
+
+`./run` supplies `VITE_RESPONDENT_LOGIN_CLIENT_ID`, `VITE_RESPONDENT_LOGIN_ENTRY_POINT`, and
+`VITE_RESPONDENT_LOGIN_CALLBACK_URI`, honoring local overrides and assigned ports. The Forms Vite proxy
+and production host mount `/api/projects` same-origin; `/api/auth` is NEVER mounted on Forms.
+Forms runtime `/config.json` has `respondentLoginClientId`, `respondentLoginEntryPoint`,
+`respondentLoginCallbackUri`. No new repository, catalog port, system scope or shared-js version is needed.
+`./publish` and `./feature` use the updated canonical manifests; host-rewriting remains generic.
+Do not publish a preview for this pre-launch change; verify locally.
+
+Audience targets are multiple `{projectId,roleKeys?}` entries. Permissions come live from
+`GET /projects/:id/me/access`; the picker uses `GET /projects/me/managed`. Current-edition changes
+change eligibility. The Forms provider contract is `GET /projects/:projectId/forms`, with paginated,
+caller-filtered cards. Oikos's provider registry belongs in its runtime configuration, not projects-api.
 
 ### Local notifications
 
@@ -119,9 +209,45 @@ exchanges, `DOCUMENTS_API_URL`, `DOCUMENTS_API_AUDIENCE`, `MEMBERSHIP_TERM_DOCUM
 `PERSONS_API_AUDIENCE`, the consumed and published exchanges, `FACE_REVIEW_THRESHOLD=0.35` and the two slugs;
 dispatch-api gets `PHOTOS_API_URL` and the `EXCHANGE_PHOTOS_*` exchanges. auth-api's
 `AUTH_RESOURCE_AUDIENCES_JSON` lists `ipalpha:photos` and `ipalpha:documents`. `./pull` and `setup` only add
-missing keys, never overwrite yours; the one exception is that the two new audiences are appended to an existing
-`AUTH_RESOURCE_AUDIENCES_JSON`. The embedded `system-clients.json` grants `persons:links`, `persons:consents`,
+missing keys, never overwrite yours; the exception is appending missing built-in audiences to an existing
+`AUTH_RESOURCE_AUDIENCES_JSON`, preserving every custom entry. This includes `ipalpha:schedule` and `ipalpha:sign`
+alongside photos/documents. `./run`, `./pull` and setup apply the repair idempotently. If auth-api exits with
+“must register ipalpha:schedule”, its local list is stale; use the updated tooling and restart `./run` so the
+process receives the repaired environment. Persons' projects cache can recover once auth is available; never
+remove readiness checks or bypass authentication to hide this failure. The embedded `system-clients.json` grants `persons:links`, `persons:consents`,
 `persons:face-photos`, `persons:access-log` (photos-api, persons-api) and `documents:read` (persons-api).
+
+### Local IPAlpha Sign (apps/sign)
+
+IPAlpha Sign is an app outside core: `apps/sign/sign-api` (port **3014**, MongoDB `sign`, audience
+`ipalpha:sign`) and `apps/sign/sign-webapp` (port **5113**, group "Sign" in the panel). The web app's Vite proxy
+mounts `/api/sign`, `/api/documents`, `/api/persons`, `/api/projects` and `/api/dispatch` same-origin with the
+ports of the run; auth-api stays cross-origin. Start the page from the panel (or `./run apps set sign-webapp`).
+
+Signed PDFs live in documents-api: it stores them in the RustFS bucket `documents` and seals them with a
+generated self-signed key locally (`SEAL_DEV_SELF_SIGNED=true`; production uses the church e-CNPJ in
+`SEAL_CERT_P12_BASE64` / `SEAL_CERT_PASSWORD`, never set locally). Signing asks for a fresh sign-in
+(`SIGNING_MAX_AUTH_AGE_SEC=300`). E-mails (request, reminder, completed) arrive in Mailpit.
+
+Env added for this (`./pull` and `setup` only add missing keys and fill blanks; yours are never overwritten):
+
+- sign-api (new `.env`): `DOCUMENTS_API_URL`, `NOTIFICATIONS_API_URL`, `DISPATCH_API_URL`, `SIGN_APP_ID`,
+  `SIGN_ENTRY_POINT_ID`, `SIGN_WEBAPP_URL=http://localhost:5113`, optional `SIGN_WEBHOOK_SECRET` (empty = app channel only).
+- documents-api: `PERSONS_API_URL` / `PROJECTS_API_URL` + audiences, `EXCHANGE_PERSON_DELETED`,
+  `EXCHANGE_SIGNED_DOCUMENTS_CHANGED`, `SIGNING_MAX_AUTH_AGE_SEC`, `S3_*` (`S3_BUCKET=documents`; keys follow
+  `.ipalpha/.env` like photos-api), `SEAL_DEV_SELF_SIGNED=true`, empty `SEAL_CERT_*`, `SIGN_WEBAPP_URL`.
+- dispatch-api: `EXCHANGE_SIGNED_DOCUMENTS_CHANGED`; `http://localhost:5113` is appended to an existing
+  `SOCKET_ALLOWED_ORIGINS` (the one value `./pull` extends).
+- notifications-api: `SIGN_APP_ID`, `SIGN_WEBAPP_URL`. persons-api: `SIGNING_FIELDS_CALLER_SERVICE_IDS=documents-api`.
+- auth-api: `BUILTIN_SIGN_CLIENT_ID=sign-web`, `BUILTIN_SIGN_ORIGINS`, `BUILTIN_SIGN_REDIRECT_URIS`; `ipalpha:sign` is
+  appended to an existing `AUTH_RESOURCE_AUDIENCES_JSON`. `./run` reconciles the Sign entry's localhost origin and
+  callback like the other built-in apps and hands sign-webapp `VITE_SIGN_CLIENT_ID`, `VITE_SIGN_ENTRY_POINT`,
+  `VITE_SIGN_CALLBACK_URI`, `VITE_OIKOS_URL`.
+
+System clients (`system-clients.json`): documents-api gains `persons:signing-fields`, `persons:access-log`,
+`projects:read`; sign-api is **app-bound** — listed under `appBound` (`sign-api → app-ipalpha-sign`), so its
+`SEED_CLIENTS_JSON` entry carries `appId` and holds only app-bound scopes (`notifications:send-template`,
+`dispatch:app-channel`).
 
 ## `./publish`
 
@@ -138,6 +264,25 @@ missing keys, never overwrite yours; the one exception is that the two new audie
 `-d` shows the plan and offers to apply exactly that plan · `-f <repo>` one repo · `--engine/--model` one-off
 AI · `-y` no confirmation · `./publish clean` wipes the decision cache. Also `--resume`, `--npm-only`,
 `--initialize`, `--deployment-path`, `--ci` (TeamCity builds images).
+
+### Application AI gateway (cpamc)
+
+`./run` starts `docker.io/kevynsax/cpamc-simulator:0.1.0` as development infrastructure on loopback port 8317 (automatically moved when busy), using Docker Compose or Apple `container`. It appears in `./run`, `./logs cpamc` and `./stop`; it is not a core repository, production service or application publish target. The public image supports Linux amd64 and arm64; after pulling, it needs no provider account, network access or management credentials. Local feature workspaces get their own simulator port with the usual offset, never a shared gateway.
+
+`ipalpha ai gateway` configures the **application gateway**, not the coding CLI:
+
+```sh
+ipalpha ai gateway --mode simulator
+ipalpha ai gateway --mode real --url https://your-cpamc.example/v1
+```
+
+Interactive real setup asks for a hidden client key and optional hidden management key. Headless setup takes `CPAMC_SETUP_CLIENT_KEY` and optional `CPAMC_SETUP_MANAGEMENT_KEY` from the environment, never secret command-line flags. HTTPS is required except on loopback; use an origin or `/v1` base without user info, query or fragment. Keys must differ. Management is optional: without it, subscriptions/quotas are unavailable but AI client calls work.
+
+The default `ai_gateway=simulator` overlays `AI_BASE_URL`, `AI_API_KEY` and `CPAMC_MANAGEMENT_KEY` **only in ai-api's process environment**, using the resolved port and public dummy keys. Existing `.env` values are preserved; real keys are never forwarded to the simulator. Explicit gateway setup updates just those three keys in `core/ai-api/.env` (ignored, permission 0600) plus the non-secret `ai_gateway` mode in `.ipalpha/settings`. `./pull` and setup still add/fill only missing or blank values. Restart `./run` after changing mode. In real mode the selected gateway URL is preserved, even when it points at another local gateway.
+
+Chat, images, classification and the nightly review now share cpamc. Jev uses native `POST /v1/decisions` with `AI_API_KEY`; only cpamc owns the OpenRouter key. Real cpamc needs an enabled OpenRouter-compatible provider with base `/api/v1`, API key and registered `typesafe/jev-1.13` model. `OPENROUTER_API_KEY` is no longer required or consumed by core ai-api; old local values are left untouched.
+
+The simulator offers fake models/subscriptions/quotas, text/SSE, a limited JSON-schema fixture generator and 256 px placeholder PNGs. Jev returns deterministic canned answers (first offered choice, `noul: 0.9`, first score level `0`) with fake probabilities/confidence and `simulator: true` on every answer. State is ignored: use these only to exercise local positive flows, never real safety, permissions or content approval. Voice returns `501`. `SIMULATOR_SCENARIO` selects `healthy`, `low-quota`, `rate-limited`, `upstream-error`; restart to switch. No database or volume; no stored/logged prompts; no real judgments, quality guarantees or costs. It never bypasses church tokens, consent or external-app restrictions. Keep this image and dummy connection settings out of production manifests and application images. Developer guide: `/docs/ai-local-development`.
 
 ### AI configuration
 
@@ -199,11 +344,12 @@ migrated by their next `./pull`.
 | places-api | 3011 | RustFS (S3) | 9000 |
 | photos-api | 3010 | Face service (optional) | 8000 |
 | documents-api | 3012 | schedule-api | 3013 |
+| sign-api | 3014 | sign-webapp | 5113 |
 
 ## Core and apps
 
 `core/` holds the shared capabilities and the core UIs; apps that consume core live in `apps/<app>/`
-(`apps/forms/{forms-api,forms-webapp}`). **Acampa Kids** (`apps/acampa-kids/{backend,frontend,face-service}`)
+(`apps/forms/{forms-api,forms-webapp}`, `apps/sign/{sign-api,sign-webapp}`). **Acampa Kids** (`apps/acampa-kids/{backend,frontend,face-service}`)
 has its own repositories, registry and TeamCity project; `./run` does not start it and its repos are optional.
 In a feature environment every core service runs; an app joins only when one of its own repos changed.
 
@@ -236,6 +382,7 @@ either end, every host ≤ 63 chars.
 | `https://developers-ipalpha-<slug>.kevyn.com.br` | IPAlpha Developers (when the baseline has it) |
 | `https://ipalpha-<slug>.kevyn.com.br/mailbox` | captured e-mail/SMS (sign-in codes) |
 | `https://acampa-ipalpha-<slug>.kevyn.com.br` | Acampa Kids — only when an `acampa-kids-*` repo changed |
+| `https://sign-ipalpha-<slug>.kevyn.com.br` | IPAlpha Sign — only when a `sign-*` repo changed (and the baseline has it) |
 
 How it works: main checkouts are never touched (`git worktree`); unchanged services run the baseline images
 (`deployment/releases/core-latest.json`); `shared-js` changes rebuild every core API

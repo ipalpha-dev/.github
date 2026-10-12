@@ -41,8 +41,22 @@ func version(name string, args ...string) (string, error) {
 	return strings.TrimSpace(out), nil
 }
 
-// MinNode is the lowest Node.js major the services support.
-const MinNode = 20
+// Campaign HTML sanitization uses the patched sanitizer on Node 22.12+ (native require(ESM)).
+const MinNode = 22
+const MinNodeMinor = 12
+
+func nodeSupported(v string) bool {
+	parts := strings.Split(strings.TrimPrefix(v, "v"), ".")
+	if len(parts) < 2 {
+		return false
+	}
+	major, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return false
+	}
+	minor, err := strconv.Atoi(parts[1])
+	return err == nil && (major > MinNode || major == MinNode && minor >= MinNodeMinor)
+}
 
 // All tools, in check order.
 var All = []Tool{
@@ -55,9 +69,8 @@ var All = []Tool{
 			if err != nil {
 				return "", err
 			}
-			major, _ := strconv.Atoi(strings.SplitN(v, ".", 2)[0])
-			if major < MinNode {
-				return v, fmt.Errorf("%s", i18n.T("tool_node_old", v, MinNode))
+			if !nodeSupported(v) {
+				return v, fmt.Errorf("%s", i18n.T("tool_node_old", v, "22.12.0"))
 			}
 			return v, nil
 		},

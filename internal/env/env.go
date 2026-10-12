@@ -97,13 +97,14 @@ func Complete(w *workspace.Workspace, r catalog.Repo) (Change, error) {
 	return ch, nil
 }
 
-var peers = []string{"projects", "persons", "organizations", "notifications", "forms", "ai", "developers", "dispatch", "places", "photos", "documents", "schedule"}
+var peers = []string{"projects", "persons", "organizations", "notifications", "forms", "ai", "developers", "dispatch", "places", "photos", "documents", "schedule", "sign"}
 
 // Stable ids owned by auth-api (src/builtin-apps.ts).
 var builtinIDs = [][2]string{
 	{"FORMS_APP_ID", "app-ipalpha-forms"},
 	{"FORMS_CREATOR_ENTRY_POINT_ID", "ep-ipalpha-forms-creator"},
 	{"FORMS_RESPONDENT_ENTRY_POINT_ID", "ep-ipalpha-forms-respondent"},
+	{"FORMS_RESPONDENT_LOGIN_ENTRY_POINT_ID", "ep-ipalpha-forms-respondent-login"},
 	{"OIKOS_APP_ID", "app-oikos"},
 }
 
@@ -124,6 +125,12 @@ func fillLocal(w *workspace.Workspace, r catalog.Repo, f *envfile.File) []string
 	}
 	for k, v := range envfile.Parse(assets.EnvFallback(r.Name)) {
 		fill(k, v)
+	}
+	if r.Name == "ai-api" && w.Settings.Gateway() == "simulator" {
+		if base, _ := f.Get("AI_BASE_URL"); base == "http://127.0.0.1:8317/v1" {
+			fill("AI_API_KEY", catalog.CPAMCSimulatorClientKey)
+			fill("CPAMC_MANAGEMENT_KEY", catalog.CPAMCSimulatorManagementKey)
+		}
 	}
 	fill("SERVICE_NAME", r.Name)
 	sum := sha256.Sum256([]byte(w.Root))
@@ -171,23 +178,35 @@ func fillLocal(w *workspace.Workspace, r catalog.Repo, f *envfile.File) []string
 			set("DEPLOYMENT_ENVIRONMENT", "development")
 		}
 	}
-	if r.Name == "photos-api" {
+	if r.Name == "notifications-api" {
+		fill("CHURCH_EMAIL_UNSUBSCRIBE_KEY", randomB64(32))
+		fill("CONTACT_LOOKUP_KEY", randomB64(32))
+	}
+	if r.Name == "photos-api" || r.Name == "notifications-api" || r.Name == "documents-api" {
 		// Same keys the RustFS container starts with (.ipalpha/.env), else the local defaults.
 		store := envfile.Read(filepath.Join(w.Dir(), ".env"))
 		fill("S3_ACCESS_KEY", firstNonEmpty(store["RUSTFS_ACCESS_KEY"], "ipalpha"))
 		fill("S3_SECRET_KEY", firstNonEmpty(store["RUSTFS_SECRET_KEY"], "ipalpha-secret"))
-		if w.Settings.Face {
+		if r.Name == "photos-api" && w.Settings.Face {
 			fill("FACE_SERVICE_URL", "http://127.0.0.1:8000")
 		}
 	}
 	if r.Name == "persons-api" {
 		fill("IMPORT_ROWS_KEY", randomB64(32))
 	}
+	if r.Name == "dispatch-api" {
+		// An existing list is kept; only the local origins of newer web apps are appended (IPAlpha Sign).
+		if cur, ok := f.Get("SOCKET_ALLOWED_ORIGINS"); ok {
+			if merged, changedList := addCSV(cur, "http://localhost:5113"); changedList {
+				set("SOCKET_ALLOWED_ORIGINS", merged)
+			}
+		}
+	}
 	if r.Name == "auth-api" {
 		fill("WEBHOOK_SECRET_KEY", randomB64(32))
 		// An existing list is kept; only the audiences new services need are appended.
 		if cur, ok := f.Get("AUTH_RESOURCE_AUDIENCES_JSON"); ok {
-			if merged, changedList := addAudiences(cur, "ipalpha:photos", "ipalpha:documents"); changedList {
+			if merged, changedList := addAudiences(cur, "ipalpha:photos", "ipalpha:documents", "ipalpha:schedule", "ipalpha:sign"); changedList {
 				set("AUTH_RESOURCE_AUDIENCES_JSON", merged)
 			}
 		}
@@ -237,11 +256,13 @@ func ensureGitignore(dir, entry string) {
 	_ = os.WriteFile(path, []byte(text+entry+"\n"), 0o644)
 }
 
-// SeedClient is one entry of auth-api's SEED_CLIENTS_JSON.
+// SeedClient is one entry of auth-api's SEED_CLIENTS_JSON. AppID binds the client to an app
+// (system-clients.json `appBound`, e.g. sign-api → app-ipalpha-sign) for app-bound-only scopes.
 type SeedClient struct {
 	ClientID  string   `json:"clientId"`
 	Secret    string   `json:"secret"`
 	ServiceID string   `json:"serviceId"`
+	AppID     string   `json:"appId,omitempty"`
 	Scopes    []string `json:"scopes"`
 }
 
@@ -254,7 +275,7 @@ func SeedClients(w *workspace.Workspace) error {
 	if err != nil || len(auth.Lines()) == 0 {
 		return nil
 	}
-	approved, err := approvedScopes(w)
+	approved, bound, err := approvedScopes(w)
 	if err != nil {
 		return err
 	}
@@ -268,7 +289,7 @@ func SeedClients(w *workspace.Workspace) error {
 		if scopes == nil {
 			scopes = []string{}
 		}
-		ours = append(ours, SeedClient{ClientID: e["AUTH_CLIENT_ID"], Secret: e["AUTH_CLIENT_SECRET"], ServiceID: r.Name, Scopes: scopes})
+		ours = append(ours, SeedClient{ClientID: e["AUTH_CLIENT_ID"], Secret: e["AUTH_CLIENT_SECRET"], ServiceID: r.Name, AppID: bound[r.Name], Scopes: scopes})
 	}
 	var current []map[string]any
 	if raw, _ := auth.Get("SEED_CLIENTS_JSON"); strings.TrimSpace(raw) != "" {
@@ -322,7 +343,8 @@ func SeedClients(w *workspace.Workspace) error {
 	return auth.Save()
 }
 
-func approvedScopes(w *workspace.Workspace) (map[string][]string, error) {
+// approvedScopes returns the scopes per internal client and the app each app-bound client belongs to.
+func approvedScopes(w *workspace.Workspace) (map[string][]string, map[string]string, error) {
 	var raw []byte
 	if data, err := os.ReadFile(filepath.Join(w.Repo("deployment"), "base", "core", "auth-api", "system-clients.json")); err == nil {
 		raw = data
@@ -330,12 +352,16 @@ func approvedScopes(w *workspace.Workspace) (map[string][]string, error) {
 		raw = assets.MustRead("system-clients.json")
 	}
 	var doc struct {
-		Clients map[string][]string `json:"clients"`
+		Clients  map[string][]string `json:"clients"`
+		AppBound map[string]string   `json:"appBound"`
 	}
 	if err := json.Unmarshal(raw, &doc); err != nil {
-		return nil, fmt.Errorf("system-clients.json: %w", err)
+		return nil, nil, fmt.Errorf("system-clients.json: %w", err)
 	}
-	return doc.Clients, nil
+	if doc.AppBound == nil {
+		doc.AppBound = map[string]string{}
+	}
+	return doc.Clients, doc.AppBound, nil
 }
 
 // SeedClientList returns the clients auth-api will seed (for the DB reconcile step).
@@ -403,6 +429,34 @@ func firstNonEmpty(v ...string) string {
 		}
 	}
 	return ""
+}
+
+// addCSV appends missing entries to a comma-separated value (quotes around it are tolerated). An empty
+// value is left alone (the fallback fills it).
+func addCSV(raw string, add ...string) (string, bool) {
+	raw = strings.TrimSpace(raw)
+	if len(raw) >= 2 && (raw[0] == '\'' || raw[0] == '"') && raw[len(raw)-1] == raw[0] {
+		raw = raw[1 : len(raw)-1]
+	}
+	if strings.TrimSpace(raw) == "" {
+		return "", false
+	}
+	have := map[string]bool{}
+	var list []string
+	for _, v := range strings.Split(raw, ",") {
+		if v = strings.TrimSpace(v); v != "" {
+			have[v] = true
+			list = append(list, v)
+		}
+	}
+	changed := false
+	for _, a := range add {
+		if !have[a] {
+			list = append(list, a)
+			changed = true
+		}
+	}
+	return strings.Join(list, ","), changed
 }
 
 // addAudiences appends missing audiences to a JSON array value (quotes around it are tolerated).
