@@ -393,6 +393,53 @@ func askSuperuser(w *workspace.Workspace, yes bool) error {
 		return ui.Wrap(i18n.T("seed_save_failed"), err)
 	}
 	ui.Done(i18n.T("setup_account_ok", n, p))
+	return askSuperuserPassword(w, interactive)
+}
+
+// askSuperuserPassword sets the local superuser's password so the first Oikos sign-in does not stop at the
+// password-setup screen. Non-interactive: IPALPHA_SUPERUSER_PASSWORD (optional; absent keeps today's behavior).
+// Interactive: asked twice, masked; an empty answer skips it. A password already stored is never replaced.
+func askSuperuserPassword(w *workspace.Workspace, interactive bool) error {
+	if env.HasSuperuserPassword(w) {
+		return nil
+	}
+	pw := os.Getenv("IPALPHA_SUPERUSER_PASSWORD")
+	if pw != "" {
+		if err := env.ValidatePassword(pw); err != nil {
+			return ui.NewProblem(i18n.T("setup_account"), i18n.T("seed_password_invalid"))
+		}
+	} else if interactive {
+		for {
+			first, err := ui.Secret(i18n.T("seed_password"), i18n.T("seed_password_hint"))
+			if err != nil {
+				return err
+			}
+			if first == "" {
+				ui.Warning(i18n.T("setup_password_later"))
+				return nil
+			}
+			if err := env.ValidatePassword(first); err != nil {
+				ui.Warning(i18n.T("seed_password_invalid"))
+				continue
+			}
+			again, err := ui.Secret(i18n.T("seed_password_again"), "")
+			if err != nil {
+				return err
+			}
+			if again != first {
+				ui.Warning(i18n.T("seed_password_mismatch"))
+				continue
+			}
+			pw = first
+			break
+		}
+	} else {
+		return nil
+	}
+	if err := env.WriteSuperuserPassword(w, pw); err != nil {
+		return ui.Wrap(i18n.T("seed_save_failed"), err)
+	}
+	ui.Done(i18n.T("setup_password_ok"))
 	return nil
 }
 

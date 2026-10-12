@@ -17,6 +17,8 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/ipalpha-dev/tooling/internal/assets"
 	"github.com/ipalpha-dev/tooling/internal/catalog"
@@ -528,6 +530,68 @@ func WriteSuperuser(w *workspace.Workspace, name, phone string) error {
 	}
 	f.Set("SUPERUSER_NAME", envfile.Quote(name))
 	f.Set("SUPERUSER_PHONE", phone)
+	return f.Save()
+}
+
+// Password rules auth-api enforces (login-completion.service.ts PASSWORD_RULE, signup.service.ts validatePassword):
+// 8 to 200 characters, at least one digit and one symbol (neither letter, digit nor space).
+const (
+	passwordMin = 8
+	passwordMax = 200
+)
+
+// ErrPassword names the rule a password breaks: tooShort, tooLong, needsDigit or needsSymbol.
+type ErrPassword string
+
+func (e ErrPassword) Error() string { return "password: " + string(e) }
+
+// ValidatePassword applies auth-api's password rules.
+func ValidatePassword(pw string) error {
+	n := utf8.RuneCountInString(pw)
+	switch {
+	case n < passwordMin:
+		return ErrPassword("tooShort")
+	case n > passwordMax:
+		return ErrPassword("tooLong")
+	}
+	digit, symbol := false, false
+	for _, r := range pw {
+		switch {
+		case unicode.IsDigit(r):
+			digit = true
+		case !unicode.IsLetter(r) && !unicode.IsNumber(r) && !unicode.IsSpace(r):
+			symbol = true
+		}
+	}
+	if !digit {
+		return ErrPassword("needsDigit")
+	}
+	if !symbol {
+		return ErrPassword("needsSymbol")
+	}
+	return nil
+}
+
+// HasSuperuserPassword reports whether auth-api's .env already holds SUPERUSER_PASSWORD.
+func HasSuperuserPassword(w *workspace.Workspace) bool {
+	return strings.TrimSpace(envfile.Read(filepath.Join(w.Repo("auth-api"), ".env"))["SUPERUSER_PASSWORD"]) != ""
+}
+
+// WriteSuperuserPassword stores the first account's password in auth-api's local .env as SUPERUSER_PASSWORD, which
+// auth-api hashes (argon2id) into its passwords collection when it seeds the superuser. A value already there is
+// kept (set it by hand to change it). The plain text lives only in this git-ignored local file.
+func WriteSuperuserPassword(w *workspace.Workspace, pw string) error {
+	if err := ValidatePassword(pw); err != nil {
+		return err
+	}
+	path := filepath.Join(w.Repo("auth-api"), ".env")
+	f, err := envfile.Load(path)
+	if err != nil {
+		return err
+	}
+	if !f.SetIfEmpty("SUPERUSER_PASSWORD", envfile.Quote(pw)) {
+		return nil
+	}
 	return f.Save()
 }
 

@@ -85,7 +85,7 @@ func newEnv(t *testing.T) *env {
 	e := &env{t: t, tmp: tmp, origins: filepath.Join(tmp, "origins"), seed: filepath.Join(tmp, "seed"), root: filepath.Join(tmp, "ipalpha-test")}
 	e.vars = append(os.Environ(),
 		"IPALPHA_CLONE_FROM="+e.origins, "IPALPHA_LANG=en-US", "IPALPHA_SKIP_TOOLS=1", "IPALPHA_SKIP_INSTALL=1",
-		"IPALPHA_SUPERUSER_PHONE=11987654321", "IPALPHA_AI_CLI=none", "IPALPHA_NO_SELF_UPDATE=1", "IPALPHA_TEST_NO_PORT_PROBE=1",
+		"IPALPHA_SUPERUSER_PHONE=11987654321", "IPALPHA_SUPERUSER_PASSWORD=Local-pass-1!", "IPALPHA_AI_CLI=none", "IPALPHA_NO_SELF_UPDATE=1", "IPALPHA_TEST_NO_PORT_PROBE=1",
 		"GIT_AUTHOR_NAME=test", "GIT_AUTHOR_EMAIL=test@example.invalid", "GIT_COMMITTER_NAME=test", "GIT_COMMITTER_EMAIL=test@example.invalid",
 		"CI=1")
 	for _, k := range []string{"GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL"} {
@@ -186,6 +186,9 @@ func TestSetupPullAndWrappers(t *testing.T) {
 	auth := envfile.Read(filepath.Join(e.root, "core", "auth-api", ".env"))
 	if auth["SUPERUSER_PHONE"] != "+5511987654321" || !strings.Contains(auth["SEED_CLIENTS_JSON"], "persons-api") {
 		t.Fatalf("auth .env: phone=%q clients=%q", auth["SUPERUSER_PHONE"], auth["SEED_CLIENTS_JSON"])
+	}
+	if auth["SUPERUSER_PASSWORD"] != "Local-pass-1!" {
+		t.Fatalf("auth .env: SUPERUSER_PASSWORD not written from IPALPHA_SUPERUSER_PASSWORD")
 	}
 	if _, err := os.Stat(filepath.Join(e.root, "core", "auth-webapp", ".env")); err == nil {
 		t.Fatal("web apps must not get a .env")

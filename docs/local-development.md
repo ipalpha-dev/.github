@@ -86,13 +86,18 @@ Writing uses `aiSettings.assist` in the existing AI service (defaults to the cur
 5. **`.env` per API** from its `.env.example` (or the embedded fallback in `internal/assets/files/env-fallback`
    until the repo has one). Re-runs and `./pull` only **add missing keys** and fill blanks; local values are
    never overwritten — except notifications, which always go to Mailpit locally.
-6. **First sign-in**: your name and mobile number become the local superuser. Codes arrive in Mailpit.
+6. **First sign-in**: your name and mobile number become the local superuser. Codes arrive in Mailpit. Setup then asks
+   the **password** (masked, typed twice; 8-200 characters with a number and a symbol, the same rules as auth-api) so
+   the first Oikos sign-in does not stop at "Precisamos configurar sua senha"; empty skips it. It is saved as
+   `SUPERUSER_PASSWORD` in `core/auth-api/.env` only (git-ignored; a value already there is kept), and auth-api
+   hashes it (argon2id) when it seeds the superuser.
 7. **AI for `./publish`**: pick one of the coding CLIs already installed (all presets are listed only when none is),
    then pick its model from the list the CLI itself reports — no slug to type. Or your own command (see below).
 8. **Files**: `.ipalpha/` (settings, compose file, binary, logs) and the wrappers.
 9. **npm dependencies** (failures do not stop setup; `./run` retries).
 
-Non-interactive (CI): `ipalpha setup <folder> --yes` with `IPALPHA_SUPERUSER_PHONE`, `IPALPHA_AI_CLI=none`.
+Non-interactive (CI): `ipalpha setup <folder> --yes` with `IPALPHA_SUPERUSER_PHONE`, `IPALPHA_AI_CLI=none`, and optionally
+`IPALPHA_SUPERUSER_PASSWORD` (absent = the password is created at the first sign-in, as before; an invalid one fails setup).
 
 ## `./run`
 

@@ -72,3 +72,36 @@ func TestAcampaBackendIsNotSeededIntoAuthWithoutAnApp(t *testing.T) {
 		t.Fatalf("Acampa leaked into SEED_CLIENTS_JSON: %s", v)
 	}
 }
+
+func TestSuperuserPasswordFollowsAuthApiRulesAndKeepsAnExistingOne(t *testing.T) {
+	for pw, want := range map[string]string{"Short1!": "tooShort", "NoDigitsHere!": "needsDigit", "NoSymbols123": "needsSymbol", strings.Repeat("a1!", 80): "tooLong"} {
+		if err := ValidatePassword(pw); err == nil || err.Error() != "password: "+want {
+			t.Fatalf("%q: want %s, got %v", pw, want, err)
+		}
+	}
+	if err := ValidatePassword("Local-pass-1!"); err != nil {
+		t.Fatal(err)
+	}
+	w := ws(t)
+	if HasSuperuserPassword(w) {
+		t.Fatal("no password yet")
+	}
+	path := filepath.Join(w.Repo("auth-api"), ".env")
+	os.WriteFile(path, []byte("SUPERUSER_PHONE=+5511987654321\nSUPERUSER_PASSWORD=\n"), 0o600)
+	if err := WriteSuperuserPassword(w, "weak"); err == nil {
+		t.Fatal("a weak password must not be written")
+	}
+	if err := WriteSuperuserPassword(w, "Local-pass-1!"); err != nil {
+		t.Fatal(err)
+	}
+	got := envfile.Read(path)
+	if got["SUPERUSER_PASSWORD"] != "Local-pass-1!" || got["SUPERUSER_PHONE"] != "+5511987654321" || !HasSuperuserPassword(w) {
+		t.Fatalf("auth .env: %v", got)
+	}
+	if err := WriteSuperuserPassword(w, "Another-pass-2?"); err != nil {
+		t.Fatal(err)
+	}
+	if envfile.Read(path)["SUPERUSER_PASSWORD"] != "Local-pass-1!" {
+		t.Fatal("an existing password was overwritten")
+	}
+}
