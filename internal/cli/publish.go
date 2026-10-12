@@ -313,7 +313,7 @@ func npmOnly(w *workspace.Workspace, folder string, dry bool) error {
 
 func resume(w *workspace.Workspace, folder string, dry, ci bool) error {
 	r, ok := catalog.Get(folder)
-	if !ok || !r.HasImage() || r.Kind == catalog.KindOptional {
+	if !ok || !r.HasImage() || !r.Publishable() {
 		return ui.NewProblem(i18n.T("cmd_publish"), i18n.T("publish_resume_folder"))
 	}
 	dir := r.Path(w.Root)
@@ -333,7 +333,7 @@ func resume(w *workspace.Workspace, folder string, dry, ci bool) error {
 			return err
 		}
 	}
-	return publish.BumpDeployment(w, folder, v)
+	return publish.BumpDeployment(w, r, v)
 }
 
 func initialize(w *workspace.Workspace, folder string, dry bool) error {

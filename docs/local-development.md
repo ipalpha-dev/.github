@@ -320,6 +320,12 @@ sign-api's old `appId` from `SEED_CLIENTS_JSON`; every other scope you added is 
 4. Confirm → `package.json`/lock version, commit, push; libraries are tagged `v<version>` here, image repos by
    CI when they reach production. libraries → npm by TeamCity (the pushed `v<version>` tag triggers "<lib> — Publish to npm"; no npm login on your machine); images are built
    and pushed (Docker or Apple container) and `deployment` image tags bumped.
+   **Acampa Kids** (`-f acampa-kids-backend|acampa-kids-frontend`, also picked up by a bare run) goes the same way:
+   image `registry.kevyn.com.br/ip-alpha/apps/acampa-kids/{backend,frontend}:<version>` built with the repository
+   as context, and only the tag in `deployment/base/apps/acampa-kids` is bumped (never `base/core`). With `--ci`
+   no local build runs; the pushed commit starts TeamCity `IpAlpha_AcampaKids_{Backend,Frontend}_Build`. `./publish`
+   never triggers an app's or Core's Deploy. `face-service` (`core/face-service`) is not published here: Core's
+   TeamCity builds its image.
 
 `-d` shows the plan and offers to apply exactly that plan · `-f <repo>` one repo · `--engine/--model` one-off
 AI · `-y` no confirmation · `./publish clean` wipes the decision cache. Also `--resume`, `--npm-only`,
@@ -436,14 +442,9 @@ work stay; it only renames, and does nothing but warn when the new folder alread
 
 ## Core and apps
 
-<<<<<<< HEAD
 `core/` holds the shared capabilities, the core UIs and the core tools Forms (`core/forms-api`,
 `core/forms-webapp`) and IPAlpha Sign (`core/sign-api`, `core/sign-webapp`); apps that consume core live in
-`apps/<app>/`. **Acampa Kids** (`apps/acampa-kids/{backend,frontend,face-service}`)
-=======
-`core/` holds the shared capabilities and the core UIs; apps that consume core live in `apps/<app>/`
-(`apps/forms/{forms-api,forms-webapp}`). **Acampa Kids** (`apps/acampa-kids/{backend,frontend}`; its former face service is now `core/face-service`)
->>>>>>> feat/acampa-core-sync
+`apps/<app>/`. **Acampa Kids** (`apps/acampa-kids/{backend,frontend}`; its former face service is now `core/face-service`)
 has its own repositories, registry and TeamCity project; `./run` does not start it and its repos are optional.
 In a feature environment every core service runs; an app joins only when one of its own repos changed.
 

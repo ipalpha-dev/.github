@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/ipalpha-dev/tooling/internal/catalog"
+	"github.com/ipalpha-dev/tooling/internal/workspace"
 )
 
 func TestBumpAndClamp(t *testing.T) {
@@ -107,5 +108,32 @@ func TestRewriteImageTagsReplacesTagsAndDigests(t *testing.T) {
 	}
 	if again := RewriteImageTags(dir, "reg.example/ip-alpha/core/auth-webapp:", "0.7.0"); len(again) != 0 {
 		t.Fatalf("second run changed %v", again)
+	}
+}
+
+func TestAcampaImagesArePublishableAndPinnedInTheApp(t *testing.T) {
+	w := &workspace.Workspace{Settings: &workspace.Settings{Registry: catalog.DefaultRegistry}}
+	for _, c := range [][3]string{
+		{"acampa-kids-backend", "registry.kevyn.com.br/ip-alpha/apps/acampa-kids/backend", "IpAlpha_AcampaKids_Backend_Build"},
+		{"acampa-kids-frontend", "registry.kevyn.com.br/ip-alpha/apps/acampa-kids/frontend", "IpAlpha_AcampaKids_Frontend_Build"},
+	} {
+		r, ok := catalog.Get(c[0])
+		if !ok || !r.Publishable() || !r.HasImage() {
+			t.Fatalf("%s must be publishable: %+v", c[0], r)
+		}
+		if got := ImageName(w, r); got != c[1] {
+			t.Fatalf("image = %s", got)
+		}
+		if got := AppBuildURL(r); !strings.HasSuffix(got, "/"+c[2]) {
+			t.Fatalf("build url = %s", got)
+		}
+	}
+	core, _ := catalog.Get("auth-api")
+	if got := ImageName(w, core); got != catalog.DefaultRegistry+"/auth-api" {
+		t.Fatalf("core image = %s", got)
+	}
+	// face-service stays a TeamCity-built core service, never a ./publish target.
+	if f, _ := catalog.Get("face-service"); f.Publishable() || f.Rel() != "core/face-service" {
+		t.Fatalf("face-service: %+v", f)
 	}
 }

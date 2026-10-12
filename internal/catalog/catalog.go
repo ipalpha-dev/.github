@@ -170,10 +170,14 @@ func (r Repo) HasImage() bool {
 // quietly by ./pull, ./doctor and ./feature instead of failing them.
 func (r Repo) SkippedWhenMissing() bool { return r.Kind == KindOptional || r.Kind == KindService || r.NoRemote }
 
-// Publishable by ./publish (release mode): core services, web apps and libraries.
+// Publishable by ./publish (release mode): core services, web apps, libraries and the images of
+// apps outside core (Acampa Kids backend/frontend). face-service (KindService) is built by TeamCity only.
 func (r Repo) Publishable() bool {
-	return r.Kind == KindAPI || r.Kind == KindWeb || r.Kind == KindLibrary
+	return r.Kind == KindAPI || r.Kind == KindWeb || r.Kind == KindLibrary || r.IsAppImage()
 }
+
+// IsAppImage: an optional app repository that ships its own image under apps/<app>/<image>.
+func (r Repo) IsAppImage() bool { return r.Kind == KindOptional && r.App != "" && r.Image != "" }
 
 // TagsLocally: libraries are tagged when published; image repos are tagged by CI when they reach production.
 func (r Repo) TagsLocally() bool { return r.Kind == KindLibrary }

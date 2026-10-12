@@ -415,8 +415,10 @@ func Apply(w *workspace.Workspace, p Plan, ciMode bool) error {
 		if err := BuildImage(w, p.Repo, p.Next, dir); err != nil {
 			return err
 		}
+	} else if p.Repo.IsAppImage() {
+		ui.Info(i18n.T("publish_app_ci", p.Repo.Name, AppBuildURL(p.Repo)))
 	}
-	return BumpDeployment(w, p.Repo.Name, p.Next)
+	return BumpDeployment(w, p.Repo, p.Next)
 }
 
 // TeamCityURL is the project's CI. Libraries reach npm only from there (no GitHub Actions).
@@ -457,6 +459,31 @@ func BuildContext(root string, r catalog.Repo, dir string) string {
 	}
 }
 
+// ImageName is the registry repository (no tag) of a repository's image: <registry>/<name> for core,
+// <registry root>/apps/<app>/<image> for apps outside core (registry root = the registry without its /core).
+func ImageName(w *workspace.Workspace, r catalog.Repo) string {
+	if r.IsAppImage() {
+		return strings.TrimSuffix(w.Settings.Registry, "/core") + "/apps/" + r.App + "/" + r.Image
+	}
+	return w.Settings.Registry + "/" + r.Name
+}
+
+// AppBuildURL is the TeamCity build of an app image (IpAlpha_AcampaKids_Backend_Build). ./publish --ci only
+// points to it: the pushed commit starts the build, and the app's Deploy configuration is never triggered here.
+func AppBuildURL(r catalog.Repo) string {
+	return TeamCityURL + "/buildConfiguration/IpAlpha_" + pascal(r.App) + "_" + pascal(r.Image) + "_Build"
+}
+
+func pascal(s string) string {
+	out := ""
+	for _, part := range strings.Split(s, "-") {
+		if part != "" {
+			out += strings.ToUpper(part[:1]) + part[1:]
+		}
+	}
+	return out
+}
+
 // BuildImage builds (for the cluster's platform) and pushes <registry>/<repo>:<version> with Docker or Apple container.
 func BuildImage(w *workspace.Workspace, r catalog.Repo, version, dir string) error {
 	if !r.HasImage() {
@@ -467,7 +494,7 @@ func BuildImage(w *workspace.Workspace, r catalog.Repo, version, dir string) err
 		ui.Info(r.Name + ": " + i18n.T("publish_no_dockerfile"))
 		return nil
 	}
-	image := w.Settings.Registry + "/" + r.Name + ":" + version
+	image := ImageName(w, r) + ":" + version
 	registryHost := strings.SplitN(w.Settings.Registry, "/", 2)[0]
 	context := BuildContext(w.Root, r, dir)
 	var build, push []string
@@ -497,7 +524,8 @@ const deploymentBranch = "master"
 
 // BumpDeployment rewrites <registry>/<repo>:<tag> in deployment YAML on origin/master and pushes it there.
 // It works in a temporary worktree, so the local deployment checkout (its branch and uncommitted work) is untouched.
-func BumpDeployment(w *workspace.Workspace, repo, version string) error {
+func BumpDeployment(w *workspace.Workspace, r catalog.Repo, version string) error {
+	repo := r.Name
 	dep := w.Repo("deployment")
 	if !repos.IsGit(dep) {
 		ui.Warning(i18n.T("publish_deployment_missing"))
@@ -516,7 +544,7 @@ func BumpDeployment(w *workspace.Workspace, repo, version string) error {
 	}
 	defer func() { _ = git(dep, "worktree", "remove", "--force", tmp) }()
 
-	changed := RewriteImageTags(tmp, w.Settings.Registry+"/"+repo+":", version)
+	changed := RewriteImageTags(tmp, ImageName(w, r)+":", version)
 	if len(changed) == 0 {
 		return nil
 	}
