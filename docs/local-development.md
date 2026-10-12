@@ -61,7 +61,7 @@ Setup and `./pull` add missing notifications keys: `ORGANIZATIONS_API_URL`, `ORG
 
 `CHURCH_EMAIL_PUBLIC_URL` defaults to Oikos at `http://localhost:5110/api/notifications/church-emails`; the run-time port rewriter follows remapped ports. Use the actual Oikos HTTPS origin when configuring local TLS. Outside development/test the base must be HTTPS, on the Oikos host; its origin serves `/church-email-unsubscribe`. All notifications replicas share the private unsubscribe key. Public image URLs contain only opaque asset IDs. GET validates an unsubscribe without mutating it; browser confirmation and RFC 8058 provider POST disable campaigns only.
 
-Writing uses `aiSettings.assist` in the existing AI service (defaults to the current completion model); images and reference edits use its existing image-model priority list. The person reviews all suggestions and explicitly sends. No AI action chooses recipients or sends email. A 202 means queued, not delivered; provider acceptance is not an inbox receipt. Uncertain acceptance is never automatically retried. Draft content remains only in the open screen when offline; never persist it or person data in browser storage. Portal reference: `/docs/church-emails`, in all five languages.
+Writing uses `aiSettings.assist` in the existing AI service (defaults to the current completion model); images and reference edits use its existing image-model priority list. The person reviews all suggestions and explicitly sends. No AI action chooses recipients or sends email. Recipient-language preparation uses the existing translation model: four versions are prepared automatically without per-language manual approval, stored with the source hash and required current before send/schedule. Delivery selects the live preferred language (unknown uses pt-BR), never calls AI per recipient. No new env, scope, collection or microservice is needed. A 202 means queued, not delivered; provider acceptance is not an inbox receipt. Uncertain acceptance is never automatically retried. Draft content remains only in the open screen when offline; never persist it or person data in browser storage. Portal reference: `/docs/church-emails`, in all five languages.
 
 ## Supported platforms
 
@@ -106,16 +106,16 @@ Non-interactive (CI): `ipalpha setup <folder> --yes` with `IPALPHA_SUPERUSER_PHO
    `rustfs-init`, safe to repeat).
 4. `.env` completion, npm installs (shared-js built first, consumers' copies refreshed).
 5. auth-api signing keys, then the **local** auth database is reconciled: drifted client secrets, `allowedScopes`
-   (exactly the `SEED_CLIENTS_JSON` entry, so new grants reach clients auth-api seeded earlier) and the `appId` of
-   app-bound clients of the local services and the `localhost` origins/callbacks of the built-in apps (so sign-in keeps working when a web
+   (exactly the `SEED_CLIENTS_JSON` entry, so new grants reach clients auth-api seeded earlier), the `appId` of
+   app-bound clients of the local services (removed from a client that is no longer bound, e.g. sign-api) and the `localhost` origins/callbacks of the built-in apps (so sign-in keeps working when a web
    port moved). Only loopback MongoDB; non-loopback entries are never touched.
 6. Every API and the remembered web apps start at once — nothing waits on a peer. Each API's `GET /ready`
    drives its dot: ● ready, ◐ starting/not ready, ✖ failed, ○ stopped.
 
-The panel and `./status` list **core APIs → core frontends → apps → infrastructure**. Each app stays
-in one group, with its backend immediately before its frontend (for example, Forms API + Forms Web,
-then Sign API + Sign Web). This is display order: infrastructure is prepared before application
-processes start.
+The panel and `./status` list **core APIs → core frontends → apps → infrastructure**. Forms and IPAlpha
+Sign are core tools: Forms API and Sign API list with the core APIs, Forms Web and Sign Web with the core
+frontends. An app outside core stays in one group, with its backend immediately before its frontend. This
+is display order: infrastructure is prepared before application processes start.
 
 Processes left behind by a closed terminal are stopped by the next `./run`.
 
@@ -237,38 +237,59 @@ process receives the repaired environment. Persons' projects cache can recover o
 remove readiness checks or bypass authentication to hide this failure. The embedded `system-clients.json` grants `persons:links`, `persons:consents`,
 `persons:face-photos`, `persons:access-log` (photos-api, persons-api) and `documents:read` (persons-api).
 
-### Local IPAlpha Sign (apps/sign)
+### Forms and IPAlpha Sign (core tools)
 
-IPAlpha Sign is an app outside core: `apps/sign/sign-api` (port **3014**, MongoDB `sign`, audience
-`ipalpha:sign`) and `apps/sign/sign-webapp` (port **5113**, group "Sign" in the panel). The web app's Vite proxy
-mounts `/api/sign`, `/api/documents`, `/api/persons`, `/api/projects` and `/api/dispatch` same-origin with the
-ports of the run; auth-api stays cross-origin. Start the page from the panel (or `./run apps set sign-webapp`).
+Forms and IPAlpha Sign are **core tools** (Kevyn, 2026-10-12): `core/forms-api` (port **3006**, MongoDB `forms`,
+core Redis with `forms:` key prefixes), `core/forms-webapp` (**5106**), `core/sign-api` (**3014**, MongoDB `sign`,
+audience `ipalpha:sign`, no Redis) and `core/sign-webapp` (**5113**). Both use the core infra and talk to core
+over RabbitMQ (no HTTP webhooks). The web apps' Vite proxies mount their APIs (`/api/forms`, `/api/sign`,
+`/api/documents`, `/api/persons`, `/api/projects`, `/api/dispatch`) same-origin with the ports of the run;
+auth-api stays cross-origin. Start a page from the panel (or `./run apps set sign-webapp`).
 
-Signed PDFs live in documents-api: it stores them in the RustFS bucket `documents` and seals them with a
-generated self-signed key locally (`SEAL_DEV_SELF_SIGNED=true`; production uses the church e-CNPJ in
-`SEAL_CERT_P12_BASE64` / `SEAL_CERT_PASSWORD`, never set locally). Signing asks for a fresh sign-in
-(`SIGNING_MAX_AUTH_AGE_SEC=300`). E-mails (request, reminder, completed) arrive in Mailpit.
+`./pull` moves an old `apps/forms/{forms-api,forms-webapp}` and `apps/sign/{sign-api,sign-webapp}` checkout to
+`core/` (feature worktrees included, `.env` and uncommitted work kept). It only renames: when both folders exist
+it moves nothing and warns, and `apps/forms` / `apps/sign` are removed only once empty.
 
-Env added for this (`./pull` and `setup` only add missing keys and fill blanks; yours are never overwritten):
+Env for this (`./pull` and `setup` only add missing keys and fill blanks; yours are never overwritten):
 
-- sign-api (new `.env`): `DOCUMENTS_API_URL`, `NOTIFICATIONS_API_URL`, `DISPATCH_API_URL`, `SIGN_APP_ID`,
-  `SIGN_ENTRY_POINT_ID`, `SIGN_WEBAPP_URL=http://localhost:5113`, optional `SIGN_WEBHOOK_SECRET` (empty = app channel only).
+- auth-api: `BUILTIN_FORMS_RESPONDENT_CLIENT_SECRET` (the respondent entry point is a confidential client;
+  ≥ 16 characters, local default `dev-forms-respondent-secret-change-me`), `EXCHANGE_PERSON_DELETED`;
+  `sign-api` is appended to an existing `SEND_TEMPLATE_UNBOUND_CLIENT_IDS`. `FORMS_API_URL` and
+  `PREFILL_TRANSACTION_TTL_SEC` are no longer read (delete them when you like).
+- forms-api: `RABBITMQ_URL`, `EXCHANGE_FORMS_RESPONSE_CREATED`, `EXCHANGE_FORMS_PERSON_REQUESTED`,
+  `FORMS_RESPONDENT_CLIENT_ID` / `FORMS_RESPONDENT_CLIENT_SECRET` / `FORMS_RESPONDENT_REDIRECT_URI` (filled from
+  auth-api's `BUILTIN_FORMS_RESPONDENT_*`: they must be equal), optional `FORMS_RESPONDENT_ENTRY_POINT=respondent`.
+  `DISPATCH_API_URL` is no longer read.
+- sign-api: `SERVICE_NAME`, `RABBITMQ_URL`, `AUTH_API_AUDIENCE=ipalpha:auth`, `EXCHANGE_AUTH_REVOCATIONS`,
+  `EXCHANGE_SIGN_REQUEST_CHANGED`, `EXCHANGE_SIGNED_DOCUMENTS_CHANGED`, `EXCHANGE_PERSON_DELETED`, plus
+  `DOCUMENTS_API_URL`, `NOTIFICATIONS_API_URL`, `SIGN_APP_ID`, `SIGN_ENTRY_POINT_ID`,
+  `SIGN_WEBAPP_URL=http://localhost:5113`. `DISPATCH_API_URL` and `SIGN_WEBHOOK_SECRET` are no longer read.
+- persons-api: `EXCHANGE_FORMS_PERSON_REQUESTED`, `SIGNING_FIELDS_CALLER_SERVICE_IDS=documents-api`.
+  `WEBHOOK_ALLOWED_CLIENT_IDS` is no longer read.
+- dispatch-api: `EXCHANGE_FORMS_RESPONSE_CREATED`, `SIGN_API_URL`, `EXCHANGE_SIGN_REQUEST_CHANGED`;
+  `http://localhost:5113` is appended to an existing `SOCKET_ALLOWED_ORIGINS`. `WEBHOOK_ALLOWED_CLIENT_IDS` and
+  `EXCHANGE_SIGNED_DOCUMENTS_CHANGED` are no longer read (sign-api consumes documents-api's event itself).
 - documents-api: `PERSONS_API_URL` / `PROJECTS_API_URL` + audiences, `EXCHANGE_PERSON_DELETED`,
   `EXCHANGE_SIGNED_DOCUMENTS_CHANGED`, `SIGNING_MAX_AUTH_AGE_SEC`, `S3_*` (`S3_BUCKET=documents`; keys follow
   `.ipalpha/.env` like photos-api), `SEAL_DEV_SELF_SIGNED=true`, empty `SEAL_CERT_*`, `SIGN_WEBAPP_URL`,
   `TRUST_PROXY_HOPS=1`.
-- dispatch-api: `EXCHANGE_SIGNED_DOCUMENTS_CHANGED`; `http://localhost:5113` is appended to an existing
-  `SOCKET_ALLOWED_ORIGINS` (the one value `./pull` extends).
-- notifications-api: `SIGN_APP_ID`, `SIGN_WEBAPP_URL`. persons-api: `SIGNING_FIELDS_CALLER_SERVICE_IDS=documents-api`.
-- auth-api: `BUILTIN_SIGN_CLIENT_ID=sign-web`, `BUILTIN_SIGN_ORIGINS`, `BUILTIN_SIGN_REDIRECT_URIS`; `ipalpha:sign` is
-  appended to an existing `AUTH_RESOURCE_AUDIENCES_JSON`. `./run` reconciles the Sign entry's localhost origin and
-  callback like the other built-in apps and hands sign-webapp `VITE_SIGN_CLIENT_ID`, `VITE_SIGN_ENTRY_POINT`,
-  `VITE_SIGN_CALLBACK_URI`, `VITE_OIKOS_URL`.
+- notifications-api: `SIGN_APP_ID`, `SIGN_WEBAPP_URL`.
+- auth-api built-in Sign entry: `BUILTIN_SIGN_CLIENT_ID=sign-web`, `BUILTIN_SIGN_ORIGINS`, `BUILTIN_SIGN_REDIRECT_URIS`;
+  `ipalpha:sign` is appended to an existing `AUTH_RESOURCE_AUDIENCES_JSON`. `./run` reconciles the Sign entry's
+  localhost origin and callback like the other built-in apps and hands sign-webapp `VITE_SIGN_CLIENT_ID`,
+  `VITE_SIGN_ENTRY_POINT`, `VITE_SIGN_CALLBACK_URI`, `VITE_OIKOS_URL`.
 
-System clients (`system-clients.json`): documents-api gains `persons:signing-fields`, `persons:access-log`,
-`projects:read`; sign-api is **app-bound** — listed under `appBound` (`sign-api → app-ipalpha-sign`), so its
-`SEED_CLIENTS_JSON` entry carries `appId` and holds only app-bound scopes (`notifications:send-template`,
-`dispatch:app-channel`).
+Signed PDFs live in documents-api: it stores them in the RustFS bucket `documents` and seals them with a
+generated self-signed key locally (`SEAL_DEV_SELF_SIGNED=true`; production uses the church seal certificate in
+`SEAL_CERT_P12_BASE64` / `SEAL_CERT_PASSWORD`, never set locally). Signing asks for a fresh sign-in
+(`SIGNING_MAX_AUTH_AGE_SEC=300`). E-mails (request, reminder, completed) arrive in Mailpit.
+
+System clients (`system-clients.json`): forms-api holds only `persons:read` (its events go over RabbitMQ and it
+runs without revocation sync); sign-api is an **unbound** core client with `revocations:read` and
+`notifications:send-template` (`appBound` is empty). Setup and `./pull` remove exactly the retired grants
+(forms-api `prefill:*`, `persons:write`, `dispatch:events`, `revocations:read`; sign-api `dispatch:app-channel`) and
+sign-api's old `appId` from `SEED_CLIENTS_JSON`; every other scope you added is kept. documents-api has
+`persons:signing-fields`, `persons:access-log`, `projects:read`.
 
 ## `./publish`
 
@@ -288,7 +309,7 @@ AI · `-y` no confirmation · `./publish clean` wipes the decision cache. Also `
 
 ### Application AI gateway (cpamc)
 
-`./run` starts `docker.io/kevynsax/cpamc-simulator:0.1.0` as development infrastructure on loopback port 8317 (automatically moved when busy), using Docker Compose or Apple `container`. It appears in `./run`, `./logs cpamc` and `./stop`; it is not a core repository, production service or application publish target. The public image supports Linux amd64 and arm64; after pulling, it needs no provider account, network access or management credentials. Local feature workspaces get their own simulator port with the usual offset, never a shared gateway.
+`./run` starts `docker.io/kevynsax/cpamc-simulator:0.1.1` as development infrastructure on loopback port 8317 (automatically moved when busy), using Docker Compose or Apple `container`. It appears in `./run`, `./logs cpamc` and `./stop`; it is not a core repository, production service or application publish target. The public image supports Linux amd64 and arm64; after pulling, it needs no provider account, network access or management credentials. Local feature workspaces get their own simulator port with the usual offset, never a shared gateway.
 
 `ipalpha ai gateway` configures the **application gateway**, not the coding CLI:
 
@@ -332,7 +353,7 @@ The choice is per workspace (`ai_cli`, `ai_model`, `ai_command` in `.ipalpha/set
 
 Downloads the newest tool (checksum verified) and continues with it; fast-forwards every repo (a conflict
 leaves that folder untouched and is listed at the end), clones missing ones, moves repos whose folder
-changed (e.g. `core/forms-*` → `apps/forms/`, feature worktrees included), adds new `.env` keys, refreshes
+changed (e.g. `apps/forms/` → `core/forms-*`, `apps/sign/` → `core/sign-*`, feature worktrees included), adds new `.env` keys, refreshes
 wrappers and generated files. Feature workspaces only fetch. Workspaces made by the old bash tooling are
 migrated by their next `./pull`.
 
@@ -366,11 +387,34 @@ migrated by their next `./pull`.
 | photos-api | 3010 | Face service (optional) | 8000 |
 | documents-api | 3012 | schedule-api | 3013 |
 | sign-api | 3014 | sign-webapp | 5113 |
+| photo-services-api | 3016 | photo-services-webapp | 5114 |
+
+## Photo Services (app outside core)
+
+`apps/photo-services/photo-services-api` (port **3016**, MongoDB `photo_services` on the shared local Mongo) and
+`apps/photo-services/photo-services-webapp` (**5114**, Vite; `/api` goes to the API, WebSocket `/api/socket.io`
+included). It is an app, not a core tool: it talks to core only over HTTP with the signed-in person's tokens.
+Start it from the panel (or `./run apps set photo-services-webapp`). The API runs as a **single instance** (live
+updates are in-process websockets).
+
+`./pull` and `setup` write `photo-services-api/.env` from `.env.example` (else the embedded fallback), only adding
+missing keys and filling blanks: `SESSION_TOKEN_KEY` (64 hex, generated), `MONGO_URI`, `WEB_ORIGINS` /
+`PUBLIC_WEB_URL` (`http://localhost:5114`), `COOKIE_SECURE=false`, `AUTH_API_URL`, `PROJECTS|PERSONS|SCHEDULE|PHOTOS|PLACES_API_URL`.
+
+Sign-in uses auth-api's login relay, so the app needs an **app-bound client with `login:relay`** and a relay
+entry point. The tooling does not seed these (no local app id exists): register the app in the Developers portal /
+Oikos, then paste `AUTH_CLIENT_ID`, `AUTH_CLIENT_SECRET`, `RELAY_CLIENT_ID` and `RELAY_ENTRY_POINT` into
+`photo-services-api/.env`. Until then the API boots but sign-in answers unavailable.
+
+New core env for this feature (added, never overwritten): schedule-api `PERSONS_API_URL`, `PERSONS_API_AUDIENCE=ipalpha:persons`
+(and the system-client scope `persons:coordination`); persons-api `PROFILE_CALLER_SERVICE_IDS=auth-api`,
+`COORDINATION_CALLER_SERVICE_IDS=schedule-api`. Previews are not built for Photo Services before launch.
 
 ## Core and apps
 
-`core/` holds the shared capabilities and the core UIs; apps that consume core live in `apps/<app>/`
-(`apps/forms/{forms-api,forms-webapp}`, `apps/sign/{sign-api,sign-webapp}`). **Acampa Kids** (`apps/acampa-kids/{backend,frontend,face-service}`)
+`core/` holds the shared capabilities, the core UIs and the core tools Forms (`core/forms-api`,
+`core/forms-webapp`) and IPAlpha Sign (`core/sign-api`, `core/sign-webapp`); apps that consume core live in
+`apps/<app>/`. **Acampa Kids** (`apps/acampa-kids/{backend,frontend,face-service}`)
 has its own repositories, registry and TeamCity project; `./run` does not start it and its repos are optional.
 In a feature environment every core service runs; an app joins only when one of its own repos changed.
 
@@ -403,7 +447,7 @@ either end, every host ≤ 63 chars.
 | `https://developers-ipalpha-<slug>.kevyn.com.br` | IPAlpha Developers (when the baseline has it) |
 | `https://ipalpha-<slug>.kevyn.com.br/mailbox` | captured e-mail/SMS (sign-in codes) |
 | `https://acampa-ipalpha-<slug>.kevyn.com.br` | Acampa Kids — only when an `acampa-kids-*` repo changed |
-| `https://sign-ipalpha-<slug>.kevyn.com.br` | IPAlpha Sign — only when a `sign-*` repo changed (and the baseline has it) |
+| `https://sign-ipalpha-<slug>.kevyn.com.br` | IPAlpha Sign (core tool, always served) |
 
 How it works: main checkouts are never touched (`git worktree`); unchanged services run the baseline images
 (`deployment/releases/core-latest.json`); `shared-js` changes rebuild every core API
