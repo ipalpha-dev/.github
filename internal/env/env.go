@@ -268,7 +268,6 @@ func fillLocal(w *workspace.Workspace, r catalog.Repo, f *envfile.File) []string
 		fill("IMPORT_ROWS_KEY", randomB64(32))
 	}
 	if r.Name == "services-kids-api" {
-		fill("SESSION_TOKEN_KEY", randomHex(32))
 		// One Web Push (VAPID) P-256 key pair, generated once and kept: a new pair would drop every subscription.
 		pub, _ := f.Get("VAPID_PUBLIC_KEY")
 		priv, _ := f.Get("VAPID_PRIVATE_KEY")

@@ -486,7 +486,7 @@ HTTP with the signed-in person's tokens, its own socket.io (no `dispatch-api` or
 The repositories have an origin, so `./pull`, `setup` and `./feature` clone them like every other repo.
 
 `./pull` and `setup` write `services-kids-api/.env` from `.env.example` (else the embedded fallback), only adding
-missing keys and filling blanks: `SESSION_TOKEN_KEY` (64 hex), `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` (one Web Push P-256
+missing keys and filling blanks: `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` (one Web Push P-256
 pair, base64url, generated once and kept), `VAPID_SUBJECT=mailto:dev@example.test`, `MONGO_URI`, `WEB_ORIGINS` /
 `PUBLIC_WEB_URL` (`http://localhost:5115`), `COOKIE_SECURE=false`, `AUTH_API_URL`,
 `PROJECTS|PERSONS|PLACES|SCHEDULE|NOTIFICATIONS_API_URL`, `WHATSAPP_ENABLED=false`.

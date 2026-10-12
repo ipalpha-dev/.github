@@ -304,14 +304,14 @@ func TestServicesKidsAPIGetsStableVAPIDKeys(t *testing.T) {
 	w := ws(t)
 	dir := w.Repo("services-kids-api")
 	os.MkdirAll(dir, 0o755)
-	os.WriteFile(filepath.Join(dir, ".env.example"), []byte("SESSION_TOKEN_KEY=\nVAPID_PUBLIC_KEY=\nVAPID_PRIVATE_KEY=\nVAPID_SUBJECT=\n"), 0o644)
+	os.WriteFile(filepath.Join(dir, ".env.example"), []byte("VAPID_PUBLIC_KEY=\nVAPID_PRIVATE_KEY=\nVAPID_SUBJECT=\n"), 0o644)
 	if _, err := Prepare(w); err != nil {
 		t.Fatal(err)
 	}
 	e := envfile.Read(filepath.Join(dir, ".env"))
 	pub, err := base64.RawURLEncoding.DecodeString(e["VAPID_PUBLIC_KEY"])
 	priv, err2 := base64.RawURLEncoding.DecodeString(e["VAPID_PRIVATE_KEY"])
-	if err != nil || err2 != nil || len(pub) != 65 || pub[0] != 4 || len(priv) != 32 || len(e["SESSION_TOKEN_KEY"]) != 64 || e["VAPID_SUBJECT"] != "mailto:dev@example.test" {
+	if err != nil || err2 != nil || len(pub) != 65 || pub[0] != 4 || len(priv) != 32 || e["SESSION_TOKEN_KEY"] != "" || e["AUTH_TOKEN_ISSUER"] == "" || e["VAPID_SUBJECT"] != "mailto:dev@example.test" {
 		t.Fatalf("keys: %v", e)
 	}
 	if _, err := Prepare(w); err != nil {
