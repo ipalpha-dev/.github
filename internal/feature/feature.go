@@ -42,18 +42,19 @@ func WaitMinutes() int {
 	return 60
 }
 
-// Hosts of a preview (spec: Oikos, Forms, auth).
+// Hosts of a preview (spec: Oikos, Forms, auth, plus IPAlpha Sign): every core host. Forms and Sign are
+// core tools, so their hosts are always served.
 func Hosts(slug string) []string {
 	d := Domain()
-	return []string{"ipalpha-" + slug + "." + d, "forms-ipalpha-" + slug + "." + d, "auth-ipalpha-" + slug + "." + d}
+	return []string{"ipalpha-" + slug + "." + d, "forms-ipalpha-" + slug + "." + d, "auth-ipalpha-" + slug + "." + d, "sign-ipalpha-" + slug + "." + d}
 }
 
 // DevelopersHost is served when the baseline includes developers-webapp.
 func DevelopersHost(slug string) string { return "developers-ipalpha-" + slug + "." + Domain() }
 
-// AppHosts are served only when the app changed (Acampa Kids, IPAlpha Sign).
+// AppHosts are served only when the app changed (apps outside core: Acampa Kids).
 func AppHosts(slug string) []string {
-	return []string{"acampa-ipalpha-" + slug + "." + Domain(), "sign-ipalpha-" + slug + "." + Domain()}
+	return []string{"acampa-ipalpha-" + slug + "." + Domain()}
 }
 
 var slugRe = regexp.MustCompile(`^[a-z0-9-]{3,30}$`)
