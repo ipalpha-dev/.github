@@ -115,7 +115,7 @@ Non-interactive (CI): `ipalpha setup <folder> --yes` with `IPALPHA_SUPERUSER_PHO
 5. auth-api signing keys, then the **local** auth database is reconciled: drifted client secrets, `allowedScopes`
    (exactly the `SEED_CLIENTS_JSON` entry, so new grants reach clients auth-api seeded earlier), the `appId` of
    app-bound clients of the local services (removed from a client that is no longer bound, e.g. sign-api) and the `localhost` origins/callbacks of the built-in apps (so sign-in keeps working when a web
-   port moved). Only loopback MongoDB; non-loopback entries are never touched.
+   port moved). Clients of outside apps (services with no entry in `system-clients.json`, e.g. Services Kids, registered through the portal) only get their secret synced: their `appId` and scopes (`login:relay`...) are never rewritten. Only loopback MongoDB; non-loopback entries are never touched.
 6. Every API and the remembered web apps start at once — nothing waits on a peer. Each API's `GET /ready`
    drives its dot: ● ready, ◐ starting/not ready, ✖ failed, ○ stopped.
 

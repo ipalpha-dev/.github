@@ -491,6 +491,22 @@ func SeedClientList(w *workspace.Workspace) []SeedClient {
 	return list
 }
 
+// ExternalClientIDs returns the ids of local clients whose service has no entry in system-clients.json
+// (outside apps such as Services Kids). Their appId and scopes belong to the portal/Oikos registration.
+func ExternalClientIDs(w *workspace.Workspace) map[string]bool {
+	approved, _, err := approvedScopes(w)
+	out := map[string]bool{}
+	if err != nil {
+		return out
+	}
+	for _, c := range SeedClientList(w) {
+		if _, ok := approved[c.ServiceID]; !ok {
+			out[c.ClientID] = true
+		}
+	}
+	return out
+}
+
 var (
 	phoneDigits = regexp.MustCompile(`\D`)
 	brMobile    = regexp.MustCompile(`^[1-9]{2}9\d{8}$`)

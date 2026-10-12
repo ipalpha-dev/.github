@@ -536,7 +536,7 @@ func reconcileDB(w *workspace.Workspace, rw ports.Rewriter, plan ports.Plan) (lo
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
-	return localdb.Reconcile(ctx, uri, env.SeedClientList(w), entries)
+	return localdb.Reconcile(ctx, uri, env.SeedClientList(w), env.ExternalClientIDs(w), entries)
 }
 
 func loopbackOnly(list string) []string {

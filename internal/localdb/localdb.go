@@ -113,7 +113,7 @@ type EntryURLs struct {
 }
 
 // Reconcile connects to auth's local database and fixes drifted clients and built-in loopback URLs.
-func Reconcile(ctx context.Context, uri string, clients []env.SeedClient, entries []EntryURLs) (Result, error) {
+func Reconcile(ctx context.Context, uri string, clients []env.SeedClient, external map[string]bool, entries []EntryURLs) (Result, error) {
 	var res Result
 	if !IsLoopbackURI(uri) {
 		res.Skipped = "not a local database"
@@ -127,7 +127,7 @@ func Reconcile(ctx context.Context, uri string, clients []env.SeedClient, entrie
 	}
 	defer cli.Disconnect(context.Background())
 	db := cli.Database(dbName(uri))
-	if err := reconcileClients(ctx, db.Collection("clients"), clients, &res); err != nil {
+	if err := reconcileClients(ctx, db.Collection("clients"), clients, external, &res); err != nil {
 		return res, err
 	}
 	if err := reconcileEntries(ctx, db.Collection("apps"), entries, &res); err != nil {
@@ -147,7 +147,7 @@ func dbName(uri string) string {
 	return "auth"
 }
 
-func reconcileClients(ctx context.Context, col *mongo.Collection, clients []env.SeedClient, res *Result) error {
+func reconcileClients(ctx context.Context, col *mongo.Collection, clients []env.SeedClient, external map[string]bool, res *Result) error {
 	for _, c := range clients {
 		var doc clientDoc
 		err := col.FindOne(ctx, bson.M{"clientId": c.ClientID, "clientClass": "system"}).Decode(&doc)
@@ -158,6 +158,9 @@ func reconcileClients(ctx context.Context, col *mongo.Collection, clients []env.
 			return err
 		}
 		update := clientUpdate(doc, c, time.Now())
+		if external[c.ClientID] {
+			update = secretUpdate(doc, c, time.Now())
+		}
 		if update == nil {
 			continue
 		}
@@ -212,6 +215,18 @@ func clientUpdate(doc clientDoc, c env.SeedClient, now time.Time) bson.M {
 		update["$unset"] = bson.M{"appId": ""}
 	}
 	return update
+}
+
+// secretUpdate is clientUpdate for an outside app's client: only the secret is synced. Its appId and scopes
+// (login:relay, notifications:send-template...) come from the portal/Oikos registration, never from the seed.
+func secretUpdate(doc clientDoc, c env.SeedClient, now time.Time) bson.M {
+	if doc.SecretHash != "" && VerifySecret(doc.SecretHash, c.Secret) {
+		return nil
+	}
+	return bson.M{
+		"$set": bson.M{"secretHash": HashSecret(c.Secret), "rotatedAt": now},
+		"$inc": bson.M{"credentialVersion": 1},
+	}
 }
 
 // sameSet reports whether a and b hold the same strings (order and duplicates ignored).

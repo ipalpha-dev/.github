@@ -121,3 +121,17 @@ func TestClientUpdateSyncsScopesAndApp(t *testing.T) {
 		t.Fatalf("empty scopes: %#v", got)
 	}
 }
+
+// An outside app's client (registered through the portal) keeps its appId and scopes; only the secret syncs.
+func TestSecretUpdateKeepsAppBinding(t *testing.T) {
+	now := time.Now()
+	c := env.SeedClient{ClientID: "kids", Secret: "local-secret-123", ServiceID: "services-kids-api"}
+	if u := secretUpdate(clientDoc{SecretHash: HashSecret("local-secret-123"), AppID: "app-x", AllowedScopes: []string{"login:relay"}}, c, now); u != nil {
+		t.Fatalf("matching external client updated: %v", u)
+	}
+	u := secretUpdate(clientDoc{SecretHash: HashSecret("other-secret-1")}, c, now)
+	set, _ := u["$set"].(bson.M)
+	if set == nil || set["secretHash"] == nil || set["appId"] != nil || set["allowedScopes"] != nil || u["$unset"] != nil {
+		t.Fatalf("secret only: %v", u)
+	}
+}
