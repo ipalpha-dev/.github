@@ -260,7 +260,7 @@ remove readiness checks or bypass authentication to hide this failure. The embed
 `core/drive-webapp` (**5116**). Both repos have an origin and are cloned by `./pull` and `setup`.
 `drive-api.env` follows the Sign pattern (`EXCHANGE_AUTH_REVOCATIONS`, `EXCHANGE_DRIVE_ITEMS_CHANGED=drive-api.items.changed`,
 `EXCHANGE_PERSON_DELETED`, `PROJECTS_API_*`, `S3_*` with keys from `.ipalpha/.env`, `S3_PUBLIC_ENDPOINT` for presigned
-browser URLs). The `drive-api` system client has `revocations:read` and `projects:read`. Added keys only: dispatch-api
+browser URLs). Contact shares go out through notifications-api: `NOTIFICATIONS_API_URL`/`NOTIFICATIONS_API_AUDIENCE` and `DRIVE_PUBLIC_URL=http://localhost:5116` (no persons-api keys; persons-api has no `RESOLVE_CONTACT_CALLER_SERVICE_IDS`). The `drive-api` system client has `revocations:read` and `projects:read`. Added keys only: dispatch-api
 gets `DRIVE_API_URL`, `EXCHANGE_DRIVE_ITEMS_CHANGED` and `http://localhost:5116` in `SOCKET_ALLOWED_ORIGINS`; auth-api
 gets `ipalpha:drive` in `AUTH_RESOURCE_AUDIENCES_JSON`. The `rustfs-init` job also creates the `drive` bucket and applies
 CORS for `http://localhost:5116` and Oikos (`5110`). Oikos' Vite proxy reads `DRIVE_API_URL` like every other API.
