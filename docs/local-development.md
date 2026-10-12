@@ -96,12 +96,22 @@ with the other infra on `127.0.0.1:9000` (volume `<infra>-rustfs-data`, no conso
 `ipalpha` / `ipalpha-secret` and live in `.ipalpha/.env` (`RUSTFS_ACCESS_KEY`, `RUSTFS_SECRET_KEY`); photos-api's
 `S3_ACCESS_KEY` / `S3_SECRET_KEY` follow them, and `S3_ENDPOINT` follows the port of the run.
 
-The **face service** (the Acampa face image, `registry.kevyn.com.br/ip-alpha/kids/acampa-2025-face`, needs registry
-access and downloads a model on first start) is **off by default**. With it off, `FACE_SERVICE_URL` is empty for
+The **face service** (a core service, repository `ipalpha-dev/face-service` cloned to `core/face-service`; image
+`registry.kevyn.com.br/ip-alpha/core/face-service`, built by Core's TeamCity like every core image; it used to be
+Acampa's `acampa-kids-face-service`, and only photos-api calls it; needs registry access and downloads a model on first start) is **off by default**. With it off, `FACE_SERVICE_URL` is empty for
 photos-api: uploads work, face indexing and search stay off. Turn it on with `./run --face` (remembered as
 `face=on` in `.ipalpha/settings`; `ipalpha config set face off` turns it off). It then runs on `127.0.0.1:8000`.
 The image only has a `linux/amd64` build, so compose and Apple `container` run it with `--platform linux/amd64`; on Apple
 Silicon it is emulated and noticeably slower (first start and each detection).
+
+The face service repository is optional for `./pull` and `./doctor` (skipped quietly when you cannot read it);
+`./run --face` only needs the image. Env added for faces by consent and the programme: photos-api gets
+`DOCUMENTS_API_URL` / `DOCUMENTS_API_AUDIENCE` (which document versions grant `faceRecognition`),
+`SCHEDULE_API_URL` / `SCHEDULE_API_AUDIENCE` (the span of an album event linked to a programme entry) and the consumed
+`EXCHANGE_DOCUMENTS_CHANGED`, `EXCHANGE_SCHEDULE_ENTRY_CHANGED`, `EXCHANGE_SCHEDULE_ENTRY_DELETED`; its system client
+gains `documents:read` and `schedule:read`. places-api gets `AUDIT_RETENTION_DAYS=365` (how long `placeAudits` rows
+are kept). Acampa Kids' backend is not an `./run` process; its `IPALPHA_SCHEDULE_API_URL`, `IPALPHA_PLACES_API_URL`
+and `IPALPHA_PHOTOS_API_URL` are set in its own `.env` (see its `.env.example`).
 
 Oikos reaches photos-api at `/api/photos` through its Vite proxy; `./run` hands it `PHOTOS_API_URL` for the port of
 the run, like every other API.
@@ -203,7 +213,7 @@ migrated by their next `./pull`.
 ## Core and apps
 
 `core/` holds the shared capabilities and the core UIs; apps that consume core live in `apps/<app>/`
-(`apps/forms/{forms-api,forms-webapp}`). **Acampa Kids** (`apps/acampa-kids/{backend,frontend,face-service}`)
+(`apps/forms/{forms-api,forms-webapp}`). **Acampa Kids** (`apps/acampa-kids/{backend,frontend}`; its former face service is now `core/face-service`)
 has its own repositories, registry and TeamCity project; `./run` does not start it and its repos are optional.
 In a feature environment every core service runs; an app joins only when one of its own repos changed.
 

@@ -115,7 +115,6 @@ func newEnv(t *testing.T) *env {
 		case r.Name == "deployment":
 			write(t, filepath.Join(s, "base/apps/acampa-kids/acampa-kids-backend/backend.yaml"), "        - image: registry.kevyn.com.br/ip-alpha/apps/acampa-kids/backend:0.19.0\n")
 			write(t, filepath.Join(s, "base/apps/acampa-kids/acampa-kids-frontend/frontend.yaml"), "        - image: registry.kevyn.com.br/ip-alpha/apps/acampa-kids/frontend:0.27.0\n")
-			write(t, filepath.Join(s, "base/apps/acampa-kids/acampa-kids-face-service/face.yaml"), "        - image: registry.kevyn.com.br/ip-alpha/apps/acampa-kids/face:0.1.0\n")
 		}
 		git(t, s, "add", "-A")
 		git(t, s, "commit", "-q", "-m", "init")
@@ -130,7 +129,7 @@ func newEnv(t *testing.T) *env {
 	// Baseline pins the init commits; master moves on afterwards.
 	services := map[string]any{}
 	for _, r := range catalog.Repos {
-		if r.Kind == catalog.KindAPI || r.Kind == catalog.KindWeb {
+		if r.Kind == catalog.KindAPI || r.Kind == catalog.KindWeb || r.Kind == catalog.KindService {
 			services[r.Name] = map[string]string{"image": "x@sha256:" + strings.Repeat("a", 64), "sourceCommit": git(t, filepath.Join(e.seed, r.Name), "rev-parse", "HEAD")}
 		}
 	}

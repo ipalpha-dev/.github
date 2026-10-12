@@ -107,7 +107,7 @@ func doctorCmd() *cobra.Command {
 			for _, r := range catalog.Repos {
 				dir := r.Path(w.Root)
 				if _, err := os.Stat(dir); err != nil {
-					if r.Kind == catalog.KindOptional {
+					if r.SkippedWhenMissing() {
 						continue
 					}
 					add(check{name: r.Rel(), status: "fail", detail: i18n.T("doctor_not_cloned"), fix: "./pull"})
