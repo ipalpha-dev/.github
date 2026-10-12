@@ -3,7 +3,7 @@ name: ${IPALPHA_INFRA_NAME:-ipalpha}
 services:
   # Public, secret-free, development-only gateway. Never calls real AI providers.
   cpamc:
-    image: docker.io/kevynsax/cpamc-simulator:0.1.1
+    image: docker.io/kevynsax/cpamc-simulator:0.1.2
     container_name: ${IPALPHA_INFRA_NAME:-ipalpha}-cpamc
     ports:
       - "127.0.0.1:${CPAMC_HOST_PORT:-8317}:8317"

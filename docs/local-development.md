@@ -366,7 +366,7 @@ AI · `-y` no confirmation · `./publish clean` wipes the decision cache. Also `
 
 ### Application AI gateway (cpamc)
 
-`./run` starts `docker.io/kevynsax/cpamc-simulator:0.1.1` as development infrastructure on loopback port 8317 (automatically moved when busy), using Docker Compose or Apple `container`. It appears in `./run`, `./logs cpamc` and `./stop`; it is not a core repository, production service or application publish target. The public image supports Linux amd64 and arm64; after pulling, it needs no provider account, network access or management credentials. Local feature workspaces get their own simulator port with the usual offset, never a shared gateway.
+`./run` starts `docker.io/kevynsax/cpamc-simulator:0.1.2` as development infrastructure on loopback port 8317 (automatically moved when busy), using Docker Compose or Apple `container`. It appears in `./run`, `./logs cpamc` and `./stop`; it is not a core repository, production service or application publish target. The public image supports Linux amd64 and arm64; after pulling, it needs no provider account, network access or management credentials. Local feature workspaces get their own simulator port with the usual offset, never a shared gateway.
 
 `ipalpha ai gateway` configures the **application gateway**, not the coding CLI:
 

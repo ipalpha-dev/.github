@@ -18,7 +18,7 @@ const ToolingRepo = ".github"
 const DefaultRegistry = "registry.kevyn.com.br/ip-alpha/core"
 
 // Public, version-pinned development infrastructure; never a production core service.
-const CPAMCSimulatorImage = "docker.io/kevynsax/cpamc-simulator:0.1.1"
+const CPAMCSimulatorImage = "docker.io/kevynsax/cpamc-simulator:0.1.2"
 const CPAMCSimulatorClientKey = "simulator-client-key"
 const CPAMCSimulatorManagementKey = "simulator-management-key"
 
