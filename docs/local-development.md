@@ -433,19 +433,21 @@ One feature = one isolated workspace, one `feat/<slug>` branch per repo, one pre
 data and public HTTPS hosts, alive 72 h after each publish. 
 
 ```sh
-./feature new hello-preview          # features/hello-preview/: worktrees on feat/hello-preview at the last green Core Deploy
+./feature new hello-preview          # features/hello-preview/: worktrees on feat/hello-preview at each repo's local default-branch tip
 cd features/hello-preview
 ./run                                # own ports (+100 per feature) and own infra
 ./publish                            # = --feature hello-preview: commit (no version bump), push, deploy the preview
 cd ../..
 ./feature list                       # previews + local features, generation, expiry, URLs
 ./feature extend hello-preview       # +72 h without a build
-./feature rebase hello-preview       # move to the latest green Core Deploy
+./feature rebase hello-preview       # move onto each repo's local default-branch tip
 ./feature reset hello-preview        # back to the synthetic seed (type the slug to confirm)
 ./feature destroy hello-preview      # delete the preview and worktrees; branches stay
 ```
 
-`--baseline <deployment commit>` pins an earlier recorded baseline. Slugs: `^[a-z0-9-]{3,30}$`, no hyphen at
+`./feature new` starts every repo's `feat/<slug>` from that repo's **local** default-branch tip (`master`, or
+`main` where that is the default), not from the last green Core Deploy; an existing `feat/<slug>` branch is reused as is.
+`./feature rebase` rebases onto the same local tips. Pull the repos first (`./pull`) if you want upstream work. Slugs: `^[a-z0-9-]{3,30}$`, no hyphen at
 either end, every host ≤ 63 chars.
 
 | URL | What |
@@ -453,18 +455,17 @@ either end, every host ≤ 63 chars.
 | `https://ipalpha-<slug>.kevyn.com.br` | Oikos |
 | `https://forms-ipalpha-<slug>.kevyn.com.br` | IPAlpha Formulários |
 | `https://auth-ipalpha-<slug>.kevyn.com.br` | sign-in popup |
-| `https://developers-ipalpha-<slug>.kevyn.com.br` | IPAlpha Developers (when the baseline has it) |
+| `https://developers-ipalpha-<slug>.kevyn.com.br` | IPAlpha Developers |
 | `https://ipalpha-<slug>.kevyn.com.br/mailbox` | captured e-mail/SMS (sign-in codes) |
 | `https://acampa-ipalpha-<slug>.kevyn.com.br` | Acampa Kids — only when an `acampa-kids-*` repo changed |
 | `https://sign-ipalpha-<slug>.kevyn.com.br` | IPAlpha Sign (core tool, always served) |
 
-How it works: main checkouts are never touched (`git worktree`); unchanged services run the baseline images
-(`deployment/releases/core-latest.json`); `shared-js` changes rebuild every core API
+How it works: main checkouts are never touched (`git worktree`); unchanged services run the last green Core Deploy images
+(`deployment/releases/core-latest.json`, resolved by CI, not by `./feature`); `shared-js` changes rebuild every core API
 (each web app owns its UI kit, so no library rebuilds them). `./publish` pushes `previews/<slug>/release.json` to deployment master (a throwaway worktree, retried
 on races, CI fields kept) and waits for CI's record commit — no CI token on laptops. Pushes use
 `--force-with-lease` against the tip this workspace pushed, so a teammate's push is never overwritten.
-`.env` files are kept out of commits. Acampa repos start at the `v<version>` tag their production manifest
-names (origin/master with a warning when missing). Sign in with the fixture accounts in
+`.env` files are kept out of commits. Sign in with the fixture accounts in
 `deployment/fixtures/2/README.md`. Previews only hold synthetic data (LGPD).
 
 ## Troubleshooting

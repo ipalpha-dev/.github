@@ -309,17 +309,12 @@ func TestFeatureLifecycle(t *testing.T) {
 			t.Fatalf("%s on %s", r.Name, b)
 		}
 	}
-	authBase := git(t, filepath.Join(e.origins, "auth-api.git"), "rev-parse", "master~1")
-	if git(t, filepath.Join(froot, "core", "auth-api"), "rev-parse", "HEAD") != authBase {
-		t.Fatal("auth-api not pinned to the baseline")
+	for _, r := range catalog.Repos {
+		if git(t, r.Path(froot), "rev-parse", "HEAD") != git(t, r.Path(root), "rev-parse", "refs/heads/master") {
+			t.Fatalf("%s not started from its local master tip", r.Name)
+		}
 	}
-	if git(t, filepath.Join(froot, "core", "shared-js"), "rev-parse", "HEAD") != git(t, filepath.Join(root, "core", "shared-js"), "rev-parse", "v1.0.0") {
-		t.Fatal("shared-js not pinned to its tag")
-	}
-	if git(t, filepath.Join(froot, "apps", "acampa-kids", "backend"), "rev-parse", "HEAD") != git(t, filepath.Join(root, "apps", "acampa-kids", "backend"), "rev-parse", "v0.19.0") {
-		t.Fatal("acampa backend not pinned to its production tag")
-	}
-	if !strings.Contains(out, "acampa-kids-frontend: no v0.27.0 tag") || !strings.Contains(out, "https://acampa-ipalpha-hello-test.kevyn.com.br") {
+	if !strings.Contains(out, "https://acampa-ipalpha-hello-test.kevyn.com.br") {
 		t.Fatalf("feature new output:\n%s", out)
 	}
 	fs := envfile.Read(filepath.Join(froot, ".ipalpha", "settings"))

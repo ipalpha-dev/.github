@@ -1,5 +1,5 @@
 // Package feature is ./feature: one isolated workspace per feature (git worktrees on feat/<slug>
-// pinned to the last green Core Deploy) and its preview namespace. The cluster only reacts to
+// started from each repository's local default-branch tip) and its preview namespace. The cluster only reacts to
 // previews/<slug>/release.json pushed to deployment master; this package never writes to
 // Kubernetes and never holds a CI token. Design: deployment/docs/feature-environments.md.
 package feature
@@ -49,7 +49,7 @@ func Hosts(slug string) []string {
 	return []string{"ipalpha-" + slug + "." + d, "forms-ipalpha-" + slug + "." + d, "auth-ipalpha-" + slug + "." + d, "sign-ipalpha-" + slug + "." + d}
 }
 
-// DevelopersHost is served when the baseline includes developers-webapp.
+// DevelopersHost is the Developers portal host.
 func DevelopersHost(slug string) string { return "developers-ipalpha-" + slug + "." + Domain() }
 
 // AppHosts are served only when the app changed (apps outside core: Acampa Kids).
@@ -75,159 +75,39 @@ func ValidateSlug(slug string) error {
 // Dir of a feature workspace.
 func Dir(main, slug string) string { return filepath.Join(main, "features", slug) }
 
-// Baseline is releases/core-latest.json.
-type Baseline struct {
-	Release    string                     `json:"release"`
-	Services   map[string]json.RawMessage `json:"services"`
-	Libraries  map[string]json.RawMessage `json:"libraries"`
-	Deployment struct {
-		Commit string `json:"commit"`
-	} `json:"deployment"`
-	raw []byte
+// BaseCommit resolves the commit a repository's feature branch starts from: the tip of the repository's
+// LOCAL default branch (master, or main where that is the default), never a recorded green baseline.
+func BaseCommit(main string, r catalog.Repo) (string, error) {
+	return LocalTip(r.Path(main), r.Name)
 }
 
-type pin struct {
-	SourceCommit string `json:"sourceCommit"`
-	Commit       string `json:"commit"`
+// DefaultBranch names the default branch of the repository in dir: origin/HEAD when it points at a local
+// branch, else master, else main.
+func DefaultBranch(dir string) (string, bool) {
+	var cands []string
+	if ref, err := sys.Git(dir, "symbolic-ref", "-q", "--short", "refs/remotes/origin/HEAD"); err == nil && strings.HasPrefix(ref, "origin/") {
+		cands = append(cands, strings.TrimPrefix(ref, "origin/"))
+	}
+	cands = append(cands, "master", "main")
+	for _, c := range cands {
+		if sys.GitOK(dir, "show-ref", "--verify", "--quiet", "refs/heads/"+c) {
+			return c, true
+		}
+	}
+	return "", false
 }
 
-func (b *Baseline) commitOf(repo string) string {
-	if repo == "deployment" {
-		return b.Deployment.Commit
+// LocalTip returns the commit at the tip of the local default branch of dir.
+func LocalTip(dir, name string) (string, error) {
+	br, ok := DefaultBranch(dir)
+	if !ok {
+		return "", errors.New(i18n.T("feature_no_default_branch", name))
 	}
-	for _, m := range []map[string]json.RawMessage{b.Services, b.Libraries} {
-		if raw, ok := m[repo]; ok {
-			var p pin
-			_ = json.Unmarshal(raw, &p)
-			if p.SourceCommit != "" {
-				return p.SourceCommit
-			}
-			return p.Commit
-		}
+	tip, err := sys.Git(dir, "rev-parse", "--verify", "-q", "refs/heads/"+br+"^{commit}")
+	if err != nil || tip == "" {
+		return "", errors.New(i18n.T("feature_no_default_branch", name))
 	}
-	return ""
-}
-
-func (b *Baseline) has(repo string) bool {
-	if repo == "deployment" || repo == "shared-js" {
-		return true
-	}
-	_, s := b.Services[repo]
-	_, l := b.Libraries[repo]
-	return s || l
-}
-
-// ReadBaseline fetches deployment master and reads the baseline at ref (default origin/master).
-func ReadBaseline(main, ref string) (*Baseline, string, error) {
-	dep := filepath.Join(main, "deployment")
-	step := i18n.T("feature_step_baseline")
-	if res := (sys.Cmd{Name: "git", Args: []string{"-C", dep, "fetch", "-q", "origin", "master"}, Env: []string{"GIT_TERMINAL_PROMPT=0"}}).Run(); res.Err != nil {
-		return nil, "", &ui.Problem{Step: step, Cause: i18n.T("feature_fetch_deployment"), Tail: ui.Tail(res.Output, 4)}
-	}
-	if ref == "" {
-		ref = "origin/master"
-	}
-	commit, err := sys.Git(dep, "rev-parse", "--verify", "-q", ref+"^{commit}")
-	if err != nil || commit == "" {
-		return nil, "", ui.NewProblem(step, i18n.T("feature_unknown_revision", ref))
-	}
-	if !sys.GitOK(dep, "merge-base", "--is-ancestor", commit, "origin/master") {
-		return nil, "", ui.NewProblem(step, i18n.T("feature_baseline_not_master"))
-	}
-	raw, err := sys.Git(dep, "show", commit+":releases/core-latest.json")
-	if err != nil {
-		return nil, "", ui.NewProblem(step, i18n.T("feature_no_baseline"))
-	}
-	b := &Baseline{raw: []byte(raw)}
-	if err := json.Unmarshal([]byte(raw), b); err != nil {
-		return nil, "", ui.Wrap(step, err)
-	}
-	return b, commit, nil
-}
-
-// BaseCommit resolves the commit a repository's feature branch starts from.
-func BaseCommit(main string, b *Baseline, r catalog.Repo) (string, string, error) {
-	dir := r.Path(main)
-	if r.Kind == catalog.KindOptional {
-		// Apps with their own registry: the tag v<version> of the image their production manifest
-		// names in the baseline's deployment commit; origin/master with a warning when missing.
-		re := regexp.MustCompile(`ip-alpha/apps/` + regexp.QuoteMeta(r.App) + `/` + regexp.QuoteMeta(r.Image) + `:([0-9]+\.[0-9]+\.[0-9]+)`)
-		out, _ := sys.Git(filepath.Join(main, "deployment"), "grep", "-h", "-o", "-E", re.String(), b.Deployment.Commit, "--", "base/apps")
-		version := ""
-		if m := re.FindStringSubmatch(out); m != nil {
-			version = m[1]
-		}
-		if version != "" {
-			if c, err := sys.Git(dir, "rev-parse", "--verify", "-q", "v"+version+"^{commit}"); err == nil && c != "" {
-				return c, "", nil
-			}
-		}
-		if version == "" {
-			version = "?"
-		}
-		c, err := sys.Git(dir, "rev-parse", "--verify", "-q", "origin/master^{commit}")
-		if err != nil || c == "" {
-			return "", "", fmt.Errorf("%s: neither v%s nor origin/master found", r.Name, version)
-		}
-		return c, i18n.T("feature_app_no_tag", r.Name, version), nil
-	}
-	if r.Name == "shared-js" {
-		version := ""
-		for _, api := range catalog.APIs() {
-			c := b.commitOf(api.Name)
-			if c == "" {
-				continue
-			}
-			lock, err := sys.Git(api.Path(main), "show", c+":package-lock.json")
-			if err != nil {
-				continue
-			}
-			var doc struct {
-				Packages map[string]struct {
-					Version string `json:"version"`
-				} `json:"packages"`
-			}
-			if json.Unmarshal([]byte(lock), &doc) == nil {
-				if v := doc.Packages["node_modules/@ipalpha/shared-js"].Version; v != "" {
-					version = v
-					break
-				}
-			}
-		}
-		if version == "" {
-			return "", "", errors.New("cannot resolve the baseline shared-js version")
-		}
-		_, _ = sys.Git(dir, "fetch", "-q", "--tags", "origin")
-		c, err := sys.Git(dir, "rev-parse", "--verify", "-q", "v"+version+"^{commit}")
-		if err != nil || c == "" {
-			return "", "", fmt.Errorf("shared-js tag v%s not found", version)
-		}
-		return c, "", nil
-	}
-	c := b.commitOf(r.Name)
-	if c == "" {
-		return "", "", fmt.Errorf("baseline has no commit for %s", r.Name)
-	}
-	return resolveBaselineCommit(dir, r.Name, c)
-}
-
-// resolveBaselineCommit returns c when the commit exists in dir (fetching once if needed). When it is gone
-// locally and on the remote (rewritten history), it falls back to the default-branch tip with a warning.
-func resolveBaselineCommit(dir, name, c string) (string, string, error) {
-	has := func() bool { return sys.GitOK(dir, "cat-file", "-e", c+"^{commit}") }
-	if has() {
-		return c, "", nil
-	}
-	_, _ = sys.Git(dir, "fetch", "-q", "--tags", "origin")
-	if has() {
-		return c, "", nil
-	}
-	for _, ref := range []string{"origin/HEAD", "origin/master", "origin/main"} {
-		if tip, err := sys.Git(dir, "rev-parse", "--verify", "-q", ref+"^{commit}"); err == nil && tip != "" {
-			return tip, i18n.T("feature_baseline_missing", name, short(c), short(tip)), nil
-		}
-	}
-	return "", "", fmt.Errorf("%s: baseline commit %s not found and no default branch to fall back to", name, short(c))
+	return tip, nil
 }
 
 // Record is previews/<slug>/release.json (schema approved in the spec, §1 decision 11). Unknown
@@ -307,7 +187,7 @@ func now() string { return time.Now().UTC().Format("2006-01-02T15:04:05Z") }
 func mainOf(w *workspace.Workspace) string { return w.Main() }
 
 // New creates features/<slug>.
-func New(w *workspace.Workspace, slug, baselineRef string, self string, materialize func(*workspace.Workspace) error) (string, error) {
+func New(w *workspace.Workspace, slug string, self string, materialize func(*workspace.Workspace) error) (string, error) {
 	main := mainOf(w)
 	if err := ValidateSlug(slug); err != nil {
 		return "", err
@@ -333,11 +213,7 @@ func New(w *workspace.Workspace, slug, baselineRef string, self string, material
 		}
 		os.RemoveAll(froot)
 	}
-	b, bcommit, err := ReadBaseline(main, baselineRef)
-	if err != nil {
-		return "", err
-	}
-	ui.Section(i18n.T("feature_creating", slug, b.Release))
+	ui.Section(i18n.T("feature_creating", slug))
 	fetchAll(main)
 	branch := "feat/" + slug
 	type repoLine struct{ name, base, head string }
@@ -349,21 +225,14 @@ func New(w *workspace.Workspace, slug, baselineRef string, self string, material
 			ui.Info(i18n.T("feature_optional_skipped", r.Name))
 			continue
 		}
-		if r.Kind != catalog.KindOptional && !b.has(r.Name) {
-			ui.Info(i18n.T("feature_not_in_baseline", r.Name))
-			continue
-		}
 		if !repos.IsGit(src) {
 			rollback()
 			return "", ui.NewProblem(i18n.T("feature_step_new", slug), i18n.T("feature_missing_repo", r.Rel()), "./pull")
 		}
-		base, warn, err := BaseCommit(main, b, r)
+		base, err := BaseCommit(main, r)
 		if err != nil {
 			rollback()
 			return "", ui.Wrap(i18n.T("feature_step_new", slug), err)
-		}
-		if warn != "" {
-			ui.Warning(warn)
 		}
 		dest := r.Path(froot)
 		had := sys.GitOK(src, "show-ref", "--verify", "--quiet", "refs/heads/"+branch)
@@ -443,19 +312,20 @@ func New(w *workspace.Workspace, slug, baselineRef string, self string, material
 	for _, l := range lines {
 		reposMap[l.name] = map[string]any{"url": repos.URL(mw.Settings.Org, l.name), "baseRef": "master", "baseCommit": l.base, "featureCommit": l.head}
 	}
-	var release any
-	if b.Release != "" {
-		release = b.Release
+	depBase := ""
+	for _, l := range lines {
+		if l.name == "deployment" {
+			depBase = l.base
+		}
 	}
 	rec := Record{"schemaVersion": 1, "feature": slug, "namespace": "ipalpha-feat-" + slug, "owner": owner,
-		"baselineRelease": map[string]any{"id": release, "deploymentCommit": bcommit},
+		"baselineRelease": map[string]any{"id": nil, "deploymentCommit": depBase},
 		"repositories":    reposMap, "images": map[string]any{}, "seed": map[string]any{"version": 1, "digest": nil},
 		"hosts": Hosts(slug), "generation": 0, "createdAt": now(), "expiresAt": nil, "teamcityBuild": nil}
 	if err := rec.Save(filepath.Join(fw.Dir(), "release.json")); err != nil {
 		rollback()
 		return "", err
 	}
-	_ = envfile.WriteAtomic(filepath.Join(fw.Dir(), "baseline.json"), b.raw, 0o644)
 	return froot, nil
 }
 
@@ -888,7 +758,7 @@ func same(a, b string) bool {
 	return err1 == nil && err2 == nil && os.SameFile(sa, sb)
 }
 
-// Rebase moves the feature to the latest green Core Deploy.
+// Rebase moves the feature onto the local default-branch tip of every repository.
 func Rebase(w *workspace.Workspace, slug string) error {
 	main := mainOf(w)
 	froot := Dir(main, slug)
@@ -897,10 +767,6 @@ func Rebase(w *workspace.Workspace, slug string) error {
 	step := i18n.T("feature_step_action", "rebase", slug)
 	if err != nil {
 		return ui.NewProblem(step, i18n.T("feature_missing", slug))
-	}
-	b, bcommit, err := ReadBaseline(main, "")
-	if err != nil {
-		return err
 	}
 	reposMap := rec.Repositories()
 	for _, r := range catalog.Repos {
@@ -912,12 +778,9 @@ func Rebase(w *workspace.Workspace, slug string) error {
 			return ui.NewProblem(step, i18n.T("feature_uncommitted", r.Name))
 		}
 		old := str(reposMap[r.Name]["baseCommit"])
-		nb, warn, err := BaseCommit(main, b, r)
+		nb, err := BaseCommit(main, r)
 		if err != nil {
 			return ui.Wrap(step, err)
-		}
-		if warn != "" {
-			ui.Warning(warn)
 		}
 		if old == nb {
 			continue
@@ -933,15 +796,12 @@ func Rebase(w *workspace.Workspace, slug string) error {
 		reposMap[r.Name]["featureCommit"] = head
 		ui.Item(r.Name, short(old)+" → "+short(nb))
 	}
-	var release any
-	if b.Release != "" {
-		release = b.Release
+	if dep := reposMap["deployment"]; dep != nil {
+		rec["baselineRelease"] = map[string]any{"id": nil, "deploymentCommit": str(dep["baseCommit"])}
 	}
-	rec["baselineRelease"] = map[string]any{"id": release, "deploymentCommit": bcommit}
 	if err := rec.Save(recPath); err != nil {
 		return err
 	}
-	_ = envfile.WriteAtomic(filepath.Join(froot, workspace.DirName, "baseline.json"), b.raw, 0o644)
 	ui.Done(i18n.T("feature_rebased", slug))
 	return nil
 }
