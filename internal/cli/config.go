@@ -87,7 +87,7 @@ func aiCmd() *cobra.Command {
 			return nil
 		},
 	}
-	c.AddCommand(set)
+	c.AddCommand(set, gatewayCmd())
 	return c
 }
 

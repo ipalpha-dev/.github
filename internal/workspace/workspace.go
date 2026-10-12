@@ -27,6 +27,7 @@ type Settings struct {
 	AICLI       string // preset id, "custom" or "none"
 	AIModel     string
 	AICommand   string // custom command template ({prompt} / {prompt_file} / {model})
+	GatewayMode string // simulator (default) | real; gateway secrets live only in ai-api/.env
 	BrowserApps []string
 	browserSet  bool
 	InfraName   string
@@ -109,7 +110,7 @@ func Open(root string) (*Workspace, error) {
 
 // NewSettings returns defaults.
 func NewSettings() *Settings {
-	return &Settings{Org: catalog.Org, AICLI: "", InfraName: "ipalpha", Registry: catalog.DefaultRegistry, Ports: map[string]int{}}
+	return &Settings{Org: catalog.Org, AICLI: "", GatewayMode: "simulator", InfraName: "ipalpha", Registry: catalog.DefaultRegistry, Ports: map[string]int{}}
 }
 
 // LoadSettings reads a settings file; missing → defaults.
@@ -148,6 +149,11 @@ func LoadSettings(path string) (*Settings, error) {
 			s.AIModel = v
 		case "ai_command":
 			s.AICommand = v
+		case "ai_gateway":
+			if v != "simulator" && v != "real" {
+				return nil, errors.New("ai_gateway must be simulator or real")
+			}
+			s.GatewayMode = v
 		case "browser_apps":
 			s.BrowserApps = strings.Fields(v)
 			s.browserSet = true
@@ -189,6 +195,14 @@ func settingsPortKey(k string) string {
 		return "rabbitmq_mgmt"
 	}
 	return k
+}
+
+// Gateway defaults old workspaces to the secret-free simulator without editing their env files.
+func (s *Settings) Gateway() string {
+	if s.GatewayMode == "real" {
+		return "real"
+	}
+	return "simulator"
 }
 
 // Port returns the preferred port of a key (settings, else catalog default).
@@ -241,6 +255,7 @@ func (s *Settings) Render() string {
 	fmt.Fprintf(&b, "ai_cli=%s\n", s.AICLI)
 	fmt.Fprintf(&b, "ai_model=%s\n", s.AIModel)
 	fmt.Fprintf(&b, "ai_command=%s\n", s.AICommand)
+	fmt.Fprintf(&b, "ai_gateway=%s\n", s.Gateway())
 	fmt.Fprintf(&b, "browser_apps=%s\n", strings.Join(s.Browsers(), " "))
 	fmt.Fprintf(&b, "infra_name=%s\n", s.InfraName)
 	if s.Registry != catalog.DefaultRegistry {

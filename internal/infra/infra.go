@@ -318,7 +318,7 @@ func (e *Engine) Up(plan ports.Plan) error {
 	if res.Err != nil {
 		return e.upProblem(res.Output)
 	}
-	// One-shot job: create the photos bucket in RustFS when it is missing (idempotent).
+	// One-shot job: create the buckets in RustFS when missing (idempotent; list in compose.yaml rustfs-init).
 	if res := e.compose(&plan, "run", "--rm", "--no-deps", "rustfs-init").Run(); res.Err != nil {
 		return &ui.Problem{Step: i18n.T("infra_step"), Cause: i18n.T("infra_bucket_failed"), Tail: ui.Tail(res.Output, 8), Fix: []string{i18n.T("infra_fix_logs")}}
 	}
@@ -379,7 +379,9 @@ func (e *Engine) Stop(purge, volumes bool) error {
 	return nil
 }
 
-func services() []string { return []string{"mongo", "redis", "rabbitmq", "mailpit", "rustfs", "face"} }
+func services() []string {
+	return []string{"mongo", "redis", "rabbitmq", "mailpit", "rustfs", "cpamc", "face"}
+}
 
 // Health of each service: running+healthy / starting / stopped / unhealthy.
 func (e *Engine) Health() map[string]string {

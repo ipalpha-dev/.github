@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/ipalpha-dev/tooling/internal/catalog"
+	"github.com/ipalpha-dev/tooling/internal/i18n"
 	"github.com/ipalpha-dev/tooling/internal/ports"
 	"github.com/ipalpha-dev/tooling/internal/run"
 	"github.com/ipalpha-dev/tooling/internal/workspace"
@@ -29,6 +30,11 @@ func fakeModel(t *testing.T, notes int) *Model {
 		}
 		specs = append(specs, &run.Spec{ID: r.Name, Name: r.Label(), Kind: k, Group: r.App, Port: r.Port, URL: "http://localhost:1/"})
 	}
+	// Forms and Sign are core tools now, so no catalog repo runs as an app outside core: a fictional
+	// ministry app keeps the grouped "apps" section covered.
+	specs = append(specs,
+		&run.Spec{ID: "ministry-api", Name: "Ministry API", Kind: run.KindAPI, Group: "ministry", Port: 3990, URL: "http://localhost:1/"},
+		&run.Spec{ID: "ministry-webapp", Name: "Ministry Web", Kind: run.KindWeb, Group: "ministry", Port: 5990, URL: "http://localhost:1/"})
 	sess := &run.Session{W: &workspace.Workspace{Root: t.TempDir(), Settings: workspace.NewSettings()}, Specs: specs,
 		Plan: ports.Plan{Actual: map[string]int{}}}
 	for i := 0; i < notes; i++ {
@@ -66,6 +72,35 @@ func TestViewFitsTerminal(t *testing.T) {
 					}
 				}
 			}
+		}
+	}
+}
+
+func TestPanelSectionsUseCoreFrontendsGroupedAppsThenInfrastructure(t *testing.T) {
+	m := fakeModel(t, 0)
+	defer m.ctl.StopAll()
+	m.Update(tea.WindowSizeMsg{Width: 160, Height: 120})
+	view := m.View()
+	last := -1
+	for _, key := range []string{"panel_section_core", "panel_section_web", "panel_section_apps", "panel_section_infra"} {
+		position := strings.Index(view, i18n.T(key))
+		if position < 0 || position <= last {
+			t.Fatalf("section %s is missing or out of order", key)
+		}
+		last = position
+	}
+	groups := map[string]int{}
+	previous := ""
+	for _, proc := range m.procs {
+		current := section(proc)
+		if strings.HasPrefix(current, "app:") && current != previous {
+			groups[current]++
+		}
+		previous = current
+	}
+	for group, count := range groups {
+		if count != 1 {
+			t.Fatalf("app %s appears in %d separate groups", group, count)
 		}
 	}
 }

@@ -273,7 +273,20 @@ func RunningOwner(w *workspace.Workspace) int {
 
 func apiEnv(w *workspace.Workspace, r catalog.Repo, plan ports.Plan, rw ports.Rewriter) ([]string, map[int]bool) {
 	vals := envfile.Read(filepath.Join(r.Path(w.Root), ".env"))
+	// The simulator mode overlays runtime settings only. Never overwrite the developer's .env
+	// or send real keys to a simulator. Real mode preserves the selected gateway URL verbatim.
+	gatewayURL := vals["AI_BASE_URL"]
 	refs := rw.Env(vals)
+	if r.Name == "ai-api" {
+		if w.Settings.Gateway() == "simulator" {
+			vals["AI_BASE_URL"] = urlOf(plan.Port("cpamc")) + "/v1"
+			vals["AI_API_KEY"] = catalog.CPAMCSimulatorClientKey
+			vals["CPAMC_MANAGEMENT_KEY"] = catalog.CPAMCSimulatorManagementKey
+			refs[plan.Port("cpamc")] = true
+		} else {
+			vals["AI_BASE_URL"] = gatewayURL
+		}
+	}
 	vals["PORT"] = strconv.Itoa(plan.Port(r.Name))
 	if r.Name == "photos-api" && !w.Settings.Face {
 		vals["FACE_SERVICE_URL"] = "" // face is opt-in: without it photos-api skips face indexing and search
@@ -303,13 +316,13 @@ func webEnv(w *workspace.Workspace, r catalog.Repo, plan ports.Plan, rw ports.Re
 	dir := r.Path(w.Root)
 	for _, name := range []string{".env", ".env.local", ".env.development", ".env.development.local"} {
 		for k, v := range envfile.Read(filepath.Join(dir, name)) {
-			if strings.HasPrefix(k, "VITE_") {
+			if strings.HasPrefix(k, "VITE_") || k == "IPALPHA_WEB_TLS_CERT" || k == "IPALPHA_WEB_TLS_KEY" || k == "IPALPHA_WEB_ORIGIN" {
 				vals[k] = v
 			}
 		}
 	}
 	port := plan.Port(r.Name)
-	self := "http://localhost:" + strconv.Itoa(port)
+	self := firstNonEmpty(vals["IPALPHA_WEB_ORIGIN"], "http://localhost:"+strconv.Itoa(port))
 	auth := envfile.Read(filepath.Join(w.Repo("auth-api"), ".env"))
 	def := func(k, v string) {
 		if strings.TrimSpace(vals[k]) == "" {
@@ -324,6 +337,8 @@ func webEnv(w *workspace.Workspace, r catalog.Repo, plan ports.Plan, rw ports.Re
 		def("VITE_ENTRY_POINT_KEY", "church")
 		def("VITE_AUTH_CALLBACK_URI", "http://localhost:5110/auth/callback")
 		def("VITE_FORMS_URL", "http://localhost:5106")
+		provider, _ := json.Marshal([]map[string]any{{"appId": "app-ipalpha-forms", "slug": "ipalpha-forms", "audience": "ipalpha:forms", "scope": "project-content:read", "apiBase": "/api/forms", "listPath": "/projects/{projectId}/forms/managed", "socketPath": "/api/forms/socket.io", "webBase": vals["VITE_FORMS_URL"], "label": map[string]string{"pt-BR": "Formulários", "en-US": "Forms", "es": "Formularios", "fr": "Formulaires", "de": "Formulare"}}})
+		def("VITE_PROJECT_CONTENT_PROVIDERS_JSON", string(provider))
 	case "developers-webapp":
 		def("VITE_APP_CLIENT_ID", firstNonEmpty(auth["BUILTIN_DEVELOPERS_CLIENT_ID"], "developers-web"))
 		def("VITE_ENTRY_POINT_KEY", "portal")
@@ -333,8 +348,16 @@ func webEnv(w *workspace.Workspace, r catalog.Repo, plan ports.Plan, rw ports.Re
 		def("VITE_RESPONDENT_CLIENT_ID", firstNonEmpty(auth["BUILTIN_FORMS_RESPONDENT_CLIENT_ID"], "forms-respondent-web"))
 		def("VITE_CREATOR_ENTRY_POINT", "creator")
 		def("VITE_RESPONDENT_ENTRY_POINT", "respondent")
+		def("VITE_RESPONDENT_LOGIN_CLIENT_ID", firstNonEmpty(auth["BUILTIN_FORMS_RESPONDENT_LOGIN_CLIENT_ID"], "forms-respondent-login-web"))
+		def("VITE_RESPONDENT_LOGIN_ENTRY_POINT", "respondent-login")
+		def("VITE_RESPONDENT_LOGIN_CALLBACK_URI", "http://localhost:5106/respond/login/callback")
 		def("VITE_CREATOR_CALLBACK_URI", "http://localhost:5106/auth/callback")
 		def("VITE_RESPONDENT_CALLBACK_URI", "http://localhost:5106/respond/callback")
+	case "sign-webapp":
+		def("VITE_SIGN_CLIENT_ID", firstNonEmpty(auth["BUILTIN_SIGN_CLIENT_ID"], "sign-web"))
+		def("VITE_SIGN_ENTRY_POINT", "church")
+		def("VITE_SIGN_CALLBACK_URI", "http://localhost:5113/auth/callback")
+		def("VITE_OIKOS_URL", "http://localhost:5110")
 	}
 	refs := rw.Env(vals)
 	for _, api := range catalog.APIs() {
@@ -377,7 +400,7 @@ func startScript(dir string) string {
 
 func buildSpecs(w *workspace.Workspace, eng *infra.Engine, plan ports.Plan, rw ports.Rewriter) []*Spec {
 	var specs []*Spec
-	infraSvcs := []string{"mongo", "redis", "rabbitmq", "mailpit", "rustfs"}
+	infraSvcs := []string{"mongo", "redis", "rabbitmq", "mailpit", "rustfs", "cpamc"}
 	if w.Settings.Face {
 		infraSvcs = append(infraSvcs, "face")
 	}
@@ -401,6 +424,9 @@ func buildSpecs(w *workspace.Workspace, eng *infra.Engine, plan ports.Plan, rw p
 		if svc == "mailpit" {
 			sp.ReadyURL = url + "readyz"
 		}
+		if svc == "cpamc" {
+			sp.ReadyURL = urlOf(port) + "/ready"
+		}
 		specs = append(specs, sp)
 	}
 	webBin := filepath.Join(w.Dir(), "bin", "web-dev.mjs")
@@ -423,6 +449,11 @@ func buildSpecs(w *workspace.Workspace, eng *infra.Engine, plan ports.Plan, rw p
 			sp.Env = append(sp.Env, sys.NodeEnv()...)
 			sp.Command, sp.Args = "node", []string{webBin}
 			sp.URL = "http://localhost:" + strconv.Itoa(sp.Port) + "/"
+			for _, value := range sp.Env {
+				if strings.HasPrefix(value, "IPALPHA_WEB_URL=") {
+					sp.URL = strings.TrimRight(strings.TrimPrefix(value, "IPALPHA_WEB_URL="), "/") + "/"
+				}
+			}
 			sp.ReadyURL = sp.URL
 			sp.Autostart = w.Settings.BrowserSelected(r.Name)
 		}
@@ -466,9 +497,9 @@ func bootstrapKeys(w *workspace.Workspace, rw ports.Rewriter, plan ports.Plan) e
 	return nil
 }
 
-var builtinEntries = []string{"OIKOS", "FORMS_CREATOR", "FORMS_RESPONDENT", "DEVELOPERS"}
+var builtinEntries = []string{"OIKOS", "FORMS_CREATOR", "FORMS_RESPONDENT", "DEVELOPERS", "SIGN"}
 
-// reconcileDB syncs drifted local client secrets and the loopback addresses of built-in apps.
+// reconcileDB syncs the local seeded clients (secret, allowedScopes, appId) and the loopback addresses of built-in apps.
 func reconcileDB(w *workspace.Workspace, rw ports.Rewriter, plan ports.Plan) (localdb.Result, error) {
 	auth := envfile.Read(filepath.Join(w.Repo("auth-api"), ".env"))
 	rw.Env(auth)

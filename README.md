@@ -17,7 +17,7 @@ curl -fsSL https://raw.githubusercontent.com/ipalpha-dev/.github/master/install.
 irm https://raw.githubusercontent.com/ipalpha-dev/.github/master/install.ps1 | iex
 ```
 
-O setup verifica as ferramentas (Git, Node.js 20+, Docker; instala com winget/brew/apt se você
+O setup verifica as ferramentas (Git, Node.js 22.12+, Docker; instala com winget/brew/apt se você
 aceitar), entra no GitHub (chave SSH **ou** login pelo navegador com o GitHub CLI), clona os
 repositórios, cria os `.env`, pergunta o primeiro acesso e qual IA usar, e gera os comandos abaixo.
 Pode rodar de novo a qualquer momento: nada que você configurou é sobrescrito.
@@ -37,6 +37,7 @@ No Windows use `.\run`, `.\pull`… (PowerShell/cmd) ou `./run.cmd` (Git Bash).
 | `./feature new <slug>` | Ambiente de feature isolado com preview público. Guia: [docs/local-development.md](docs/local-development.md#feature-environments-feature) |
 | `./doctor` | Diz o que falta ou está quebrado e como resolver. `--copy` copia o relatório |
 | `./ipalpha config` · `./ipalpha ai` | Muda idioma, IA/modelo, web apps, portas, runtime |
+| `./ipalpha ai gateway` | Configura simulador cpamc ou URL/chaves reais dos aplicativos, separado do coding CLI |
 
 Qualquer erro mostra a causa, as últimas linhas, como resolver e o caminho do log completo
 (`.ipalpha/logs/`).

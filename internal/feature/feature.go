@@ -42,17 +42,20 @@ func WaitMinutes() int {
 	return 60
 }
 
-// Hosts of a preview (spec: Oikos, Forms, auth).
+// Hosts of a preview (spec: Oikos, Forms, auth, plus IPAlpha Sign): every core host. Forms and Sign are
+// core tools, so their hosts are always served.
 func Hosts(slug string) []string {
 	d := Domain()
-	return []string{"ipalpha-" + slug + "." + d, "forms-ipalpha-" + slug + "." + d, "auth-ipalpha-" + slug + "." + d}
+	return []string{"ipalpha-" + slug + "." + d, "forms-ipalpha-" + slug + "." + d, "auth-ipalpha-" + slug + "." + d, "sign-ipalpha-" + slug + "." + d}
 }
 
 // DevelopersHost is served when the baseline includes developers-webapp.
 func DevelopersHost(slug string) string { return "developers-ipalpha-" + slug + "." + Domain() }
 
-// AppHosts are served only when the app changed.
-func AppHosts(slug string) []string { return []string{"acampa-ipalpha-" + slug + "." + Domain()} }
+// AppHosts are served only when the app changed (apps outside core: Acampa Kids).
+func AppHosts(slug string) []string {
+	return []string{"acampa-ipalpha-" + slug + "." + Domain()}
+}
 
 var slugRe = regexp.MustCompile(`^[a-z0-9-]{3,30}$`)
 
@@ -205,7 +208,26 @@ func BaseCommit(main string, b *Baseline, r catalog.Repo) (string, string, error
 	if c == "" {
 		return "", "", fmt.Errorf("baseline has no commit for %s", r.Name)
 	}
-	return c, "", nil
+	return resolveBaselineCommit(dir, r.Name, c)
+}
+
+// resolveBaselineCommit returns c when the commit exists in dir (fetching once if needed). When it is gone
+// locally and on the remote (rewritten history), it falls back to the default-branch tip with a warning.
+func resolveBaselineCommit(dir, name, c string) (string, string, error) {
+	has := func() bool { return sys.GitOK(dir, "cat-file", "-e", c+"^{commit}") }
+	if has() {
+		return c, "", nil
+	}
+	_, _ = sys.Git(dir, "fetch", "-q", "--tags", "origin")
+	if has() {
+		return c, "", nil
+	}
+	for _, ref := range []string{"origin/HEAD", "origin/master", "origin/main"} {
+		if tip, err := sys.Git(dir, "rev-parse", "--verify", "-q", ref+"^{commit}"); err == nil && tip != "" {
+			return tip, i18n.T("feature_baseline_missing", name, short(c), short(tip)), nil
+		}
+	}
+	return "", "", fmt.Errorf("%s: baseline commit %s not found and no default branch to fall back to", name, short(c))
 }
 
 // Record is previews/<slug>/release.json (schema approved in the spec, §1 decision 11). Unknown

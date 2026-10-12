@@ -102,40 +102,83 @@ func pull(w *workspace.Workspace) error {
 	return nil
 }
 
-// migrateLayout moves repositories that left core/ (forms → apps/forms/), with their feature
-// worktrees, keeping branches, .env files and uncommitted work.
+// formerLayouts lists where a repository used to live (workspace-relative, slash separated), newest
+// first. Forms and IPAlpha Sign were apps outside core (apps/forms/, apps/sign/) and are core tools
+// again (core/forms-*, core/sign-*). Repositories of an app outside core (App set, not optional) used
+// to sit in core/<name>.
+var formerLayouts = map[string][]string{
+	"forms-api":    {"apps/forms/forms-api"},
+	"forms-webapp": {"apps/forms/forms-webapp"},
+	"sign-api":     {"apps/sign/sign-api"},
+	"sign-webapp":  {"apps/sign/sign-webapp"},
+}
+
+func formerRels(r catalog.Repo) []string {
+	out := formerLayouts[r.Name]
+	if r.App != "" && r.Kind != catalog.KindOptional {
+		out = append(out, "core/"+r.Name)
+	}
+	return out
+}
+
+// migrateLayout moves repositories that changed folders (apps/forms → core/forms-*, apps/sign →
+// core/sign-*), with their feature worktrees, keeping branches, .env files and uncommitted work.
+// It only renames: nothing is deleted except a parent folder (apps/forms, apps/sign) left empty.
+// When both the old and the new folder exist, both stay and the developer is warned.
 func migrateLayout(w *workspace.Workspace) {
 	root, _ := filepath.EvalSymlinks(w.Root)
 	if root == "" {
 		root = w.Root
 	}
 	for _, r := range catalog.Repos {
-		if r.App == "" {
-			continue
-		}
-		old := filepath.Join(root, "core", r.Name)
-		dest := r.Path(root)
-		if _, err := os.Stat(old); err != nil {
-			continue
-		}
-		if _, err := os.Stat(dest); err == nil {
-			continue
-		}
-		list, _ := sys.Git(old, "worktree", "list", "--porcelain")
-		for _, l := range strings.Split(list, "\n") {
-			wt := strings.TrimPrefix(l, "worktree ")
-			if wt == l {
+		for _, rel := range formerRels(r) {
+			if rel == r.Rel() {
 				continue
 			}
-			if nw, ok := movedWorktree(root, wt, "core/"+r.Name, r.Rel()); ok {
-				_ = os.MkdirAll(filepath.Dir(nw), 0o755)
-				_, _ = sys.Git(old, "worktree", "move", wt, nw)
+			old := filepath.Join(root, filepath.FromSlash(rel))
+			dest := r.Path(root)
+			if _, err := os.Stat(old); err != nil {
+				continue
 			}
+			if _, err := os.Stat(dest); err == nil {
+				ui.Warning(i18n.T("pull_layout_both", r.Name, rel, r.Rel()))
+				continue
+			}
+			list, _ := sys.Git(old, "worktree", "list", "--porcelain")
+			for _, l := range strings.Split(list, "\n") {
+				wt := strings.TrimPrefix(l, "worktree ")
+				if wt == l {
+					continue
+				}
+				if nw, ok := movedWorktree(root, wt, rel, r.Rel()); ok {
+					if _, err := os.Stat(nw); err == nil {
+						ui.Warning(i18n.T("pull_layout_both", r.Name, wt, nw))
+						continue
+					}
+					_ = os.MkdirAll(filepath.Dir(nw), 0o755)
+					if _, err := sys.Git(old, "worktree", "move", wt, nw); err == nil {
+						removeEmptyParents(filepath.Dir(wt), filepath.Join(root, "features"))
+					}
+				}
+			}
+			_ = os.MkdirAll(filepath.Dir(dest), 0o755)
+			if os.Rename(old, dest) == nil {
+				_, _ = sys.Git(dest, "worktree", "repair")
+				removeEmptyParents(filepath.Dir(old), root)
+				ui.Item(r.Name, rel+" → "+r.Rel())
+			}
+			break
 		}
-		_ = os.MkdirAll(filepath.Dir(dest), 0o755)
-		if os.Rename(old, dest) == nil {
-			_, _ = sys.Git(dest, "worktree", "repair")
-			ui.Item(r.Name, "core/"+r.Name+" → "+r.Rel())
+	}
+}
+
+// removeEmptyParents removes dir and its parents while they are empty, stopping at stop (never removed).
+// os.Remove refuses a folder that still has anything in it, so no content is ever deleted.
+func removeEmptyParents(dir, stop string) {
+	stop = filepath.Clean(stop)
+	for d := filepath.Clean(dir); d != stop && strings.HasPrefix(d, stop+string(filepath.Separator)); d = filepath.Dir(d) {
+		if os.Remove(d) != nil {
+			return
 		}
 	}
 }
@@ -162,7 +205,7 @@ func movedWorktree(root, wt, relOld, relNew string) (string, bool) {
 	if !strings.HasPrefix(w, base) || !strings.HasSuffix(w, suffix) {
 		return "", false
 	}
-	// features/<slug>/core/<repo>: exactly one folder between features/ and the repo.
+	// features/<slug>/<relOld>: exactly one folder between features/ and the repo.
 	slug := strings.TrimSuffix(strings.TrimPrefix(w, base), suffix)
 	if slug == "" || strings.Contains(slug, "/") {
 		return "", false

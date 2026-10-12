@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ipalpha-dev/tooling/internal/catalog"
 	"github.com/ipalpha-dev/tooling/internal/envfile"
 	"github.com/ipalpha-dev/tooling/internal/workspace"
 )
@@ -14,7 +15,7 @@ import (
 func ws(t *testing.T) *workspace.Workspace {
 	t.Helper()
 	root := t.TempDir()
-	for _, d := range []string{"core/auth-api", "core/persons-api", "core/notifications-api", "apps/forms/forms-api", ".ipalpha"} {
+	for _, d := range []string{"core/auth-api", "core/persons-api", "core/notifications-api", "core/forms-api", ".ipalpha"} {
 		if err := os.MkdirAll(filepath.Join(root, d), 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -25,6 +26,31 @@ func ws(t *testing.T) *workspace.Workspace {
 		t.Fatal(err)
 	}
 	return w
+}
+
+func TestFedcmProviderOriginIsAddedWithoutReplacingDeveloperConfiguration(t *testing.T) {
+	w := ws(t)
+	r, _ := catalog.Get("auth-api")
+	path := filepath.Join(w.Repo("auth-api"), ".env")
+	if err := os.WriteFile(path, []byte("FEDCM_PROVIDER_ORIGIN=https://auth.ipalpha.test:5100\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Complete(w, r); err != nil {
+		t.Fatal(err)
+	}
+	if got := envfile.Read(path)["FEDCM_PROVIDER_ORIGIN"]; got != "https://auth.ipalpha.test:5100" {
+		t.Fatalf("developer origin overwritten: %q", got)
+	}
+	if err := os.WriteFile(path, []byte("CUSTOM_KEY=keep\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Complete(w, r); err != nil {
+		t.Fatal(err)
+	}
+	values := envfile.Read(path)
+	if value, exists := values["FEDCM_PROVIDER_ORIGIN"]; !exists || value != "" || values["CUSTOM_KEY"] != "keep" {
+		t.Fatalf("missing disabled default or lost developer values: %v", values)
+	}
 }
 
 func TestPrepareKeepsDeveloperValuesAndFillsLocalOnes(t *testing.T) {
@@ -74,8 +100,45 @@ func TestPrepareKeepsDeveloperValuesAndFillsLocalOnes(t *testing.T) {
 	if byID["persons-api"].Secret != "operator-secret-long-enough" || len(byID["persons-api"].Scopes) == 0 {
 		t.Fatalf("persons client: %+v", byID["persons-api"])
 	}
-	if len(byID["forms-api"].Scopes) == 0 {
-		t.Fatal("forms-api (apps/forms) client missing")
+	if strings.Join(byID["forms-api"].Scopes, ",") != "persons:read" {
+		t.Fatalf("forms-api (core/forms-api) client: %+v", byID["forms-api"])
+	}
+	// Forms respondent: forms-api holds auth's confidential client id, secret and callback.
+	f := envfile.Read(filepath.Join(w.Repo("forms-api"), ".env"))
+	if f["FORMS_RESPONDENT_CLIENT_ID"] != auth["BUILTIN_FORMS_RESPONDENT_CLIENT_ID"] || f["FORMS_RESPONDENT_CLIENT_SECRET"] != auth["BUILTIN_FORMS_RESPONDENT_CLIENT_SECRET"] ||
+		len(f["FORMS_RESPONDENT_CLIENT_SECRET"]) < 16 || f["FORMS_RESPONDENT_REDIRECT_URI"] != "http://localhost:5106/respond/callback" ||
+		f["RABBITMQ_URL"] == "" || f["EXCHANGE_FORMS_RESPONSE_CREATED"] != "forms-api.response.created" || f["EXCHANGE_FORMS_PERSON_REQUESTED"] != "forms-api.person.requested" {
+		t.Fatalf("forms-api respondent env: %v", f)
+	}
+	if auth["EXCHANGE_PERSON_DELETED"] != "persons-api.person.deleted" {
+		t.Fatalf("auth-api env: %v", auth)
+	}
+}
+
+// Forms and Sign became core tools: scopes system-clients.json dropped are removed from an existing
+// SEED_CLIENTS_JSON (only those), and the old sign-api app binding disappears.
+func TestRetiredScopesAndAppBindingDropped(t *testing.T) {
+	w := ws(t)
+	os.MkdirAll(filepath.Join(w.Root, "core", "sign-api"), 0o755)
+	auth := filepath.Join(w.Repo("auth-api"), ".env")
+	os.WriteFile(auth, []byte(`SEED_CLIENTS_JSON='[{"clientId":"forms-api","secret":"s","serviceId":"forms-api","scopes":["revocations:read","prefill:redeem","prefill:read","persons:read","persons:write","dispatch:events","extra:keep"]},{"clientId":"sign-api","secret":"s","serviceId":"sign-api","appId":"app-ipalpha-sign","scopes":["notifications:send-template","dispatch:app-channel"]}]'`+"\n"), 0o600)
+	os.WriteFile(filepath.Join(w.Repo("forms-api"), ".env"), []byte("AUTH_CLIENT_ID=forms-api\nAUTH_CLIENT_SECRET=forms-secret-long\n"), 0o600)
+	os.WriteFile(filepath.Join(w.Repo("sign-api"), ".env"), []byte("AUTH_CLIENT_ID=sign-api\nAUTH_CLIENT_SECRET=sign-secret-long\n"), 0o600)
+	if err := SeedClients(w); err != nil {
+		t.Fatal(err)
+	}
+	raw := envfile.Read(auth)["SEED_CLIENTS_JSON"]
+	var clients []SeedClient
+	json.Unmarshal([]byte(raw), &clients)
+	byID := map[string]SeedClient{}
+	for _, c := range clients {
+		byID[c.ClientID] = c
+	}
+	if got := strings.Join(byID["forms-api"].Scopes, ","); got != "persons:read,extra:keep" {
+		t.Fatalf("forms-api scopes: %s", got)
+	}
+	if got := strings.Join(byID["sign-api"].Scopes, ","); got != "notifications:send-template,revocations:read" || byID["sign-api"].AppID != "" || strings.Contains(raw, "app-ipalpha-sign") {
+		t.Fatalf("sign-api client: %+v", byID["sign-api"])
 	}
 }
 
@@ -173,5 +236,65 @@ func TestAuthAudiencesAndDocumentsEnvAreAddedToExistingFiles(t *testing.T) {
 	p := envfile.Read(filepath.Join(pers, ".env"))
 	if p["DOCUMENTS_API_URL"] != "http://127.0.0.1:4000" || p["MEMBERSHIP_TERM_DOCUMENT_SLUG"] == "" || p["EXCHANGE_PERSON_CONSENT_CHANGED"] == "" || p["DOCUMENTS_API_AUDIENCE"] != "ipalpha:documents" {
 		t.Fatalf("persons env: %v", p)
+	}
+}
+
+// IPAlpha Sign (core tool): sign-api's client is unbound (revocations:read + notifications:send-template, allowed
+// by SEND_TEMPLATE_UNBOUND_CLIENT_IDS), documents-api gets its S3 keys and the dev seal, and an existing dispatch
+// origin list gains the Sign web origin.
+func TestSignClientsAndEnv(t *testing.T) {
+	w := ws(t)
+	for _, d := range []string{"core/sign-api", "core/documents-api", "core/dispatch-api"} {
+		if err := os.MkdirAll(filepath.Join(w.Root, d), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	dispatch := filepath.Join(w.Repo("dispatch-api"), ".env")
+	os.WriteFile(dispatch, []byte("SOCKET_ALLOWED_ORIGINS=http://localhost:5106,http://localhost:5110\n"), 0o600)
+	auth := filepath.Join(w.Repo("auth-api"), ".env")
+	os.WriteFile(auth, []byte(`AUTH_RESOURCE_AUDIENCES_JSON='["ipalpha:auth"]'`+"\nSEND_TEMPLATE_UNBOUND_CLIENT_IDS=schedule-api\n"), 0o600)
+	if _, err := Prepare(w); err != nil {
+		t.Fatal(err)
+	}
+	var clients []SeedClient
+	if err := json.Unmarshal([]byte(envfile.Read(auth)["SEED_CLIENTS_JSON"]), &clients); err != nil {
+		t.Fatal(err)
+	}
+	byID := map[string]SeedClient{}
+	for _, c := range clients {
+		byID[c.ClientID] = c
+	}
+	sign := byID["sign-api"]
+	if sign.AppID != "" || strings.Join(sign.Scopes, ",") != "revocations:read,notifications:send-template" {
+		t.Fatalf("sign-api client: %+v", sign)
+	}
+	if u := envfile.Read(auth)["SEND_TEMPLATE_UNBOUND_CLIENT_IDS"]; u != "schedule-api,sign-api" {
+		t.Fatalf("unbound send-template clients: %q", u)
+	}
+	if byID["persons-api"].AppID != "" || strings.Contains(envfile.Read(auth)["SEED_CLIENTS_JSON"], `"appId":""`) {
+		t.Fatal("unbound clients must not carry appId")
+	}
+	if a := envfile.Read(auth)["AUTH_RESOURCE_AUDIENCES_JSON"]; !strings.Contains(a, "ipalpha:sign") {
+		t.Fatalf("audiences: %s", a)
+	}
+	s := envfile.Read(filepath.Join(w.Repo("sign-api"), ".env"))
+	if s["PORT"] != "3014" || s["TOKEN_AUDIENCE"] != "ipalpha:sign" || s["SIGN_APP_ID"] != "app-ipalpha-sign" || s["AUTH_CLIENT_ID"] != "sign-api" ||
+		s["RABBITMQ_URL"] == "" || s["AUTH_API_AUDIENCE"] != "ipalpha:auth" || s["EXCHANGE_SIGN_REQUEST_CHANGED"] != "sign-api.request.changed" ||
+		s["EXCHANGE_SIGNED_DOCUMENTS_CHANGED"] != "documents-api.signed-document.changed" || s["EXCHANGE_PERSON_DELETED"] != "persons-api.person.deleted" ||
+		s["EXCHANGE_AUTH_REVOCATIONS"] != "auth-api.token.revoked" {
+		t.Fatalf("sign-api env: %v", s)
+	}
+	if _, ok := s["DISPATCH_API_URL"]; ok {
+		t.Fatalf("sign-api no longer calls dispatch: %v", s)
+	}
+	if dv := envfile.Read(dispatch); dv["SIGN_API_URL"] != "http://127.0.0.1:3014" || dv["EXCHANGE_SIGN_REQUEST_CHANGED"] != "sign-api.request.changed" || dv["EXCHANGE_FORMS_RESPONSE_CREATED"] != "forms-api.response.created" {
+		t.Fatalf("dispatch-api env: %v", dv)
+	}
+	d := envfile.Read(filepath.Join(w.Repo("documents-api"), ".env"))
+	if d["S3_BUCKET"] != "documents" || d["S3_ACCESS_KEY"] == "" || d["SEAL_DEV_SELF_SIGNED"] != "true" || d["EXCHANGE_SIGNED_DOCUMENTS_CHANGED"] != "documents-api.signed-document.changed" {
+		t.Fatalf("documents-api env: %v", d)
+	}
+	if o := envfile.Read(dispatch)["SOCKET_ALLOWED_ORIGINS"]; o != "http://localhost:5106,http://localhost:5110,http://localhost:5113" {
+		t.Fatalf("dispatch origins: %q", o)
 	}
 }

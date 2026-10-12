@@ -520,10 +520,10 @@ func (m *Model) listRows() []int {
 
 func section(p *run.Proc) string {
 	switch {
-	case p.Spec.Group != "":
-		return "app:" + p.Spec.Group
 	case p.Spec.Kind == run.KindInfra:
 		return "infra"
+	case p.Spec.Group != "":
+		return "app:" + p.Spec.Group
 	case p.Spec.Kind == run.KindAPI:
 		return "api"
 	default:

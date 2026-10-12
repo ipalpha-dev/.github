@@ -149,10 +149,7 @@ func dbName(uri string) string {
 
 func reconcileClients(ctx context.Context, col *mongo.Collection, clients []env.SeedClient, res *Result) error {
 	for _, c := range clients {
-		var doc struct {
-			ID         any    `bson:"_id"`
-			SecretHash string `bson:"secretHash"`
-		}
+		var doc clientDoc
 		err := col.FindOne(ctx, bson.M{"clientId": c.ClientID, "clientClass": "system"}).Decode(&doc)
 		if errors.Is(err, mongo.ErrNoDocuments) {
 			continue // auth-api seeds it on boot
@@ -160,19 +157,82 @@ func reconcileClients(ctx context.Context, col *mongo.Collection, clients []env.
 		if err != nil {
 			return err
 		}
-		if doc.SecretHash != "" && VerifySecret(doc.SecretHash, c.Secret) {
+		update := clientUpdate(doc, c, time.Now())
+		if update == nil {
 			continue
 		}
-		_, err = col.UpdateOne(ctx, bson.M{"_id": doc.ID}, bson.M{
-			"$set": bson.M{"secretHash": HashSecret(c.Secret), "rotatedAt": time.Now()},
-			"$inc": bson.M{"credentialVersion": 1},
-		})
-		if err != nil {
+		if _, err = col.UpdateOne(ctx, bson.M{"_id": doc.ID}, update); err != nil {
 			return err
 		}
 		res.Clients = append(res.Clients, c.ClientID)
 	}
 	return nil
+}
+
+// clientDoc is the part of an auth.clients document the reconcile reads.
+type clientDoc struct {
+	ID            any      `bson:"_id"`
+	SecretHash    string   `bson:"secretHash"`
+	AllowedScopes []string `bson:"allowedScopes"`
+	AppID         string   `bson:"appId"`
+}
+
+// clientUpdate is the update that makes a local system client match its SEED_CLIENTS_JSON entry (nil when it
+// already does). auth-api seeding is insert-only, so without this a client that exists keeps the secret and
+// scopes of its first boot: the secret is re-hashed when it drifted, allowedScopes become exactly the entry's
+// scopes (new grants reach existing clients), an app-bound entry's appId is set and an unbound entry's stale appId
+// is removed. Local database only.
+func clientUpdate(doc clientDoc, c env.SeedClient, now time.Time) bson.M {
+	set := bson.M{}
+	update := bson.M{}
+	if doc.SecretHash == "" || !VerifySecret(doc.SecretHash, c.Secret) {
+		set["secretHash"] = HashSecret(c.Secret)
+		set["rotatedAt"] = now
+		update["$inc"] = bson.M{"credentialVersion": 1}
+	}
+	want := c.Scopes
+	if want == nil {
+		want = []string{}
+	}
+	if !sameSet(doc.AllowedScopes, want) {
+		set["allowedScopes"] = want
+	}
+	if c.AppID != "" && doc.AppID != c.AppID {
+		set["appId"] = c.AppID
+	}
+	// A client that is no longer app-bound (sign-api once Sign became a core tool) loses its stale appId.
+	unbind := c.AppID == "" && doc.AppID != ""
+	if len(set) == 0 && !unbind {
+		return nil
+	}
+	if len(set) > 0 {
+		update["$set"] = set
+	}
+	if unbind {
+		update["$unset"] = bson.M{"appId": ""}
+	}
+	return update
+}
+
+// sameSet reports whether a and b hold the same strings (order and duplicates ignored).
+func sameSet(a, b []string) bool {
+	in := func(list []string) map[string]bool {
+		m := map[string]bool{}
+		for _, v := range list {
+			m[v] = true
+		}
+		return m
+	}
+	ma, mb := in(a), in(b)
+	if len(ma) != len(mb) {
+		return false
+	}
+	for v := range ma {
+		if !mb[v] {
+			return false
+		}
+	}
+	return true
 }
 
 // isLoopback reports an http URL on localhost/127.0.0.1/[::1].

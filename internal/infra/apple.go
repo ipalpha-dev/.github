@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ipalpha-dev/tooling/internal/catalog"
 	"github.com/ipalpha-dev/tooling/internal/i18n"
 	"github.com/ipalpha-dev/tooling/internal/ports"
 	"github.com/ipalpha-dev/tooling/internal/sys"
@@ -28,6 +29,9 @@ func (e *Engine) appleUp(plan ports.Plan) error {
 		args  []string
 		ready []string
 	}{
+		{"cpamc", []string{"--network", n, "--publish", fmt.Sprintf("127.0.0.1:%d:8317", plan.Port("cpamc")),
+			"--cpus", "1", "--memory", "256M", catalog.CPAMCSimulatorImage},
+			[]string{"/cpamc-simulator", "healthcheck"}},
 		{"mongo", []string{"--network", n, "--publish", fmt.Sprintf("%d:27017", plan.Port("mongo")),
 			"--env", "MONGO_INITDB_ROOT_USERNAME=" + c["MONGO_USERNAME"], "--env", "MONGO_INITDB_ROOT_PASSWORD=" + c["MONGO_PASSWORD"],
 			"--volume", n + "-mongo-data:/data/db", "mongo:8"},
@@ -110,12 +114,12 @@ func (e *Engine) appleUp(plan ports.Plan) error {
 			ui.Warning(i18n.T("infra_not_healthy_yet", s.name))
 		}
 	}
-	// One-shot job: create the photos bucket when it is missing (idempotent).
+	// One-shot job: create the buckets (photos, church e-mail images, documents) when missing (idempotent).
 	endpoint := "http://" + n + "-rustfs:9000"
 	if out, err := sys.Output("", "container", "run", "--rm", "--network", n,
 		"--env", "AWS_ACCESS_KEY_ID="+c["RUSTFS_ACCESS_KEY"], "--env", "AWS_SECRET_ACCESS_KEY="+c["RUSTFS_SECRET_KEY"], "--env", "AWS_DEFAULT_REGION=us-east-1",
 		"--entrypoint", "sh", "amazon/aws-cli:2.37.9", "-c",
-		"aws --endpoint-url "+endpoint+" s3api head-bucket --bucket photos || aws --endpoint-url "+endpoint+" s3api create-bucket --bucket photos"); err != nil {
+		"for bucket in photos church-email-images documents; do aws --endpoint-url "+endpoint+" s3api head-bucket --bucket \"$bucket\" || aws --endpoint-url "+endpoint+" s3api create-bucket --bucket \"$bucket\"; done"); err != nil {
 		return &ui.Problem{Step: i18n.T("infra_step"), Cause: i18n.T("infra_bucket_failed"), Tail: ui.Tail(out+"\n"+err.Error(), 8), Fix: []string{i18n.T("infra_fix_use_docker")}}
 	}
 	return nil

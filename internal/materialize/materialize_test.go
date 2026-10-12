@@ -24,7 +24,7 @@ func TestRemoveAgentPointers(t *testing.T) {
 		write("CLAUDE.md", gen),
 		write("core/oikos-webapp/GEMINI.md", gen),
 		write("core/oikos-webapp/.github/copilot-instructions.md", gen),
-		write("features/x/apps/forms/forms-api/CLAUDE.md", gen),
+		write("features/x/apps/acampa-kids/backend/CLAUDE.md", gen),
 	}
 	mine := []string{
 		write("AGENTS.md", "my own rules\n"),

@@ -1,6 +1,21 @@
 name: ${IPALPHA_INFRA_NAME:-ipalpha}
 
 services:
+  # Public, secret-free, development-only gateway. Never calls real AI providers.
+  cpamc:
+    image: docker.io/kevynsax/cpamc-simulator:0.1.1
+    container_name: ${IPALPHA_INFRA_NAME:-ipalpha}-cpamc
+    ports:
+      - "127.0.0.1:${CPAMC_HOST_PORT:-8317}:8317"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 128m
+    healthcheck:
+      test: [CMD, /cpamc-simulator, healthcheck]
+      interval: 5s
+      timeout: 4s
+      retries: 12
   mongo:
     image: mongo:8
     container_name: ${IPALPHA_INFRA_NAME:-ipalpha}-mongo
@@ -80,7 +95,7 @@ services:
       retries: 12
       start_period: 5s
 
-  # S3-compatible store for photos-api (same image as production). The bucket is created by
+  # S3-compatible store for photos-api, notifications-api and documents-api (same image as production). Buckets are created by
   # `rustfs-init` after `up` (profile "init": run explicitly by ./run, never part of `up`).
   rustfs:
     image: rustfs/rustfs:1.0.1
@@ -110,8 +125,10 @@ services:
     command:
       - |
         set -eu
-        aws --endpoint-url http://rustfs:9000 s3api head-bucket --bucket photos \
-          || aws --endpoint-url http://rustfs:9000 s3api create-bucket --bucket photos
+        for bucket in photos church-email-images documents; do
+          aws --endpoint-url http://rustfs:9000 s3api head-bucket --bucket "$$bucket" \
+            || aws --endpoint-url http://rustfs:9000 s3api create-bucket --bucket "$$bucket"
+        done
     environment:
       AWS_ACCESS_KEY_ID: ${RUSTFS_ACCESS_KEY}
       AWS_SECRET_ACCESS_KEY: ${RUSTFS_SECRET_KEY}
