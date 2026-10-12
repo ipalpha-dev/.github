@@ -31,7 +31,7 @@ func Domain() string {
 	if d := os.Getenv("IPALPHA_PREVIEW_DOMAIN"); d != "" {
 		return d
 	}
-	return "kevyn.com.br"
+	return "ipalpha.dev"
 }
 
 // WaitMinutes for the Preview pipeline.
@@ -46,15 +46,15 @@ func WaitMinutes() int {
 // core tools, so their hosts are always served.
 func Hosts(slug string) []string {
 	d := Domain()
-	return []string{"ipalpha-" + slug + "." + d, "forms-ipalpha-" + slug + "." + d, "auth-ipalpha-" + slug + "." + d, "sign-ipalpha-" + slug + "." + d}
+	return []string{"oikos." + slug + "." + d, "forms." + slug + "." + d, "auth." + slug + "." + d, "sign." + slug + "." + d}
 }
 
 // DevelopersHost is the Developers portal host.
-func DevelopersHost(slug string) string { return "developers-ipalpha-" + slug + "." + Domain() }
+func DevelopersHost(slug string) string { return "developers." + slug + "." + Domain() }
 
 // AppHosts are served only when the app changed (apps outside core: Acampa Kids).
 func AppHosts(slug string) []string {
-	return []string{"acampa-ipalpha-" + slug + "." + Domain()}
+	return []string{"acampa-kids." + slug + "." + Domain()}
 }
 
 var slugRe = regexp.MustCompile(`^[a-z0-9-]{3,30}$`)

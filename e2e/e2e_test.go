@@ -316,7 +316,7 @@ func TestFeatureLifecycle(t *testing.T) {
 			t.Fatalf("%s not started from its local master tip", r.Name)
 		}
 	}
-	if !strings.Contains(out, "https://acampa-ipalpha-hello-test.kevyn.com.br") {
+	if !strings.Contains(out, "https://acampa-kids.hello-test.ipalpha.dev") {
 		t.Fatalf("feature new output:\n%s", out)
 	}
 	fs := envfile.Read(filepath.Join(froot, ".ipalpha", "settings"))

@@ -604,13 +604,13 @@ either end, every host ≤ 63 chars.
 
 | URL | What |
 | --- | --- |
-| `https://ipalpha-<slug>.kevyn.com.br` | Oikos |
-| `https://forms-ipalpha-<slug>.kevyn.com.br` | IPAlpha Formulários |
-| `https://auth-ipalpha-<slug>.kevyn.com.br` | sign-in popup |
-| `https://developers-ipalpha-<slug>.kevyn.com.br` | IPAlpha Developers |
-| `https://ipalpha-<slug>.kevyn.com.br/mailbox` | captured e-mail/SMS (sign-in codes) |
-| `https://acampa-ipalpha-<slug>.kevyn.com.br` | Acampa Kids — only when an `acampa-kids-*` repo changed |
-| `https://sign-ipalpha-<slug>.kevyn.com.br` | IPAlpha Sign (core tool, always served) |
+| `https://oikos.<slug>.ipalpha.dev` | Oikos |
+| `https://forms.<slug>.ipalpha.dev` | IPAlpha Formulários |
+| `https://auth.<slug>.ipalpha.dev` | sign-in popup |
+| `https://developers.<slug>.ipalpha.dev` | IPAlpha Developers |
+| `https://oikos.<slug>.ipalpha.dev/mailbox` | captured e-mail/SMS (sign-in codes) |
+| `https://acampa-kids.<slug>.ipalpha.dev` | Acampa Kids — only when an `acampa-kids-*` repo changed |
+| `https://sign.<slug>.ipalpha.dev` | IPAlpha Sign (core tool, always served) |
 
 How it works: main checkouts are never touched (`git worktree`); unchanged services run the last green Core Deploy images
 (`deployment/releases/core-latest.json`, resolved by CI, not by `./feature`); `shared-js` changes rebuild every core API
