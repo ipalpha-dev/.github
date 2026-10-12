@@ -20,7 +20,7 @@ services:
     image: mongo:8
     container_name: ${IPALPHA_INFRA_NAME:-ipalpha}-mongo
     ports:
-      - "${MONGO_HOST_PORT:-27017}:27017"
+      - "127.0.0.1:${MONGO_HOST_PORT:-27017}:27017"
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_USERNAME}
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
@@ -44,7 +44,7 @@ services:
     image: redis:7-alpine
     container_name: ${IPALPHA_INFRA_NAME:-ipalpha}-redis
     ports:
-      - "${REDIS_HOST_PORT:-6379}:6379"
+      - "127.0.0.1:${REDIS_HOST_PORT:-6379}:6379"
     command: redis-server --appendonly yes
     volumes:
       - redis-data:/data
@@ -60,8 +60,8 @@ services:
     container_name: ${IPALPHA_INFRA_NAME:-ipalpha}-rabbitmq
     hostname: ${IPALPHA_INFRA_NAME:-ipalpha}-rabbitmq
     ports:
-      - "${RABBITMQ_HOST_PORT:-5672}:5672"
-      - "${RABBITMQ_MGMT_HOST_PORT:-15672}:15672"
+      - "127.0.0.1:${RABBITMQ_HOST_PORT:-5672}:5672"
+      - "127.0.0.1:${RABBITMQ_MGMT_HOST_PORT:-15672}:15672"
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}

@@ -54,3 +54,25 @@ func TestComposePreservesRustFSBucketLoop(t *testing.T) {
 		t.Fatal("Compose consumed a shell variable before the container could expand it")
 	}
 }
+
+// Every published host port must stay on loopback (Docker bypasses host firewalls).
+func TestComposePublishesOnlyOnLoopback(t *testing.T) {
+	for _, line := range strings.Split(string(assets.MustRead("compose.yaml")), "\n") {
+		l := strings.TrimSpace(line)
+		if strings.HasPrefix(l, `- "`) && strings.Contains(l, "_HOST_PORT") && !strings.HasPrefix(l, `- "127.0.0.1:`) {
+			t.Fatalf("host port not bound to loopback: %s", l)
+		}
+	}
+}
+
+func TestAppleBindsInfraToLoopback(t *testing.T) {
+	src, err := os.ReadFile("apple.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, l := range strings.Split(string(src), "\n") {
+		if strings.Contains(l, `"--publish", fmt.Sprintf("%d:`) {
+			t.Fatalf("apple publish not bound to loopback: %s", strings.TrimSpace(l))
+		}
+	}
+}
