@@ -453,7 +453,7 @@ updates are in-process websockets).
 
 `./pull` and `setup` write `services-photo-api/.env` from `.env.example` (else the embedded fallback), only adding
 missing keys and filling blanks: `MONGO_URI`, `WEB_ORIGINS` /
-`PUBLIC_WEB_URL` (`http://localhost:5114`), `AUTH_API_URL`, `AUTH_TOKEN_ISSUER`, `PROJECTS|PERSONS|SCHEDULE|PHOTOS|PLACES_API_URL`.
+`PUBLIC_WEB_URL` (`http://localhost:5114`), `AUTH_API_URL`, `AUTH_TOKEN_ISSUER`, `PROJECTS|PERSONS|SCHEDULE|PHOTOS|PLACES_API_URL`, and the optional `DISPATCH_API_URL` (`http://127.0.0.1:3007/api/dispatch`; empty turns the photos-push relay off).
 
 Sign-in uses auth-api's login relay, so the app needs an **app-bound client with `login:relay`** and a relay
 entry point. The tooling does not seed these (no local app id exists): register the app in the Developers portal /
