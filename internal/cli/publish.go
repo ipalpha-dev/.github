@@ -119,7 +119,7 @@ func decide(w *workspace.Workspace, p *publish.Plan, cfg ai.Config) error {
 		if err == nil {
 			p.Bump, p.Message, p.Reason, p.Source = d.Bump, d.Message, d.Reason, src
 			ui.Raw("%s decided in %s", p.Repo.Name, time.Since(start))
-			p.Bump = publish.Clamp(files, p.Bump)
+			p.Bump = publish.CapMajor(p.Dir, publish.Clamp(files, p.Bump))
 			p.Next = publish.Bump(p.Current, p.Bump)
 			return nil
 		}

@@ -95,7 +95,29 @@ func lastTag(dir string) string {
 	return t
 }
 
-// Dirty: uncommitted changes, or commits since the last v* tag whose version was not bumped yet
+var releaseSubjectRe = regexp.MustCompile(`^chore: release (\d+\.\d+\.\d+)`)
+
+// baseline is the last published point: the nearest v* tag, else (image repos are tagged by CI only once
+// they reach production, and a history rewrite drops tags) the newest "chore: release X" commit that
+// ./publish itself wrote. ref is empty when neither exists; version is the version that baseline carries.
+func baseline(dir string) (ref, version string) {
+	if t := lastTag(dir); t != "" {
+		return t, strings.TrimPrefix(t, "v")
+	}
+	out, _ := sys.Git(dir, "log", "--format=%H %s", "--grep=^chore: release [0-9]", "-n", "50")
+	for _, l := range strings.Split(out, "\n") {
+		sha, subject, ok := strings.Cut(l, " ")
+		if !ok {
+			continue
+		}
+		if m := releaseSubjectRe.FindStringSubmatch(subject); m != nil {
+			return sha, m[1]
+		}
+	}
+	return "", ""
+}
+
+// Dirty: uncommitted changes, or commits since the last release baseline whose version was not bumped yet
 // (a bumped-but-not-deployed repo is already marked; nothing more to publish).
 func Dirty(dir string) bool {
 	if !repos.IsGit(dir) {
@@ -104,14 +126,14 @@ func Dirty(dir string) bool {
 	if st, _ := sys.Git(dir, "status", "--porcelain"); st != "" {
 		return true
 	}
-	tag := lastTag(dir)
-	if tag == "" {
+	ref, version := baseline(dir)
+	if ref == "" {
 		return true
 	}
-	if log, _ := sys.Git(dir, "log", "--oneline", tag+"..HEAD"); log == "" {
+	if log, _ := sys.Git(dir, "log", "--oneline", ref+"..HEAD"); log == "" {
 		return false
 	}
-	return CurrentVersion(dir) == strings.TrimPrefix(tag, "v")
+	return CurrentVersion(dir) == version
 }
 
 // DirtyRepos lists publishable repositories with changes.
@@ -138,7 +160,7 @@ func changedFiles(dir string) []string {
 		}
 	}
 	if len(files) == 0 {
-		if tag := lastTag(dir); tag != "" {
+		if tag, _ := baseline(dir); tag != "" {
 			out, _ := sys.Git(dir, "diff", "--name-only", tag+"..HEAD")
 			for _, f := range strings.Split(out, "\n") {
 				if f != "" {
@@ -148,6 +170,37 @@ func changedFiles(dir string) []string {
 		}
 	}
 	return files
+}
+
+var breakingSubjectRe = regexp.MustCompile(`^[a-z]+(\([^)]*\))?!:`)
+
+// BreakingMarker returns the first commit since the last release that carries a conventional-commit
+// breaking marker ("type!:" or a "BREAKING CHANGE" footer) as "<sha> <subject>", or "".
+func BreakingMarker(dir string) string {
+	ref, _ := baseline(dir)
+	if ref == "" {
+		return ""
+	}
+	out, _ := sys.Git(dir, "log", "--no-merges", "--format=%h%x1f%s%x1f%b%x1e", ref+"..HEAD")
+	for _, rec := range strings.Split(out, "\x1e") {
+		f := strings.SplitN(strings.TrimLeft(rec, "\n"), "\x1f", 3)
+		if len(f) < 3 {
+			continue
+		}
+		if breakingSubjectRe.MatchString(f[1]) || strings.Contains(f[2], "BREAKING CHANGE") || strings.Contains(f[2], "BREAKING-CHANGE") {
+			return f[0] + " " + f[1]
+		}
+	}
+	return ""
+}
+
+// CapMajor: a major bump needs an explicit breaking marker in the commits; the AI's judgement alone
+// only reaches minor.
+func CapMajor(dir, bump string) string {
+	if bump == "major" && BreakingMarker(dir) == "" {
+		return "minor"
+	}
+	return bump
 }
 
 // Clamp: docs-only changes never bump the version.
@@ -169,10 +222,15 @@ func context(dir string, r catalog.Repo) string {
 	st, _ := sys.Git(dir, "status", "--porcelain")
 	stat, _ := sys.Git(dir, "diff", "--stat", "HEAD")
 	var since string
-	if tag := lastTag(dir); tag != "" {
+	var commits string
+	if tag, _ := baseline(dir); tag != "" {
 		since, _ = sys.Git(dir, "diff", "--stat", tag+"..HEAD")
+		commits, _ = sys.Git(dir, "log", "--no-merges", "--format=%h %s", "-n", "60", tag+"..HEAD")
 	}
 	log, _ := sys.Git(dir, "log", "--oneline", "-8")
+	if commits != "" {
+		log += "\n\ncommits since the last release (" + fmt.Sprint(len(strings.Split(commits, "\n"))) + "):\n" + commits
+	}
 	diff, _ := sys.Git(dir, "diff", "HEAD", "--unified=1", "--", ".", ":(exclude)package-lock.json")
 	if len(diff) > 12000 {
 		diff = diff[:12000] + "\n… (diff truncated)"

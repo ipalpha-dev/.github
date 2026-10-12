@@ -2,6 +2,7 @@ package publish
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -135,5 +136,87 @@ func TestAcampaImagesArePublishableAndPinnedInTheApp(t *testing.T) {
 	// face-service stays a TeamCity-built core service, never a ./publish target.
 	if f, _ := catalog.Get("face-service"); f.Publishable() || f.Rel() != "core/face-service" {
 		t.Fatalf("face-service: %+v", f)
+	}
+}
+
+func gitRepo(t *testing.T, commits ...string) string {
+	t.Helper()
+	dir := t.TempDir()
+	run := func(args ...string) {
+		cmd := exec.Command("git", append([]string{"-C", dir, "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false"}, args...)...)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	run("init", "-q", "-b", "master")
+	for i, m := range commits {
+		if err := os.WriteFile(filepath.Join(dir, "f.txt"), []byte(strings.Repeat("x", i+1)), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		run("add", "-A")
+		run("commit", "-q", "-m", m)
+	}
+	return dir
+}
+
+func TestBaselineWithoutTagsUsesReleaseCommit(t *testing.T) {
+	dir := gitRepo(t, "one", "chore: release 0.4.1", "feat: a", "fix: b")
+	ref, v := baseline(dir)
+	if ref == "" || v != "0.4.1" {
+		t.Fatalf("baseline = %q %q", ref, v)
+	}
+	_ = os.WriteFile(filepath.Join(dir, "package.json"), []byte(`{"version":"0.4.1"}`), 0o644)
+	if !Dirty(dir) {
+		t.Fatal("commits after the release commit must be dirty (version still 0.4.1 in git history only)")
+	}
+}
+
+func TestDirtyAtReleaseCommitWithoutTags(t *testing.T) {
+	dir := gitRepo(t, "one", "chore: release 0.4.1")
+	if Dirty(dir) {
+		t.Fatal("HEAD is the release commit: nothing to publish")
+	}
+}
+
+func TestBaselinePrefersTag(t *testing.T) {
+	dir := gitRepo(t, "chore: release 0.1.0", "feat: a")
+	if out, err := exec.Command("git", "-C", dir, "tag", "v0.2.0").CombinedOutput(); err != nil {
+		t.Fatal(string(out))
+	}
+	gitRepoAdd(t, dir, "fix: b")
+	if ref, v := baseline(dir); ref != "v0.2.0" || v != "0.2.0" {
+		t.Fatalf("baseline = %q %q", ref, v)
+	}
+}
+
+func gitRepoAdd(t *testing.T, dir, msg string) {
+	t.Helper()
+	_ = os.WriteFile(filepath.Join(dir, "g.txt"), []byte(msg), 0o644)
+	for _, a := range [][]string{{"add", "-A"}, {"-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", msg}} {
+		if out, err := exec.Command("git", append([]string{"-C", dir}, a...)...).CombinedOutput(); err != nil {
+			t.Fatal(string(out))
+		}
+	}
+}
+
+func TestBreakingMarkerAndCapMajor(t *testing.T) {
+	plain := gitRepo(t, "chore: release 0.5.1", "dispatch-api: acampa core sync", "feat: more")
+	if got := BreakingMarker(plain); got != "" {
+		t.Fatalf("no marker expected, got %q", got)
+	}
+	if got := CapMajor(plain, "major"); got != "minor" {
+		t.Fatalf("major without marker must cap to minor, got %s", got)
+	}
+	if got := CapMajor(plain, "patch"); got != "patch" {
+		t.Fatalf("patch unchanged, got %s", got)
+	}
+	bang := gitRepo(t, "chore: release 0.5.1", "feat(api)!: drop v1")
+	if BreakingMarker(bang) == "" || CapMajor(bang, "major") != "major" {
+		t.Fatal("feat!: must keep major")
+	}
+	footer := gitRepo(t, "chore: release 0.5.1")
+	gitRepoAdd(t, footer, "refactor: x\n\nBREAKING CHANGE: gone")
+	if BreakingMarker(footer) == "" {
+		t.Fatal("BREAKING CHANGE footer must be detected")
 	}
 }

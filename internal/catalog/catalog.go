@@ -59,7 +59,7 @@ var Repos = []Repo{
 	{Name: "photos-api", Kind: KindAPI, Port: 3010, Display: "Photos"},
 	{Name: "documents-api", Kind: KindAPI, Port: 3012, Display: "Documents"},
 	{Name: "schedule-api", Kind: KindAPI, Port: 3013, Display: "Schedule"},
-	{Name: "apps-api", Kind: KindAPI, Port: 3015, Display: "Apps", NoRemote: true},
+	{Name: "apps-api", Kind: KindAPI, Port: 3015, Display: "Apps"},
 	{Name: "notifications-api", Kind: KindAPI, Port: 3004, Display: "Notifications"},
 	{Name: "auth-api", Kind: KindAPI, Port: 3005, Display: "Auth"},
 	{Name: "forms-api", Kind: KindAPI, Port: 3006, Display: "Forms API"},
