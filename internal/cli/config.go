@@ -213,6 +213,12 @@ func configCmd() *cobra.Command {
 			if err := w.Save(); err != nil {
 				return err
 			}
+			if args[0] == "seed" {
+				// The seed choice is tool-owned in the .env files: apply it now, not at the next ./pull.
+				if _, err := env.Prepare(w); err != nil {
+					return ui.Wrap(i18n.T("setup_env"), err)
+				}
+			}
 			ui.Done(i18n.T("config_saved"))
 			return nil
 		},
@@ -252,6 +258,11 @@ func setSetting(s *workspace.Settings, key, value string) error {
 		s.Registry = value
 	case "face":
 		s.Face = value == "on" || value == "true" || value == "1"
+	case "seed":
+		if workspace.NormalizeSeed(value) == "" {
+			return ui.NewProblem("config", i18n.T("config_bad_value", key, value), "on | off")
+		}
+		s.Seed = workspace.NormalizeSeed(value)
 	case "tmux":
 		s.Tmux = value == "on" || value == "true" || value == "1"
 	default:

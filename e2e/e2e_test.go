@@ -458,3 +458,67 @@ func TestFeatureLifecycle(t *testing.T) {
 		t.Fatal("reused branch lost its commits")
 	}
 }
+
+// The seed choice (seed=on|off) is asked once, defaults to yes, and owns SEED_DATA / IPALPHA_ENV / SEED_KEY in the
+// .env files: the one exception to "never overwrite a developer's value". Same on Windows, Linux and macOS.
+func TestSeedChoiceIsToolOwned(t *testing.T) {
+	e := newEnv(t)
+	e.setup() // --yes = seed with data
+	root := e.root
+	authEnv := filepath.Join(root, "core", "auth-api", ".env")
+	personsEnv := filepath.Join(root, "core", "persons-api", ".env")
+	if envfile.Read(filepath.Join(root, ".ipalpha", "settings"))["seed"] != "on" {
+		t.Fatal("setup --yes must seed with data")
+	}
+	a, p := envfile.Read(authEnv), envfile.Read(personsEnv)
+	if a["SEED_DATA"] != "true" || a["IPALPHA_ENV"] != "dev" || len(a["SEED_KEY"]) != 64 || a["SEED_KEY"] != p["SEED_KEY"] {
+		t.Fatalf("seed keys on: %v %v", a, p)
+	}
+	for _, retired := range []string{"SEED_OWNER_PERSON_ID", "SEED_PERSON_IDS_JSON"} {
+		if _, ok := envfile.Read(filepath.Join(root, "core", "forms-api", ".env"))[retired]; ok {
+			t.Fatalf("%s must be retired", retired)
+		}
+	}
+	// A developer edit of a tool-owned key does not survive a re-run; other values do.
+	appendFile(t, authEnv, "SEED_DATA=false\nCUSTOM_VALUE=keep-me\n")
+	e.setup()
+	if a = envfile.Read(authEnv); a["SEED_DATA"] != "true" || a["CUSTOM_VALUE"] != "keep-me" {
+		t.Fatalf("tool-owned key not restored or local value lost: %v", a)
+	}
+	key := a["SEED_KEY"]
+
+	// A new feature workspace copies the choice and has its own key.
+	e.must(root, "feature", "new", "with-seed")
+	fa := envfile.Read(filepath.Join(root, "features", "with-seed", "core", "auth-api", ".env"))
+	if envfile.Read(filepath.Join(root, "features", "with-seed", ".ipalpha", "settings"))["seed"] != "on" || fa["SEED_DATA"] != "true" || len(fa["SEED_KEY"]) != 64 || fa["SEED_KEY"] == key {
+		t.Fatalf("feature seed on: %v", fa)
+	}
+	var rec map[string]any
+	data, _ := os.ReadFile(filepath.Join(root, "features", "with-seed", ".ipalpha", "release.json"))
+	json.Unmarshal(data, &rec)
+	if rec["seedData"] != true {
+		t.Fatalf("preview request must carry seed: %s", data)
+	}
+	e.must(root, "feature", "new", "no-seed", "--no-seed")
+	fa = envfile.Read(filepath.Join(root, "features", "no-seed", "core", "auth-api", ".env"))
+	if envfile.Read(filepath.Join(root, "features", "no-seed", ".ipalpha", "settings"))["seed"] != "off" || fa["SEED_DATA"] != "" || fa["SEED_KEY"] != "" {
+		t.Fatalf("feature --no-seed: %v", fa)
+	}
+	if envfile.Read(filepath.Join(root, ".ipalpha", "settings"))["seed"] != "on" {
+		t.Fatal("feature --no-seed must not change main")
+	}
+
+	// Off: blanked everywhere; the developer's other values stay. Back on: same key again.
+	e.must(e.tmp, "setup", e.root, "--yes", "--no-seed")
+	a = envfile.Read(authEnv)
+	if envfile.Read(filepath.Join(root, ".ipalpha", "settings"))["seed"] != "off" || a["SEED_DATA"] != "" || a["IPALPHA_ENV"] != "" || a["SEED_KEY"] != "" || a["CUSTOM_VALUE"] != "keep-me" {
+		t.Fatalf("seed off: %v", a)
+	}
+	e.must(root, "config", "set", "seed", "on")
+	if a = envfile.Read(authEnv); a["SEED_DATA"] != "true" || a["SEED_KEY"] != key {
+		t.Fatalf("config set seed on: %v", a)
+	}
+	if _, err := e.run(root, "config", "set", "seed", "maybe"); err == nil {
+		t.Fatal("config set seed accepted a bad value")
+	}
+}

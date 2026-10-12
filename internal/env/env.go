@@ -1,6 +1,7 @@
 // Package env creates and completes each API's .env: copy .env.example (or the embedded fallback),
 // add keys that appeared later, fill local-only values. It never overwrites a developer's value,
-// except the few local safety rules below (notifications always go to Mailpit).
+// except the few local safety rules below (notifications always go to Mailpit) and the seed keys the
+// workspace's seed=on|off choice owns (seed.go).
 package env
 
 import (
@@ -106,6 +107,7 @@ func Complete(w *workspace.Workspace, r catalog.Repo) (Change, error) {
 	} else {
 		ch.Filled = fillLocal(w, r, f)
 	}
+	ch.Filled = append(ch.Filled, applySeed(w, r, f)...)
 	if ch.Created || len(ch.Added) > 0 || len(ch.Filled) > 0 {
 		if err := f.Save(); err != nil {
 			return ch, err

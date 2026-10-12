@@ -105,6 +105,20 @@ func (f *File) Set(key, raw string) {
 	f.lines = append(f.lines, line)
 }
 
+// Delete removes every line of key. Returns true when something was removed.
+func (f *File) Delete(key string) bool {
+	kept := f.lines[:0:0]
+	for _, l := range f.lines {
+		if k, _, ok := parseLine(l); ok && k == key {
+			continue
+		}
+		kept = append(kept, l)
+	}
+	removed := len(kept) != len(f.lines)
+	f.lines = kept
+	return removed
+}
+
 // SetIfEmpty sets key only when it is missing or blank. Returns true when it changed.
 func (f *File) SetIfEmpty(key, raw string) bool {
 	if v, ok := f.Get(key); ok && strings.TrimSpace(v) != "" {

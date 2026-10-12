@@ -85,16 +85,18 @@ Writing uses `aiSettings.assist` in the existing AI service (defaults to the cur
    (Acampa Kids) are skipped quietly when your account cannot read them.
 5. **`.env` per API** from its `.env.example` (or the embedded fallback in `internal/assets/files/env-fallback`
    until the repo has one). Re-runs and `./pull` only **add missing keys** and fill blanks; local values are
-   never overwritten — except notifications, which always go to Mailpit locally.
+   never overwritten — except notifications, which always go to Mailpit locally, and the sample-data keys owned by the
+   `seed` choice (see "Sample data").
 6. **First sign-in**: your name and mobile number become the local superuser. Codes arrive in Mailpit. Setup then asks
    the **password** (masked, typed twice; 8-200 characters with a number and a symbol, the same rules as auth-api) so
    the first Oikos sign-in does not stop at "Precisamos configurar sua senha"; empty skips it. It is saved as
    `SUPERUSER_PASSWORD` in `core/auth-api/.env` only (git-ignored; a value already there is kept), and auth-api
    hashes it (argon2id) when it seeds the superuser.
-7. **AI for `./publish`**: pick one of the coding CLIs already installed (all presets are listed only when none is),
+7. **Sample data**: "Seed with data?" (Enter = yes; `--yes` = yes; `--no-seed` = no). See "Sample data" below.
+8. **AI for `./publish`**: pick one of the coding CLIs already installed (all presets are listed only when none is),
    then pick its model from the list the CLI itself reports — no slug to type. Or your own command (see below).
-8. **Files**: `.ipalpha/` (settings, compose file, binary, logs) and the wrappers.
-9. **npm dependencies** (failures do not stop setup; `./run` retries).
+9. **Files**: `.ipalpha/` (settings, compose file, binary, logs) and the wrappers.
+10. **npm dependencies** (failures do not stop setup; `./run` retries).
 
 Non-interactive (CI): `ipalpha setup <folder> --yes` with `IPALPHA_SUPERUSER_PHONE`, `IPALPHA_AI_CLI=none`, and optionally
 `IPALPHA_SUPERUSER_PASSWORD` (absent = the password is created at the first sign-in, as before; an invalid one fails setup).
@@ -404,6 +406,35 @@ filters with `/`; "Other" still lets you type an id, and typing is the fallback 
 
 The choice is per workspace (`ai_cli`, `ai_model`, `ai_command` in `.ipalpha/settings`).
 
+## Sample data
+
+Core services (and the Acampa Kids backend) seed fictitious people, places, events and files at their first boot, so you
+can click through the screens. It is a per-workspace choice, `seed=on|off` in `.ipalpha/settings`, asked **once** in
+`setup` (right after the first sign-in step), in `./feature new <slug>` (a new feature copies main's value; main asks only
+if it never chose; `--no-seed` makes that feature `off` without touching main) and in the preview request
+(`./publish` in a feature asks only if the workspace never chose; the record carries `seedData: true|false` for
+`deployment`). The default is **yes**; change it later with `ipalpha config set seed on|off` (which rewrites the keys at once).
+
+The choice owns these keys in the `.env` of auth-api, persons-api, organizations-api, places-api, projects-api, schedule-api,
+drive-api, photos-api, documents-api, sign-api, forms-api and the Acampa Kids backend. **This is the one explicit exception to
+"never overwrite a local value"**: setup, `./pull` and `config set seed` rewrite them whenever the choice differs, and blank
+them when it is off (nothing is written while the workspace has not chosen):
+
+| Key | On | Where |
+| --- | --- | --- |
+| `SEED_DATA` | `true` | all of the services above |
+| `IPALPHA_ENV` | `dev` (previews use `preview:<slug>` in their configmaps) | all of the services above |
+| `SEED_KEY` | 32 random bytes in hex, generated once per workspace (`.ipalpha/seed.env`), the same value everywhere | auth-api, persons-api, sign-api, Acampa Kids backend |
+
+A service refuses to boot with `SEED_DATA=true` unless `IPALPHA_ENV` is `dev` or `preview*`; production never gets either
+key. For the Acampa Kids backend, while seeding is on, setup also generates once (same values the app's seed sends to auth-api,
+filled only where blank): `IPALPHA_CLIENT_ID` (`acampa-kids-<hex>`), `IPALPHA_CLIENT_SECRET`, `IPALPHA_SYSTEM_CLIENT_SECRET`
+(64 hex characters each), plus `IPALPHA_SYSTEM_CLIENT_ID=acampa-kids`, `IPALPHA_DEVELOPERS_API_URL` and
+`SUPER_ADMIN_PERSON_IDS=5eed0000000000000000a001` (Marina Duarte (exemplo)). The first `./run` boot applies the seeds; setup
+prints the sample phones once: `+55 11 90000-0001`..`0006` (core, not verified) and `0011`..`0020` (Acampa Kids, verified).
+`SEED_PERSON_IDS_JSON` and `SEED_OWNER_PERSON_ID` are retired (ids are fixed `5eed...`): `./pull` removes them from your `.env`.
+The matching developer guide is `/docs/local-seeding` in the developer portal.
+
 ## `./pull`
 
 Downloads the newest tool (checksum verified) and continues with it; fast-forwards every repo (a conflict
@@ -424,6 +455,7 @@ migrated by their next `./pull`.
 | `runtime` | `docker`, `container` (Apple) or empty (auto) |
 | `<service>_port` | preferred port (moves automatically when busy) |
 | `infra_name` | container/volume prefix |
+| `seed` | `on` / `off`: sample data in this workspace (default yes); owns `SEED_DATA`, `IPALPHA_ENV`, `SEED_KEY` in the `.env` files |
 | `tmux` | `on`: `./run` starts inside the workspace's tmux session (same as `./run --tmux`); off by default |
 
 ## Ports (defaults)
@@ -508,8 +540,8 @@ Start the pages from the panel or `./run apps set acampa-kids-frontend`.
 `./pull` and `setup` write `apps/acampa-kids/backend/.env` from `.env.example`, only adding missing keys and filling blanks
 (never overwriting your values): the ./run Mongo (`MONGODB_URI`, `MONGODB_DB=camping`), `PORT`, `CORS_ORIGIN` / `APP_URL` /
 `IPALPHA_REDIRECT_URI` for the frontend, every `IPALPHA_*_API_URL` of the local core, `IPALPHA_AUTH_ORIGIN`, `IPALPHA_TOKEN_ISSUER`,
-`IPALPHA_ENTRY_POINT=login`, `AI_API_URL`, and the app's own secrets `SESSION_TOKEN_KEY` and `WORKER_SECRET`. The values that
-come from registering the app in core are **not** seeded (auth-api has no seed for an app outside core, and it refuses to boot on
+`IPALPHA_ENTRY_POINT=login`, `AI_API_URL`, and the app's own secrets `SESSION_TOKEN_KEY` and `WORKER_SECRET`. With sample data on (see "Sample data") setup also writes the registration secrets and the seed values and the app registers
+itself at boot. With it off, the values that come from registering the app in core are **not** written (auth-api refuses to boot on
 a client bound to an unknown app): register Acampa in the Developers portal / Oikos and paste `IPALPHA_CLIENT_ID`,
 `IPALPHA_CLIENT_SECRET`, `IPALPHA_SYSTEM_CLIENT_ID`, `IPALPHA_SYSTEM_CLIENT_SECRET`, `IPALPHA_PROJECT_ID` and `IPALPHA_APP_ID`.
 Until then the API boots and "Entrar com IPAlpha" answers unavailable (`GET /api/auth/ipalpha/config` is not enabled).
@@ -553,6 +585,7 @@ data and public HTTPS hosts, alive 72 h after each publish.
 
 ```sh
 ./feature new hello-preview          # features/hello-preview/: worktrees on feat/hello-preview at each repo's local default-branch tip
+                                     # (--no-seed: no sample data in this feature; otherwise main's seed choice, asked once if unset)
 cd features/hello-preview
 ./run                                # own ports (+100 per feature) and own infra
 ./publish                            # = --feature hello-preview: commit (no version bump), push, deploy the preview

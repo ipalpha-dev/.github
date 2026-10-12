@@ -33,6 +33,7 @@ type Settings struct {
 	InfraName   string
 	Registry    string
 	Face        bool           // run the optional face service (settings face=on); off = photos-api skips face work
+	Seed        string         // seed=on|off: sample data in this workspace's services (empty = not asked yet; default yes)
 	Tmux        bool           // settings tmux=on: ./run starts inside the workspace tmux session (off by default)
 	Ports       map[string]int // preferred ports (port key → port)
 	extra       []string       // unknown lines, kept as written
@@ -168,6 +169,8 @@ func LoadSettings(path string) (*Settings, error) {
 			}
 		case "face":
 			s.Face = v == "on" || v == "true" || v == "1"
+		case "seed":
+			s.Seed = NormalizeSeed(v)
 		case "tmux":
 			s.Tmux = v == "on" || v == "true" || v == "1"
 		case "runner":
@@ -198,6 +201,32 @@ func settingsPortKey(k string) string {
 		return "rabbitmq_mgmt"
 	}
 	return k
+}
+
+// NormalizeSeed maps on/true/yes/1 to "on", off/false/no/0 to "off" and anything else to "" (not chosen).
+func NormalizeSeed(v string) string {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "on", "true", "yes", "1":
+		return "on"
+	case "off", "false", "no", "0":
+		return "off"
+	}
+	return ""
+}
+
+// SeedAsked reports whether the developer already chose to seed or not.
+func (s *Settings) SeedAsked() bool { return s.Seed != "" }
+
+// SeedOn is the choice with its default: sample data unless the developer said no.
+func (s *Settings) SeedOn() bool { return s.Seed != "off" }
+
+// SetSeed stores the choice (seed=on|off).
+func (s *Settings) SetSeed(on bool) {
+	if on {
+		s.Seed = "on"
+	} else {
+		s.Seed = "off"
+	}
 }
 
 // Gateway defaults old workspaces to the secret-free simulator without editing their env files.
@@ -266,6 +295,9 @@ func (s *Settings) Render() string {
 	}
 	if s.Face {
 		b.WriteString("face=on\n")
+	}
+	if s.Seed != "" {
+		fmt.Fprintf(&b, "seed=%s\n", s.Seed)
 	}
 	if s.Tmux {
 		b.WriteString("tmux=on\n")

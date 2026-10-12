@@ -14,7 +14,7 @@ import (
 )
 
 func featureCmd() *cobra.Command {
-	var yes, noWait, force bool
+	var yes, noWait, force, noSeed bool
 	c := &cobra.Command{
 		Use:   "feature",
 		Short: i18n.T("cmd_feature"),
@@ -39,7 +39,11 @@ func featureCmd() *cobra.Command {
 				return err
 			}
 			ui.Header("./feature new")
-			froot, err := feature.New(w, args[0], self(), materializeFeature)
+			seed, err := featureSeedChoice(w, yes, noSeed)
+			if err != nil {
+				return err
+			}
+			froot, err := feature.New(w, args[0], self(), seed, materializeFeature)
 			if err != nil {
 				return err
 			}
@@ -61,6 +65,7 @@ func featureCmd() *cobra.Command {
 			return nil
 		},
 	}
+	newCmd.Flags().BoolVar(&noSeed, "no-seed", false, i18n.T("flag_no_seed"))
 	listCmd := &cobra.Command{
 		Use: "list", Aliases: []string{"ls"}, Short: i18n.T("cmd_feature_list"),
 		RunE: func(cmd *cobra.Command, args []string) error {

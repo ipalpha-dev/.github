@@ -25,7 +25,7 @@ import (
 
 func setupCmd() *cobra.Command {
 	var dir string
-	var skipTools, skipInstall, yes bool
+	var skipTools, skipInstall, yes, noSeed bool
 	c := &cobra.Command{
 		Use:   "setup [folder]",
 		Short: i18n.T("cmd_setup"),
@@ -35,11 +35,12 @@ func setupCmd() *cobra.Command {
 			if len(args) == 1 {
 				dir = args[0]
 			}
-			return setup(dir, skipTools || os.Getenv("IPALPHA_SKIP_TOOLS") == "1", skipInstall || os.Getenv("IPALPHA_SKIP_INSTALL") == "1", yes)
+			return setup(dir, skipTools || os.Getenv("IPALPHA_SKIP_TOOLS") == "1", skipInstall || os.Getenv("IPALPHA_SKIP_INSTALL") == "1", yes, noSeed)
 		},
 	}
 	c.Flags().BoolVar(&skipTools, "skip-tools", false, i18n.T("flag_skip_tools"))
 	c.Flags().BoolVar(&skipInstall, "skip-install", false, i18n.T("flag_skip_install"))
+	c.Flags().BoolVar(&noSeed, "no-seed", false, i18n.T("flag_no_seed"))
 	c.Flags().BoolVarP(&yes, "yes", "y", false, i18n.T("flag_yes"))
 	return c
 }
@@ -58,7 +59,7 @@ func defaultFolder() string {
 	return filepath.Join(wd, "IpAlpha")
 }
 
-func setup(dir string, skipTools, skipInstall, yes bool) error {
+func setup(dir string, skipTools, skipInstall, yes, noSeed bool) error {
 	ui.Header(i18n.T("setup_title"))
 	ui.Info(i18n.T("setup_intro", sys.OSName(), i18n.LangName(i18n.Current())))
 
@@ -151,6 +152,9 @@ func setup(dir string, skipTools, skipInstall, yes bool) error {
 		return ui.Wrap(i18n.T("setup_env"), err)
 	}
 	if err := askSuperuser(w, yes); err != nil {
+		return err
+	}
+	if err := askSeed(w, yes, noSeed); err != nil {
 		return err
 	}
 

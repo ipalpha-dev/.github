@@ -186,8 +186,8 @@ func now() string { return time.Now().UTC().Format("2006-01-02T15:04:05Z") }
 // Open returns the main workspace for any workspace (feature or main).
 func mainOf(w *workspace.Workspace) string { return w.Main() }
 
-// New creates features/<slug>.
-func New(w *workspace.Workspace, slug string, self string, materialize func(*workspace.Workspace) error) (string, error) {
+// New creates features/<slug>. seed is the workspace choice ("on"/"off"; empty inherits main's).
+func New(w *workspace.Workspace, slug string, self string, seed string, materialize func(*workspace.Workspace) error) (string, error) {
 	main := mainOf(w)
 	if err := ValidateSlug(slug); err != nil {
 		return "", err
@@ -258,6 +258,9 @@ func New(w *workspace.Workspace, slug string, self string, materialize func(*wor
 	fs := *mw.Settings
 	fs.Ports = map[string]int{}
 	fs.InfraName = "ipalpha-" + slug
+	if seed != "" {
+		fs.Seed = workspace.NormalizeSeed(seed)
+	}
 	offset, err := portOffset(main)
 	if err != nil {
 		rollback()
@@ -320,7 +323,7 @@ func New(w *workspace.Workspace, slug string, self string, materialize func(*wor
 	}
 	rec := Record{"schemaVersion": 1, "feature": slug, "namespace": "ipalpha-feat-" + slug, "owner": owner,
 		"baselineRelease": map[string]any{"id": nil, "deploymentCommit": depBase},
-		"repositories":    reposMap, "images": map[string]any{}, "seed": map[string]any{"version": 1, "digest": nil},
+		"repositories":    reposMap, "images": map[string]any{}, "seed": map[string]any{"version": 1, "digest": nil}, "seedData": fs.SeedOn(),
 		"hosts": Hosts(slug), "generation": 0, "createdAt": now(), "expiresAt": nil, "teamcityBuild": nil}
 	if err := rec.Save(filepath.Join(fw.Dir(), "release.json")); err != nil {
 		rollback()
@@ -473,6 +476,10 @@ func Publish(w *workspace.Workspace, slug string, wait, dryRun bool, commit Comm
 		return err
 	}
 	branch := "feat/" + slug
+	seedData, err := previewSeed(froot, dryRun)
+	if err != nil {
+		return err
+	}
 	reposMap := rec.Repositories()
 	for _, r := range catalog.Repos {
 		dir := r.Path(froot)
@@ -543,6 +550,7 @@ func Publish(w *workspace.Workspace, slug string, wait, dryRun bool, commit Comm
 		r["generation"] = gen + 1
 		r["action"] = "publish"
 		r["requestedAt"] = requested
+		r["seedData"] = seedData // the preview request carries the workspace's seed choice; deployment wires SEED_DATA/IPALPHA_ENV from it
 		images, _ := r["images"].(map[string]any)
 		if images == nil {
 			images = map[string]any{}
@@ -562,6 +570,28 @@ func Publish(w *workspace.Workspace, slug string, wait, dryRun bool, commit Comm
 		return nil
 	}
 	return Wait(main, slug, sha, requested, "publish")
+}
+
+// previewSeed is the seed choice a preview request carries: the feature workspace's seed=on|off. A workspace that
+// never chose is asked now (Enter = yes; unattended = yes) and remembers the answer.
+func previewSeed(froot string, dryRun bool) (bool, error) {
+	fw, err := workspace.Open(froot)
+	if err != nil {
+		return true, nil
+	}
+	if !fw.Settings.SeedAsked() && !dryRun {
+		on := true
+		if ui.Interactive() {
+			if on, err = ui.Confirm(i18n.T("setup_seed"), i18n.T("setup_seed_desc"), true); err != nil {
+				return false, err
+			}
+		}
+		fw.Settings.SetSeed(on)
+		if err := fw.Save(); err != nil {
+			return false, err
+		}
+	}
+	return fw.Settings.SeedOn(), nil
 }
 
 func git(dir string, args ...string) error {
