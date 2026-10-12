@@ -266,6 +266,16 @@ gets `DRIVE_API_URL`, `EXCHANGE_DRIVE_ITEMS_CHANGED` and `http://localhost:5116`
 gets `ipalpha:drive` in `AUTH_RESOURCE_AUDIENCES_JSON`. The `rustfs-init` job also creates the `drive` bucket and applies
 CORS for `http://localhost:5116` and Oikos (`5110`). Oikos' Vite proxy reads `DRIVE_API_URL` like every other API.
 
+### Virtual assistant (core)
+
+`core/virtual-assistant` (port **3019**, MongoDB `virtual-assistant`, audience `ipalpha:assistant`, RustFS bucket
+`virtual-assistant`; the design's 3018 was already Drive's). The repo is `NoRemote` until it has an origin. Its
+`.env` fallback holds dummy WhatsApp/Twilio keys (nothing reaches a provider locally), the `EXCHANGE_ASSISTANT_*`
+names and `S3_*` keys from `.ipalpha/.env`. Added keys only: ai-api gets `ASSISTANT_CALLERS=virtual-assistant` and
+`ASSISTANT_BILLING_PROJECT_ID` (a local placeholder id); dispatch-api gets `VIRTUAL_ASSISTANT_API_URL` and the two
+`EXCHANGE_ASSISTANT_*` names; auth-api gets `ipalpha:assistant` in `AUTH_RESOURCE_AUDIENCES_JSON`. The `rustfs-init`
+job creates the bucket. Web apps receive `VIRTUAL_ASSISTANT_API_URL` from `./run` (Oikos mounts `/api/virtual-assistant`).
+
 ### Forms and IPAlpha Sign (core tools)
 
 Forms and IPAlpha Sign are **core tools** (Kevyn, 2026-10-12): `core/forms-api` (port **3006**, MongoDB `forms`,
@@ -426,7 +436,7 @@ migrated by their next `./pull`.
 | drive-api | 3018 | drive-webapp | 5116 |
 | services-photo-api | 3016 | services-photo-webapp | 5114 |
 | apps-api | 3015 | services-kids-api | 3017 |
-| | | services-kids-webapp | 5115 |
+| virtual-assistant | 3019 | services-kids-webapp | 5115 |
 
 ## Services Photo (app outside core)
 

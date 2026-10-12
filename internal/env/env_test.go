@@ -321,3 +321,32 @@ func TestServicesKidsAPIGetsStableVAPIDKeys(t *testing.T) {
 		t.Fatal("VAPID pair must be generated once and kept")
 	}
 }
+
+func TestVirtualAssistantEnvAndPeerKeys(t *testing.T) {
+	w := ws(t)
+	for _, d := range []string{"core/virtual-assistant", "core/ai-api", "core/dispatch-api", "core/auth-api"} {
+		if err := os.MkdirAll(filepath.Join(w.Root, d), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := Prepare(w); err != nil {
+		t.Fatal(err)
+	}
+	v := envfile.Read(filepath.Join(w.Repo("virtual-assistant"), ".env"))
+	if v["PORT"] != "3019" || v["TOKEN_AUDIENCE"] != "ipalpha:assistant" || v["S3_BUCKET"] != "virtual-assistant" || v["S3_ACCESS_KEY"] == "" ||
+		v["EXCHANGE_ASSISTANT_CONVERSATION_CHANGED"] != "virtual-assistant.conversation.changed" || v["WHATSAPP_APP_SECRET"] == "" || v["TWILIO_AUTH_TOKEN"] == "" ||
+		!strings.HasSuffix(v["MONGO_URI"], "/virtual-assistant?authSource=admin") {
+		t.Fatalf("virtual-assistant env: %v", v)
+	}
+	ai := envfile.Read(filepath.Join(w.Repo("ai-api"), ".env"))
+	if ai["ASSISTANT_CALLERS"] != "virtual-assistant" || ai["ASSISTANT_BILLING_PROJECT_ID"] == "" {
+		t.Fatalf("ai-api env: %v", ai)
+	}
+	d := envfile.Read(filepath.Join(w.Repo("dispatch-api"), ".env"))
+	if d["VIRTUAL_ASSISTANT_API_URL"] != "http://127.0.0.1:3019" || d["EXCHANGE_ASSISTANT_IDENTITY_REVIEW_CHANGED"] != "virtual-assistant.identity-review.changed" {
+		t.Fatalf("dispatch-api env: %v", d)
+	}
+	if a := envfile.Read(filepath.Join(w.Repo("auth-api"), ".env"))["AUTH_RESOURCE_AUDIENCES_JSON"]; !strings.Contains(a, "ipalpha:assistant") {
+		t.Fatalf("audiences: %s", a)
+	}
+}

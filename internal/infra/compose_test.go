@@ -16,7 +16,7 @@ func TestRustFSBucketVariablesAreEscapedForCompose(t *testing.T) {
 	if strings.Contains(compose, `--bucket "$bucket"`) || strings.Count(compose, `--bucket "$$bucket"`) != 2 {
 		t.Fatal("Compose must not interpolate the shell loop's bucket variable")
 	}
-	if !strings.Contains(compose, "for bucket in photos church-email-images documents drive; do") {
+	if !strings.Contains(compose, "for bucket in photos church-email-images documents drive virtual-assistant; do") {
 		t.Fatal("missing local runtime buckets")
 	}
 }

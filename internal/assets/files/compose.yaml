@@ -95,7 +95,7 @@ services:
       retries: 12
       start_period: 5s
 
-  # S3-compatible store for photos-api, notifications-api, documents-api and drive-api (same image as production). Buckets are created by
+  # S3-compatible store for photos-api, notifications-api, documents-api, drive-api and virtual-assistant (same image as production). Buckets are created by
   # `rustfs-init` after `up` (profile "init": run explicitly by ./run, never part of `up`).
   rustfs:
     image: rustfs/rustfs:1.0.1
@@ -125,7 +125,7 @@ services:
     command:
       - |
         set -eu
-        for bucket in photos church-email-images documents drive; do
+        for bucket in photos church-email-images documents drive virtual-assistant; do
           aws --endpoint-url http://rustfs:9000 s3api head-bucket --bucket "$$bucket" \
             || aws --endpoint-url http://rustfs:9000 s3api create-bucket --bucket "$$bucket"
         done

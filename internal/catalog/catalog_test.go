@@ -35,3 +35,10 @@ func TestDrivePortsAreUniqueAndCore(t *testing.T) {
 		seen[r.Port] = r.Name
 	}
 }
+
+func TestVirtualAssistantIsACoreAPIWithoutRemote(t *testing.T) {
+	r, ok := Get("virtual-assistant")
+	if !ok || r.Kind != KindAPI || r.Port != 3019 || r.Rel() != "core/virtual-assistant" || !r.NoRemote {
+		t.Fatalf("virtual-assistant: %+v", r)
+	}
+}

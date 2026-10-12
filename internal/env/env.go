@@ -98,7 +98,7 @@ func Complete(w *workspace.Workspace, r catalog.Repo) (Change, error) {
 	return ch, nil
 }
 
-var peers = []string{"projects", "persons", "organizations", "notifications", "forms", "ai", "developers", "dispatch", "places", "photos", "documents", "schedule", "sign", "apps", "drive"}
+var peers = []string{"projects", "persons", "organizations", "notifications", "forms", "ai", "developers", "dispatch", "places", "photos", "documents", "schedule", "sign", "apps", "drive", "assistant"}
 
 // Stable ids owned by auth-api (src/builtin-apps.ts).
 var builtinIDs = [][2]string{
@@ -193,7 +193,7 @@ func fillLocal(w *workspace.Workspace, r catalog.Repo, f *envfile.File) []string
 		fill("CHURCH_EMAIL_UNSUBSCRIBE_KEY", randomB64(32))
 		fill("CONTACT_LOOKUP_KEY", randomB64(32))
 	}
-	if r.Name == "photos-api" || r.Name == "notifications-api" || r.Name == "documents-api" || r.Name == "drive-api" {
+	if r.Name == "photos-api" || r.Name == "notifications-api" || r.Name == "documents-api" || r.Name == "drive-api" || r.Name == "virtual-assistant" {
 		// Same keys the RustFS container starts with (.ipalpha/.env), else the local defaults.
 		store := envfile.Read(filepath.Join(w.Dir(), ".env"))
 		fill("S3_ACCESS_KEY", firstNonEmpty(store["RUSTFS_ACCESS_KEY"], "ipalpha"))
@@ -236,7 +236,7 @@ func fillLocal(w *workspace.Workspace, r catalog.Repo, f *envfile.File) []string
 		}
 		// An existing list is kept; only the audiences new services need are appended.
 		if cur, ok := f.Get("AUTH_RESOURCE_AUDIENCES_JSON"); ok {
-			if merged, changedList := addAudiences(cur, "ipalpha:photos", "ipalpha:documents", "ipalpha:schedule", "ipalpha:sign", "ipalpha:apps", "ipalpha:drive"); changedList {
+			if merged, changedList := addAudiences(cur, "ipalpha:photos", "ipalpha:documents", "ipalpha:schedule", "ipalpha:sign", "ipalpha:apps", "ipalpha:drive", "ipalpha:assistant"); changedList {
 				set("AUTH_RESOURCE_AUDIENCES_JSON", merged)
 			}
 		}

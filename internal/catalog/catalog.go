@@ -71,6 +71,8 @@ var Repos = []Repo{
 	{Name: "services-photo-api", Kind: KindAPI, App: "services-photo", Port: 3016, Display: "Services Photo API"},
 	// Services Kids: repos exist only locally for now (no origin yet), so a missing clone is skipped quietly.
 	{Name: "services-kids-api", Kind: KindAPI, App: "services-kids", Port: 3017, Display: "Services Kids API", NoRemote: true},
+	// Virtual assistant (core): no origin yet, so a missing clone is skipped quietly. Repo name has no "-api" suffix.
+	{Name: "virtual-assistant", Kind: KindAPI, Port: 3019, Display: "Virtual Assistant", NoRemote: true},
 	{Name: "dispatch-api", Kind: KindAPI, Port: 3007, Display: "Dispatch"},
 	{Name: "auth-webapp", Kind: KindWeb, Port: 5100, Display: "Auth Web"},
 	{Name: "forms-webapp", Kind: KindWeb, Port: 5106, Display: "Forms Web"},
