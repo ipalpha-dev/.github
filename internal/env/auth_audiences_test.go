@@ -68,7 +68,7 @@ func TestFreshAuthFallbackRegistersSchedule(t *testing.T) {
 	if err := json.Unmarshal([]byte(envfile.Read(filepath.Join(repo.Path(w.Root), ".env"))["AUTH_RESOURCE_AUDIENCES_JSON"]), &got); err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Contains(got, "ipalpha:schedule") || !slices.Contains(got, "ipalpha:sign") {
+	if !slices.Contains(got, "ipalpha:schedule") || !slices.Contains(got, "ipalpha:sign") || !slices.Contains(got, "ipalpha:apps") {
 		t.Fatal("new setup is missing built-in audiences", got)
 	}
 }
