@@ -105,6 +105,16 @@ func TestClientUpdateSyncsScopesAndApp(t *testing.T) {
 	if !VerifySecret(set["secretHash"].(string), "new-secret-456") {
 		t.Fatal("new secret hash does not verify")
 	}
+	// sign-api became an unbound core client: a local client still bound to app-ipalpha-sign loses appId.
+	unbound := env.SeedClient{ClientID: "sign-api", Secret: "local-secret-123", ServiceID: "sign-api",
+		Scopes: []string{"revocations:read", "notifications:send-template"}}
+	u = clientUpdate(clientDoc{SecretHash: hash, AllowedScopes: unbound.Scopes, AppID: "app-ipalpha-sign"}, unbound, now)
+	if u == nil || u["$set"] != nil || u["$unset"] == nil {
+		t.Fatalf("unbind only: %v", u)
+	}
+	if u := clientUpdate(clientDoc{SecretHash: hash, AllowedScopes: unbound.Scopes}, unbound, now); u != nil {
+		t.Fatalf("already unbound client updated: %v", u)
+	}
 	// Scopes removed from the seed are removed locally too (exact match), never nil.
 	u = clientUpdate(clientDoc{SecretHash: hash, AllowedScopes: []string{"old:scope"}}, env.SeedClient{ClientID: "x", Secret: "local-secret-123"}, now)
 	if got := u["$set"].(bson.M)["allowedScopes"].([]string); got == nil || len(got) != 0 {

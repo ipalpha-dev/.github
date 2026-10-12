@@ -10,7 +10,8 @@ func TestStatusUsesSameGroupedProcessOrderAsPanel(t *testing.T) {
 	e.setup()
 	output := e.must(e.root, "status")
 	previous := -1
-	for _, label := range []string{"Core services", "Frontends", "Apps", "Forms API", "Forms Web", "Sign API", "Sign Web", "Infrastructure"} {
+	// Forms and Sign are core tools: their APIs list with the core services, their web apps with the frontends.
+	for _, label := range []string{"Core services", "Forms API", "Sign API", "Frontends", "Forms Web", "Sign Web", "Infrastructure"} {
 		position := strings.Index(output, label)
 		if position < 0 || position <= previous {
 			t.Fatalf("%s missing or out of order in status:\n%s", label, output)

@@ -65,11 +65,18 @@ func TestNpmBuildURL(t *testing.T) {
 func TestBuildContextFollowsEachDockerfile(t *testing.T) {
 	root := "/w"
 	core, _ := catalog.Get("auth-webapp")
-	app, _ := catalog.Get("forms-api")
 	if got := BuildContext(root, core, "/w/core/auth-webapp"); got != filepath.Join(root, "core") {
 		t.Fatalf("core repo context = %s", got)
 	}
-	if got := BuildContext(root, app, "/w/apps/forms/forms-api"); got != root {
+	// Forms and Sign are core tools: their Dockerfiles build from core/ like every core image.
+	for _, name := range []string{"forms-api", "forms-webapp", "sign-api", "sign-webapp"} {
+		r, _ := catalog.Get(name)
+		if got := BuildContext(root, r, "/w/core/"+name); got != filepath.Join(root, "core") || r.Rel() != "core/"+name {
+			t.Fatalf("%s context = %s (rel %s)", name, got, r.Rel())
+		}
+	}
+	app := catalog.Repo{Name: "ministry-api", Kind: catalog.KindAPI, App: "ministry"}
+	if got := BuildContext(root, app, "/w/apps/ministry/ministry-api"); got != root {
 		t.Fatalf("ministry app context = %s", got)
 	}
 	optional := catalog.Repo{Name: "acampa-kids-backend", Kind: catalog.KindOptional, App: "acampa-kids"}

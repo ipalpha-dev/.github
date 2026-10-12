@@ -123,6 +123,16 @@ func fillLocal(w *workspace.Workspace, r catalog.Repo, f *envfile.File) []string
 			set(k, v)
 		}
 	}
+	if r.Name == "forms-api" {
+		// The respondent entry point is a confidential client seeded by auth-api (BUILTIN_FORMS_RESPONDENT_*):
+		// forms-api must hold the same id, secret and registered callback. Blanks only, never a chosen value.
+		auth := envfile.Read(filepath.Join(w.Repo("auth-api"), ".env"))
+		fill("FORMS_RESPONDENT_CLIENT_ID", auth["BUILTIN_FORMS_RESPONDENT_CLIENT_ID"])
+		fill("FORMS_RESPONDENT_CLIENT_SECRET", auth["BUILTIN_FORMS_RESPONDENT_CLIENT_SECRET"])
+		if first, _, _ := strings.Cut(auth["BUILTIN_FORMS_RESPONDENT_REDIRECT_URIS"], ","); strings.TrimSpace(first) != "" {
+			fill("FORMS_RESPONDENT_REDIRECT_URI", strings.TrimSpace(first))
+		}
+	}
 	for k, v := range envfile.Parse(assets.EnvFallback(r.Name)) {
 		fill(k, v)
 	}
@@ -194,6 +204,9 @@ func fillLocal(w *workspace.Workspace, r catalog.Repo, f *envfile.File) []string
 	if r.Name == "persons-api" {
 		fill("IMPORT_ROWS_KEY", randomB64(32))
 	}
+	if r.Name == "photo-services-api" {
+		fill("SESSION_TOKEN_KEY", randomHex(32)) // seals the per-role core tokens of a session: 64 hex characters
+	}
 	if r.Name == "dispatch-api" {
 		// An existing list is kept; only the local origins of newer web apps are appended (IPAlpha Sign).
 		if cur, ok := f.Get("SOCKET_ALLOWED_ORIGINS"); ok {
@@ -204,6 +217,12 @@ func fillLocal(w *workspace.Workspace, r catalog.Repo, f *envfile.File) []string
 	}
 	if r.Name == "auth-api" {
 		fill("WEBHOOK_SECRET_KEY", randomB64(32))
+		// sign-api is an unbound core client that sends e-mail templates (IPAlpha Sign is a core tool).
+		if cur, ok := f.Get("SEND_TEMPLATE_UNBOUND_CLIENT_IDS"); ok {
+			if merged, changedList := addCSV(cur, "sign-api"); changedList {
+				set("SEND_TEMPLATE_UNBOUND_CLIENT_IDS", merged)
+			}
+		}
 		// An existing list is kept; only the audiences new services need are appended.
 		if cur, ok := f.Get("AUTH_RESOURCE_AUDIENCES_JSON"); ok {
 			if merged, changedList := addAudiences(cur, "ipalpha:photos", "ipalpha:documents", "ipalpha:schedule", "ipalpha:sign"); changedList {
@@ -256,8 +275,17 @@ func ensureGitignore(dir, entry string) {
 	_ = os.WriteFile(path, []byte(text+entry+"\n"), 0o644)
 }
 
+// retiredScopes are grants an internal client no longer has (system-clients.json dropped them). SeedClients
+// otherwise only ever adds scopes, so a developer's SEED_CLIENTS_JSON would keep them forever. Forms and Sign
+// became core tools: forms-api lost the prefill + webhook-delivery scopes and runs without revocation sync;
+// sign-api is no longer bound to its app, so its app-bound-only dispatch:app-channel is gone.
+var retiredScopes = map[string][]string{
+	"forms-api": {"prefill:purpose", "prefill:redeem", "prefill:read", "persons:write", "dispatch:events", "revocations:read"},
+	"sign-api":  {"dispatch:app-channel"},
+}
+
 // SeedClient is one entry of auth-api's SEED_CLIENTS_JSON. AppID binds the client to an app
-// (system-clients.json `appBound`, e.g. sign-api → app-ipalpha-sign) for app-bound-only scopes.
+// (system-clients.json `appBound`; empty today: every internal client is unbound) for app-bound-only scopes.
 type SeedClient struct {
 	ClientID  string   `json:"clientId"`
 	Secret    string   `json:"secret"`
@@ -309,6 +337,11 @@ func SeedClients(w *workspace.Workspace) error {
 	}
 	for _, c := range ours {
 		set := map[string]bool{}
+		for _, retired := range retiredScopes[c.ServiceID] {
+			if !contains(c.Scopes, retired) {
+				set[retired] = true // skipped below, unless system-clients.json grants it again
+			}
+		}
 		var scopes []string
 		for _, prev := range current {
 			if id, _ := prev["clientId"].(string); id == c.ClientID {
@@ -420,6 +453,15 @@ func WriteSuperuser(w *workspace.Workspace, name, phone string) error {
 func Superuser(w *workspace.Workspace) (string, string) {
 	e := envfile.Read(filepath.Join(w.Repo("auth-api"), ".env"))
 	return e["SUPERUSER_NAME"], e["SUPERUSER_PHONE"]
+}
+
+func contains(list []string, v string) bool {
+	for _, s := range list {
+		if s == v {
+			return true
+		}
+	}
+	return false
 }
 
 func firstNonEmpty(v ...string) string {

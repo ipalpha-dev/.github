@@ -30,6 +30,11 @@ func fakeModel(t *testing.T, notes int) *Model {
 		}
 		specs = append(specs, &run.Spec{ID: r.Name, Name: r.Label(), Kind: k, Group: r.App, Port: r.Port, URL: "http://localhost:1/"})
 	}
+	// Forms and Sign are core tools now, so no catalog repo runs as an app outside core: a fictional
+	// ministry app keeps the grouped "apps" section covered.
+	specs = append(specs,
+		&run.Spec{ID: "ministry-api", Name: "Ministry API", Kind: run.KindAPI, Group: "ministry", Port: 3990, URL: "http://localhost:1/"},
+		&run.Spec{ID: "ministry-webapp", Name: "Ministry Web", Kind: run.KindWeb, Group: "ministry", Port: 5990, URL: "http://localhost:1/"})
 	sess := &run.Session{W: &workspace.Workspace{Root: t.TempDir(), Settings: workspace.NewSettings()}, Specs: specs,
 		Plan: ports.Plan{Actual: map[string]int{}}}
 	for i := 0; i < notes; i++ {

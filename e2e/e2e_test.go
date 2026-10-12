@@ -370,9 +370,9 @@ func TestFeatureLifecycle(t *testing.T) {
 	git(t, filepath.Join(root, "core", "oikos-webapp"), "checkout", "-q", "master")
 
 	// publish --feature (inside the feature folder, no AI, no terminal).
-	appendFile(t, filepath.Join(froot, "apps", "forms", "forms-webapp", "README.md"), "change\n")
+	appendFile(t, filepath.Join(froot, "core", "forms-webapp", "README.md"), "change\n")
 	out = e.must(froot, "publish", "--dry-run")
-	if st := git(t, filepath.Join(froot, "apps", "forms", "forms-webapp"), "status", "--porcelain"); st == "" {
+	if st := git(t, filepath.Join(froot, "core", "forms-webapp"), "status", "--porcelain"); st == "" {
 		t.Fatal("dry-run committed")
 	}
 	if _, err := e.run(froot, "publish", "--feature", "hello-test", "--folder", "forms-webapp"); err == nil {
@@ -395,32 +395,32 @@ func TestFeatureLifecycle(t *testing.T) {
 		t.Fatalf("record: %s", raw)
 	}
 
-	// shared-js closure: every core API, not forms-api (an app outside core).
+	// shared-js closure: every core API (Forms and Sign are core tools), never a web app.
 	appendFile(t, filepath.Join(froot, "core", "shared-js", "README.md"), "x\n")
 	e.must(froot, "publish", "--no-wait")
 	raw = git(t, filepath.Join(e.origins, "deployment.git"), "show", "master:previews/hello-test/release.json")
 	json.Unmarshal([]byte(raw), &rec)
 	images = rec["images"].(map[string]any)
-	for _, s := range []string{"auth-api", "persons-api", "places-api", "photos-api", "schedule-api", "dispatch-api", "ai-api", "developers-api"} {
+	for _, s := range []string{"auth-api", "persons-api", "places-api", "photos-api", "schedule-api", "dispatch-api", "ai-api", "developers-api", "forms-api", "sign-api"} {
 		if images[s] == nil {
 			t.Errorf("closure misses %s", s)
 		}
 	}
-	if images["forms-api"] != nil || images["auth-webapp"] != nil {
+	if images["sign-webapp"] != nil || images["auth-webapp"] != nil {
 		t.Errorf("closure too wide: %v", images)
 	}
 
 	// Teammate pushes are never overwritten.
 	f2 := filepath.Join(root, "features", "second-one")
-	appendFile(t, filepath.Join(f2, "apps", "forms", "forms-webapp", "README.md"), "a\n")
+	appendFile(t, filepath.Join(f2, "core", "forms-webapp", "README.md"), "a\n")
 	e.must(f2, "publish", "--no-wait")
 	mate := filepath.Join(e.tmp, "mate")
 	git(t, e.tmp, "clone", "-q", "-b", "feat/second-one", filepath.Join(e.origins, "forms-webapp.git"), mate)
 	appendFile(t, filepath.Join(mate, "README.md"), "mate\n")
 	git(t, mate, "commit", "-qam", "teammate work")
 	git(t, mate, "push", "-q", "origin", "feat/second-one")
-	git(t, filepath.Join(f2, "apps", "forms", "forms-webapp"), "fetch", "-q", "origin")
-	appendFile(t, filepath.Join(f2, "apps", "forms", "forms-webapp", "README.md"), "b\n")
+	git(t, filepath.Join(f2, "core", "forms-webapp"), "fetch", "-q", "origin")
+	appendFile(t, filepath.Join(f2, "core", "forms-webapp", "README.md"), "b\n")
 	if _, err := e.run(f2, "publish", "--no-wait"); err == nil {
 		t.Fatal("publish overwrote a teammate push")
 	}
@@ -435,11 +435,11 @@ func TestFeatureLifecycle(t *testing.T) {
 	e.must(root, "feature", "extend", "hello-test", "--no-wait")
 
 	// destroy: refuses local changes and needs confirmation; keeps branches.
-	appendFile(t, filepath.Join(froot, "apps", "forms", "forms-webapp", "README.md"), "dirty\n")
+	appendFile(t, filepath.Join(froot, "core", "forms-webapp", "README.md"), "dirty\n")
 	if _, err := e.run(root, "feature", "destroy", "hello-test", "--yes", "--no-wait"); err == nil {
 		t.Fatal("destroy ignored local changes")
 	}
-	git(t, filepath.Join(froot, "apps", "forms", "forms-webapp"), "checkout", "-q", "--", "README.md")
+	git(t, filepath.Join(froot, "core", "forms-webapp"), "checkout", "-q", "--", "README.md")
 	if _, err := e.run(root, "feature", "destroy", "hello-test", "--no-wait"); err == nil {
 		t.Fatal("destroy without confirmation")
 	}
@@ -451,13 +451,13 @@ func TestFeatureLifecycle(t *testing.T) {
 	if _, err := os.Stat(froot); err == nil {
 		t.Fatal("feature folder still there")
 	}
-	if !gitOK(filepath.Join(root, "apps", "forms", "forms-webapp"), "rev-parse", "-q", "--verify", "refs/heads/feat/hello-test") {
+	if !gitOK(filepath.Join(root, "core", "forms-webapp"), "rev-parse", "-q", "--verify", "refs/heads/feat/hello-test") {
 		t.Fatal("destroy deleted the branch")
 	}
 
 	// new reuses the kept branch with its commits.
 	e.must(root, "feature", "new", "hello-test")
-	if git(t, filepath.Join(froot, "apps", "forms", "forms-webapp"), "log", "-1", "--format=%s") == "init" {
+	if git(t, filepath.Join(froot, "core", "forms-webapp"), "log", "-1", "--format=%s") == "init" {
 		t.Fatal("reused branch lost its commits")
 	}
 }

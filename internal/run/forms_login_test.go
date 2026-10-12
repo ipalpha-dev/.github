@@ -14,7 +14,7 @@ import (
 
 func TestFormsLoginUsesAssignedPortsAndKeepsLocalOverrides(t *testing.T) {
 	root := t.TempDir()
-	for _, path := range []string{"core/auth-api", "apps/forms/forms-webapp", ".ipalpha"} {
+	for _, path := range []string{"core/auth-api", "core/forms-webapp", ".ipalpha"} {
 		if err := os.MkdirAll(filepath.Join(root, path), 0o755); err != nil {
 			t.Fatal(err)
 		}

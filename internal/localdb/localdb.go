@@ -180,7 +180,8 @@ type clientDoc struct {
 // clientUpdate is the update that makes a local system client match its SEED_CLIENTS_JSON entry (nil when it
 // already does). auth-api seeding is insert-only, so without this a client that exists keeps the secret and
 // scopes of its first boot: the secret is re-hashed when it drifted, allowedScopes become exactly the entry's
-// scopes (new grants reach existing clients) and an app-bound entry's appId is set. Local database only.
+// scopes (new grants reach existing clients), an app-bound entry's appId is set and an unbound entry's stale appId
+// is removed. Local database only.
 func clientUpdate(doc clientDoc, c env.SeedClient, now time.Time) bson.M {
 	set := bson.M{}
 	update := bson.M{}
@@ -199,10 +200,17 @@ func clientUpdate(doc clientDoc, c env.SeedClient, now time.Time) bson.M {
 	if c.AppID != "" && doc.AppID != c.AppID {
 		set["appId"] = c.AppID
 	}
-	if len(set) == 0 {
+	// A client that is no longer app-bound (sign-api once Sign became a core tool) loses its stale appId.
+	unbind := c.AppID == "" && doc.AppID != ""
+	if len(set) == 0 && !unbind {
 		return nil
 	}
-	update["$set"] = set
+	if len(set) > 0 {
+		update["$set"] = set
+	}
+	if unbind {
+		update["$unset"] = bson.M{"appId": ""}
+	}
 	return update
 }
 

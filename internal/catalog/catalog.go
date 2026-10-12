@@ -18,7 +18,7 @@ const ToolingRepo = ".github"
 const DefaultRegistry = "registry.kevyn.com.br/ip-alpha/core"
 
 // Public, version-pinned development infrastructure; never a production core service.
-const CPAMCSimulatorImage = "docker.io/kevynsax/cpamc-simulator:0.1.0"
+const CPAMCSimulatorImage = "docker.io/kevynsax/cpamc-simulator:0.1.1"
 const CPAMCSimulatorClientKey = "simulator-client-key"
 const CPAMCSimulatorManagementKey = "simulator-management-key"
 
@@ -57,16 +57,18 @@ var Repos = []Repo{
 	{Name: "schedule-api", Kind: KindAPI, Port: 3013, Display: "Schedule"},
 	{Name: "notifications-api", Kind: KindAPI, Port: 3004, Display: "Notifications"},
 	{Name: "auth-api", Kind: KindAPI, Port: 3005, Display: "Auth"},
-	{Name: "forms-api", Kind: KindAPI, App: "forms", Port: 3006, Display: "Forms API"},
-	{Name: "sign-api", Kind: KindAPI, App: "sign", Port: 3014, Display: "Sign API"},
+	{Name: "forms-api", Kind: KindAPI, Port: 3006, Display: "Forms API"},
+	{Name: "sign-api", Kind: KindAPI, Port: 3014, Display: "Sign API"},
 	{Name: "ai-api", Kind: KindAPI, Port: 3008, Display: "AI"},
 	{Name: "developers-api", Kind: KindAPI, Port: 3009, Display: "Developers"},
+	{Name: "photo-services-api", Kind: KindAPI, App: "photo-services", Port: 3016, Display: "Photo Services API"},
 	{Name: "dispatch-api", Kind: KindAPI, Port: 3007, Display: "Dispatch"},
 	{Name: "auth-webapp", Kind: KindWeb, Port: 5100, Display: "Auth Web"},
-	{Name: "forms-webapp", Kind: KindWeb, App: "forms", Port: 5106, Display: "Forms Web"},
-	{Name: "sign-webapp", Kind: KindWeb, App: "sign", Port: 5113, Display: "Sign Web"},
+	{Name: "forms-webapp", Kind: KindWeb, Port: 5106, Display: "Forms Web"},
+	{Name: "sign-webapp", Kind: KindWeb, Port: 5113, Display: "Sign Web"},
 	{Name: "oikos-webapp", Kind: KindWeb, Port: 5110, Display: "Oikos Web"},
 	{Name: "developers-webapp", Kind: KindWeb, Port: 5111, Display: "Developers Web"},
+	{Name: "photo-services-webapp", Kind: KindWeb, App: "photo-services", Port: 5114, Display: "Photo Services Web"},
 	{Name: "acampa-kids-backend", Kind: KindOptional, App: "acampa-kids", Image: "backend"},
 	{Name: "acampa-kids-frontend", Kind: KindOptional, App: "acampa-kids", Image: "frontend"},
 	{Name: "acampa-kids-face-service", Kind: KindOptional, App: "acampa-kids", Image: "face"},
@@ -104,11 +106,12 @@ var NeverAutoOpen = map[string]bool{"auth-webapp": true}
 
 // WebBackend is the API a web app's Vite proxy reaches first (others are mounted at /api/<name>).
 var WebBackend = map[string]string{
-	"auth-webapp":       "auth-api",
-	"forms-webapp":      "forms-api",
-	"sign-webapp":       "sign-api",
-	"oikos-webapp":      "persons-api",
-	"developers-webapp": "developers-api",
+	"auth-webapp":           "auth-api",
+	"forms-webapp":          "forms-api",
+	"sign-webapp":           "sign-api",
+	"oikos-webapp":          "persons-api",
+	"developers-webapp":     "developers-api",
+	"photo-services-webapp": "photo-services-api",
 }
 
 // SystemClientScopes is the fallback of deployment/base/core/auth-api/system-clients.json (approved scopes only).
