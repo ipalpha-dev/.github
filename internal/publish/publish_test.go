@@ -78,7 +78,7 @@ func TestBuildContextFollowsEachDockerfile(t *testing.T) {
 		}
 	}
 	app := catalog.Repo{Name: "ministry-api", Kind: catalog.KindAPI, App: "ministry"}
-	if got := BuildContext(root, app, "/w/apps/ministry/ministry-api"); got != root {
+	if got := BuildContext(root, app, "/w/apps/ministry/ministry-api"); got != "/w/apps/ministry/ministry-api" {
 		t.Fatalf("ministry app context = %s", got)
 	}
 	optional := catalog.Repo{Name: "acampa-kids-backend", Kind: catalog.KindOptional, App: "acampa-kids"}
@@ -127,6 +127,16 @@ func TestAcampaImagesArePublishableAndPinnedInTheApp(t *testing.T) {
 		}
 		if got := AppBuildURL(r); !strings.HasSuffix(got, "/"+c[2]) {
 			t.Fatalf("build url = %s", got)
+		}
+	}
+	for _, n := range []string{"services-photo-api", "services-photo-webapp", "services-kids-api", "services-kids-webapp"} {
+		r, _ := catalog.Get(n)
+		want := "registry.kevyn.com.br/ip-alpha/apps/" + r.App + "/" + n
+		if got := ImageName(w, r); got != want {
+			t.Fatalf("%s image = %s", n, got)
+		}
+		if got := BuildContext("/w", r, "/w/"+r.Rel()); got != "/w/"+r.Rel() {
+			t.Fatalf("%s context = %s", n, got)
 		}
 	}
 	core, _ := catalog.Get("auth-api")

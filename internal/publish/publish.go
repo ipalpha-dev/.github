@@ -505,10 +505,10 @@ func NpmPublish(name, version string) error {
 const imagePlatform = "linux/amd64"
 
 // BuildContext is the folder a repository's Dockerfile is written against: core/ for core services,
-// the workspace root for ministry apps (they need core/shared-js), the repository itself for optional apps.
+// the workspace root for ministry apps (they need core/shared-js), the repository itself for optional apps and app API/web pairs.
 func BuildContext(root string, r catalog.Repo, dir string) string {
 	switch {
-	case r.Kind == catalog.KindOptional:
+	case r.Kind == catalog.KindOptional, r.App != "" && (r.Kind == catalog.KindAPI || r.Kind == catalog.KindWeb):
 		return dir
 	case r.App != "":
 		return root
@@ -522,6 +522,9 @@ func BuildContext(root string, r catalog.Repo, dir string) string {
 func ImageName(w *workspace.Workspace, r catalog.Repo) string {
 	if r.IsAppImage() {
 		return strings.TrimSuffix(w.Settings.Registry, "/core") + "/apps/" + r.App + "/" + r.Image
+	}
+	if r.App != "" && (r.Kind == catalog.KindAPI || r.Kind == catalog.KindWeb) {
+		return strings.TrimSuffix(w.Settings.Registry, "/core") + "/apps/" + r.App + "/" + r.Name
 	}
 	return w.Settings.Registry + "/" + r.Name
 }
