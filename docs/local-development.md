@@ -285,7 +285,7 @@ CORS for `http://localhost:5116` and Oikos (`5110`). Oikos' Vite proxy reads `DR
 names and `S3_*` keys from `.ipalpha/.env`. Added keys only: ai-api gets `ON_BEHALF_CALLERS=virtual-assistant`;
 dispatch-api gets `VIRTUAL_ASSISTANT_API_URL` and the two
 `EXCHANGE_ASSISTANT_*` names; auth-api gets `ipalpha:assistant` in `AUTH_RESOURCE_AUDIENCES_JSON`. The `rustfs-init`
-job creates the bucket. Web apps receive `VIRTUAL_ASSISTANT_API_URL` from `./run` (Oikos mounts `/api/virtual-assistant`).
+job creates the bucket. Since 0.2.0 it needs Redis (the shared local Redis `./run` already starts; `REDIS_URL`), and its fallback adds `ORGANIZATIONS_API_URL`/`ORGANIZATIONS_API_AUDIENCE`, `ASSISTANT_BILLING_PROJECT_ID` (a local placeholder; any non-empty string works) and `EXCHANGE_COSTS_USAGE_RECORDED`. `MAX_CALL_MINUTES` and `CALL_END_GRACE_MS` are gone (existing `.env` files just keep the unused lines). Calls need organizations-api and ai-api up, but boot never waits on a peer. The local `virtual-assistant` system client gets `ai:on-behalf` (replaces `ai:assistant`), `persons:eligibility` and `organizations:snapshot`, and persons-api's `ELIGIBILITY_CALLER_SERVICE_IDS` gains `virtual-assistant`. The assistant's behaviour is edited in Oikos (`/assistant-settings`). Web apps receive `VIRTUAL_ASSISTANT_API_URL` from `./run` (Oikos mounts `/api/virtual-assistant`).
 
 ### Services Photo desktop apps
 

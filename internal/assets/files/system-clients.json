@@ -14,6 +14,7 @@
     "documents-api": ["revocations:read", "persons:signing-fields", "persons:access-log", "projects:read"],
     "sign-api": ["revocations:read", "notifications:send-template"],
     "drive-api": ["revocations:read", "projects:read"],
+    "virtual-assistant": ["revocations:read", "persons:read", "persons:access-log", "ai:on-behalf", "persons:eligibility", "organizations:snapshot", "notifications:send"],
     "places-api": ["revocations:read", "projects:read", "organizations:snapshot"],
     "schedule-api": ["revocations:read", "projects:read", "organizations:snapshot", "places:read", "notifications:schedule-reminder", "notifications:send-template", "persons:coordination"],
     "apps-api": ["revocations:read", "apps:read"]

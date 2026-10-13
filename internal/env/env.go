@@ -289,6 +289,14 @@ func fillLocal(w *workspace.Workspace, r catalog.Repo, f *envfile.File) []string
 			}
 		}
 	}
+	if r.Name == "persons-api" {
+		// virtual-assistant checks a caller's eligibility; an existing list is kept and only extended.
+		if cur, ok := f.Get("ELIGIBILITY_CALLER_SERVICE_IDS"); ok {
+			if merged, changedList := addCSV(cur, "virtual-assistant"); changedList {
+				set("ELIGIBILITY_CALLER_SERVICE_IDS", merged)
+			}
+		}
+	}
 	if r.Name == "auth-api" {
 		fill("WEBHOOK_SECRET_KEY", randomB64(32))
 		// sign-api is an unbound core client that sends e-mail templates (IPAlpha Sign is a core tool).
@@ -365,8 +373,9 @@ func ensureGitignore(dir, entry string) {
 // became core tools: forms-api lost the prefill + webhook-delivery scopes and runs without revocation sync;
 // sign-api is no longer bound to its app, so its app-bound-only dispatch:app-channel is gone.
 var retiredScopes = map[string][]string{
-	"forms-api": {"prefill:purpose", "prefill:redeem", "prefill:read", "persons:write", "dispatch:events", "revocations:read"},
-	"sign-api":  {"dispatch:app-channel"},
+	"forms-api":         {"prefill:purpose", "prefill:redeem", "prefill:read", "persons:write", "dispatch:events", "revocations:read"},
+	"sign-api":          {"dispatch:app-channel"},
+	"virtual-assistant": {"ai:assistant"},
 }
 
 // SeedClient is one entry of auth-api's SEED_CLIENTS_JSON. AppID binds the client to an app

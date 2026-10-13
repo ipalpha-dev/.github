@@ -342,6 +342,18 @@ func TestVirtualAssistantEnvAndPeerKeys(t *testing.T) {
 	if ai["ON_BEHALF_CALLERS"] != "virtual-assistant" || ai["ASSISTANT_BILLING_PROJECT_ID"] != "" {
 		t.Fatalf("ai-api env: %v", ai)
 	}
+	for k, want := range map[string]string{"REDIS_URL": "redis://127.0.0.1:6379", "ORGANIZATIONS_API_URL": "http://127.0.0.1:3003", "ORGANIZATIONS_API_AUDIENCE": "ipalpha:organizations",
+		"EXCHANGE_COSTS_USAGE_RECORDED": "costs.usage.recorded"} {
+		if v[k] != want {
+			t.Fatalf("virtual-assistant %s = %q, want %q", k, v[k], want)
+		}
+	}
+	if v["ASSISTANT_BILLING_PROJECT_ID"] == "" || v["MAX_CALL_MINUTES"] != "" || v["CALL_END_GRACE_MS"] != "" {
+		t.Fatalf("virtual-assistant billing/removed keys: %v", v)
+	}
+	if p := envfile.Read(filepath.Join(w.Repo("persons-api"), ".env")); !strings.Contains(p["ELIGIBILITY_CALLER_SERVICE_IDS"], "virtual-assistant") {
+		t.Fatalf("persons-api eligibility callers: %v", p["ELIGIBILITY_CALLER_SERVICE_IDS"])
+	}
 	d := envfile.Read(filepath.Join(w.Repo("dispatch-api"), ".env"))
 	if d["VIRTUAL_ASSISTANT_API_URL"] != "http://127.0.0.1:3019" || d["EXCHANGE_ASSISTANT_IDENTITY_REVIEW_CHANGED"] != "virtual-assistant.identity-review.changed" {
 		t.Fatalf("dispatch-api env: %v", d)
