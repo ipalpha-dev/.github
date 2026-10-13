@@ -334,7 +334,7 @@ func TestVirtualAssistantEnvAndPeerKeys(t *testing.T) {
 	}
 	v := envfile.Read(filepath.Join(w.Repo("virtual-assistant"), ".env"))
 	if v["PORT"] != "3019" || v["TOKEN_AUDIENCE"] != "ipalpha:assistant" || v["S3_BUCKET"] != "virtual-assistant" || v["S3_ACCESS_KEY"] == "" ||
-		v["EXCHANGE_ASSISTANT_CONVERSATION_CHANGED"] != "virtual-assistant.conversation.changed" || v["WHATSAPP_APP_SECRET"] == "" || v["TWILIO_AUTH_TOKEN"] == "" ||
+		v["EXCHANGE_ASSISTANT_CONVERSATION_CHANGED"] != "virtual-assistant.conversation.changed" || v["WHATSAPP_ENABLED"] != "false" || v["TWILIO_AUTH_TOKEN"] == "" ||
 		!strings.HasSuffix(v["MONGO_URI"], "/virtual-assistant?authSource=admin") {
 		t.Fatalf("virtual-assistant env: %v", v)
 	}
