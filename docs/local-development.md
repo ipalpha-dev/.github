@@ -424,15 +424,14 @@ them when it is off (nothing is written while the workspace has not chosen):
 | --- | --- | --- |
 | `SEED_DATA` | `true` | all of the services above |
 | `IPALPHA_ENV` | `dev` (previews use `preview:<slug>` in their configmaps) | all of the services above |
-| `SEED_KEY` | 32 random bytes in hex, generated once per workspace (`.ipalpha/seed.env`), the same value everywhere | auth-api, sign-api, services-kids-api, Acampa Kids backend (not persons-api: it seeds in-process; a stale `SEED_KEY` in its `.env` is removed by setup/`./pull`) |
+| `SEED_KEY` | 32 random bytes in hex, generated once per workspace (`.ipalpha/seed.env`), the same value everywhere | auth-api, organizations-api, projects-api, schedule-api, drive-api, photos-api, sign-api, forms-api, services-kids-api, Acampa Kids backend (not persons-api: it seeds in-process; a stale `SEED_KEY` in its `.env` is removed by setup/`./pull`; not documents-api or places-api) |
 
 A service refuses to boot with `SEED_DATA=true` unless `IPALPHA_ENV` is `dev` or `preview*`; production never gets either
 key. For the Acampa Kids backend, while seeding is on, setup also generates once (same values the app's seed sends to auth-api,
 filled only where blank): `IPALPHA_CLIENT_ID` (`acampa-kids-<hex>`), `IPALPHA_CLIENT_SECRET`, `IPALPHA_SYSTEM_CLIENT_SECRET`
-(64 hex characters each), plus `IPALPHA_SYSTEM_CLIENT_ID=acampa-kids`, `IPALPHA_DEVELOPERS_API_URL` and
-`SUPER_ADMIN_PERSON_IDS=5eed0000000000000000a001` (Marina Duarte (exemplo)). Services Kids API (`SERVICES_KIDS_PROJECT_ID` may stay blank while seeding: its seed creates the `services-kids` project and keeps the id in its own `seedState`; with seed off you set it) references persons-api's sample people Ana..Gabriel (`5eed...0001`..`0007`) and needs `AUTH_API_URL`, `PROJECTS_API_URL` and optionally `PLACES_API_URL`. The first `./run` boot applies the seeds; setup
-prints the sample phones once: `+55 11 90000-0001`..`0006` (core and Services Kids, not verified) and `0011`..`0020` (Acampa Kids, verified).
-`SEED_PERSON_IDS_JSON` and `SEED_OWNER_PERSON_ID` are retired (ids are fixed `5eed...`): `./pull` removes them from your `.env`.
+(64 hex characters each), plus `IPALPHA_SYSTEM_CLIENT_ID=acampa-kids` and `IPALPHA_DEVELOPERS_API_URL`. `SUPER_ADMIN_PERSON_IDS` is no longer written: the sample people have normal generated ids, and the coordination (Marina Duarte (exemplo), +55 11 90000-0011) works through her project role. Every service that takes `SEED_KEY` finds the sample people by phone through persons-api under the seed-actor token, so its `.env` also needs `AUTH_API_URL` and `PERSONS_API_URL` (both in the env-fallback files; schedule-api also `PROJECTS_API_URL`). Services Kids API (`SERVICES_KIDS_PROJECT_ID` may stay blank while seeding: its seed creates the `services-kids` project and keeps the id in its own `seedState`; with seed off you set it) finds the sample people by phone (guardians 0041-0044, volunteers 0045-0048) and needs `AUTH_API_URL`, `PROJECTS_API_URL` and optionally `PLACES_API_URL`. The first `./run` boot applies the seeds; setup
+prints the sample phones once (all fictional, `@example.test`): core `+55 11 90000-0001` Ana and `0002` Bruno (stewards), `0003` Carla, `0005` Elisa, `0006` Fernanda (responsável), not verified; Acampa Kids `0011`..`0020` (Marina is the coordination), verified; Services Kids at Tamboré `0041`..`0048` (guardians and volunteers), verified.
+`SEED_PERSON_IDS_JSON` and `SEED_OWNER_PERSON_ID` are retired and there are no fixed ids: `./pull` removes them from your `.env`.
 The matching developer guide is `/docs/local-seeding` in the developer portal.
 
 ## `./pull`
@@ -459,6 +458,12 @@ migrated by their next `./pull`.
 | `tmux` | `on`: `./run` starts inside the workspace's tmux session (same as `./run --tmux`); off by default |
 
 ## Ports (defaults)
+
+Feature workspaces shift every port by +100·k. Blocks where any port would land on a browser-restricted port (WHATWG
+"bad ports", e.g. 6000, X11) are skipped, and busy-port replacements never pick one either: Firefox and Chrome refuse
+those ("This address is restricted"), which broke the sign-in popup. A workspace created before this fix and sitting on
+one (offset 900 gave auth-webapp 6000): set its `<service>_port` entries in `features/<slug>/.ipalpha/settings` to a free
+block (or use `ipalpha config` > Ports inside the workspace), then `./stop` and `./run`.
 
 | Service | Port | Service | Port |
 | --- | --- | --- | --- |

@@ -17,8 +17,6 @@ import (
 // Nothing is written until the choice exists, and production-bound files never get these keys (.env is local).
 
 const (
-	// SeedPersonIDs is Marina Duarte (exemplo), the coordination of the sample (a fixed 5eed... id).
-	SeedPersonIDs = "5eed0000000000000000a001"
 	// SeedEnvDev is the IPALPHA_ENV value local workspaces get (previews use preview:<slug> in their configmaps).
 	SeedEnvDev = "dev"
 )
@@ -31,10 +29,15 @@ var seedServices = map[string]bool{
 }
 
 // seedKeyServices also get SEED_KEY (the same value everywhere) while seeding is on: auth-api honors it, the others
-// use it to get a seed-actor token. persons-api seeds in-process and no longer takes it (a stale one is removed).
-var seedKeyServices = map[string]bool{"auth-api": true, "sign-api": true, "acampa-kids-backend": true, "services-kids-api": true}
+// use it to get a seed-actor token and find the sample people by their sample phone through persons-api (they also
+// need AUTH_API_URL and PERSONS_API_URL, which the env-fallback files carry). persons-api seeds in-process and takes
+// no key (a stale one is removed); documents-api and places-api seed no people and take none either.
+var seedKeyServices = map[string]bool{
+	"auth-api": true, "organizations-api": true, "projects-api": true, "schedule-api": true, "drive-api": true,
+	"photos-api": true, "sign-api": true, "forms-api": true, "acampa-kids-backend": true, "services-kids-api": true,
+}
 
-// retiredKeys are no longer read by any service: ids are fixed (5eed...) now. Removed from existing .env files.
+// retiredKeys are no longer read by any service. Removed from existing .env files.
 var retiredKeys = []string{"SEED_PERSON_IDS_JSON", "SEED_OWNER_PERSON_ID"}
 
 // applySeed writes the tool-owned seed keys of one service's .env. Returns the keys it changed.
@@ -82,7 +85,6 @@ func applySeed(w *workspace.Workspace, r catalog.Repo, f *envfile.File) []string
 		fill("IPALPHA_CLIENT_SECRET", secrets["IPALPHA_CLIENT_SECRET"])
 		fill("IPALPHA_SYSTEM_CLIENT_SECRET", secrets["IPALPHA_SYSTEM_CLIENT_SECRET"])
 		fill("IPALPHA_SYSTEM_CLIENT_ID", "acampa-kids")
-		fill("SUPER_ADMIN_PERSON_IDS", SeedPersonIDs)
 	}
 	return changed
 }

@@ -46,7 +46,7 @@ func TestSeedChoiceOwnsSeedKeys(t *testing.T) {
 		t.Fatal("SEED_PERSON_IDS_JSON not retired")
 	}
 
-	// On: SEED_DATA/IPALPHA_ENV in the seeding services, SEED_KEY (same value) in the three that take it (persons-api no longer does).
+	// On: SEED_DATA/IPALPHA_ENV in the seeding services, SEED_KEY (same value) in every service that takes it (persons-api no longer does).
 	reload("on")
 	os.WriteFile(auth, append(mustRead(t, auth), []byte("SEED_DATA=false\nIPALPHA_ENV=production\n")...), 0o600)
 	prep()
@@ -65,8 +65,24 @@ func TestSeedChoiceOwnsSeedKeys(t *testing.T) {
 	if _, ok := p["SEED_KEY"]; ok {
 		t.Fatal("persons-api must not get SEED_KEY (and a stale one is removed)")
 	}
-	if _, ok := f["SEED_KEY"]; ok && f["SEED_KEY"] != "" {
-		t.Fatal("forms-api must not get SEED_KEY")
+	if f["SEED_KEY"] != a["SEED_KEY"] {
+		t.Fatalf("forms-api must share SEED_KEY: %q", f["SEED_KEY"])
+	}
+	// Every service that looks the sample people up through persons-api gets the shared key and the URLs it needs.
+	for _, name := range []string{"organizations-api", "projects-api", "schedule-api", "drive-api", "photos-api", "sign-api"} {
+		os.MkdirAll(w.Repo(name), 0o755)
+	}
+	prep()
+	for _, name := range []string{"organizations-api", "projects-api", "schedule-api", "drive-api", "photos-api", "sign-api", "forms-api"} {
+		v := envfile.Read(filepath.Join(w.Repo(name), ".env"))
+		if v["SEED_KEY"] != a["SEED_KEY"] || v["AUTH_API_URL"] == "" || v["PERSONS_API_URL"] == "" {
+			t.Fatalf("%s: SEED_KEY/AUTH_API_URL/PERSONS_API_URL: %q %q %q", name, v["SEED_KEY"], v["AUTH_API_URL"], v["PERSONS_API_URL"])
+		}
+	}
+	for _, name := range []string{"documents-api", "places-api"} {
+		if v := envfile.Read(filepath.Join(w.Repo(name), ".env")); v["SEED_KEY"] != "" {
+			t.Fatalf("%s must not get SEED_KEY", name)
+		}
 	}
 	if n["SEED_DATA"] != "" {
 		t.Fatal("notifications-api does not seed")
@@ -75,7 +91,7 @@ func TestSeedChoiceOwnsSeedKeys(t *testing.T) {
 		t.Fatalf("IPALPHA_CLIENT_ID not chosen by setup: %q", ap["IPALPHA_CLIENT_ID"])
 	}
 	if len(ap["IPALPHA_CLIENT_SECRET"]) < 32 || len(ap["IPALPHA_SYSTEM_CLIENT_SECRET"]) < 32 || ap["IPALPHA_CLIENT_SECRET"] == ap["IPALPHA_SYSTEM_CLIENT_SECRET"] ||
-		ap["IPALPHA_SYSTEM_CLIENT_ID"] != "acampa-kids" || ap["SUPER_ADMIN_PERSON_IDS"] != "5eed0000000000000000a001" ||
+		ap["IPALPHA_SYSTEM_CLIENT_ID"] != "acampa-kids" || ap["SUPER_ADMIN_PERSON_IDS"] != "" ||
 		ap["IPALPHA_DEVELOPERS_API_URL"] != "http://127.0.0.1:3009" || ap["IPALPHA_ENTRY_POINT"] != "login" {
 		t.Fatalf("acampa seed registration values: %v", ap)
 	}
