@@ -3,6 +3,8 @@
 package deps
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"os"
@@ -26,9 +28,63 @@ type Task struct {
 	Action string // install | build
 }
 
-// Plan lists what must run, in phases.
+// StampPath is where the shared-js build stamp of a workspace lives.
+func StampPath(w *workspace.Workspace) string {
+	return filepath.Join(w.StateDir(), "shared-js.stamp")
+}
+
+// SharedStamp identifies the shared-js sources: its git HEAD plus a hash of uncommitted changes.
+// Empty when shared-js is absent or not a git checkout.
+func SharedStamp(w *workspace.Workspace) string {
+	dir := w.Repo("shared-js")
+	if !exists(filepath.Join(dir, "package.json")) {
+		return ""
+	}
+	head, err := sys.Git(dir, "rev-parse", "HEAD")
+	if err != nil {
+		return ""
+	}
+	dirty, _ := sys.Git(dir, "status", "--porcelain", "--", "src", "package.json", "package-lock.json")
+	if dirty == "" {
+		return head
+	}
+	diff, _ := sys.Git(dir, "diff", "HEAD", "--", "src", "package.json", "package-lock.json")
+	sum := sha256.Sum256([]byte(dirty + "\n" + diff))
+	return head + "+" + hex.EncodeToString(sum[:6])
+}
+
+// SharedStale reports that shared-js moved since the last build and reinstall of this workspace.
+func SharedStale(w *workspace.Workspace) bool {
+	cur := SharedStamp(w)
+	if cur == "" {
+		return false
+	}
+	old, _ := os.ReadFile(StampPath(w))
+	return strings.TrimSpace(string(old)) != cur
+}
+
+func writeStamp(w *workspace.Workspace, stamp string) {
+	if stamp == "" {
+		return
+	}
+	_ = os.MkdirAll(filepath.Dir(StampPath(w)), 0o755)
+	_ = os.WriteFile(StampPath(w), []byte(stamp+"\n"), 0o644)
+}
+
+// SyncShared rebuilds shared-js and reinstalls every consumer's copy, only when shared-js moved since the
+// last stamp. It is a no-op otherwise, so ./pull and ./feature rebase can call it every time.
+func SyncShared(w *workspace.Workspace, progress func(string)) error {
+	if !SharedStale(w) {
+		return nil
+	}
+	return Run(w, progress)
+}
+
+// Plan lists what must run, in phases. When shared-js moved (SharedStale), it is rebuilt and every
+// consumer reinstalls so none keeps a stale copy of its dist.
 func Plan(w *workspace.Workspace) [][]Task {
 	var libsInstall, libsBuild, rest []Task
+	stale := SharedStale(w)
 	for _, r := range w.Present(catalog.KindLibrary) {
 		dir := r.Path(w.Root)
 		if !exists(filepath.Join(dir, "package.json")) {
@@ -37,13 +93,13 @@ func Plan(w *workspace.Workspace) [][]Task {
 		if NeedsInstall(dir) {
 			libsInstall = append(libsInstall, Task{r, dir, "install"})
 		}
-		if NeedsBuild(dir) {
+		if NeedsBuild(dir) || (stale && r.Name == "shared-js") {
 			libsBuild = append(libsBuild, Task{r, dir, "build"})
 		}
 	}
 	for _, r := range w.PresentRuns() {
 		dir := r.Path(w.Root)
-		if exists(filepath.Join(dir, "package.json")) && NeedsInstall(dir) {
+		if exists(filepath.Join(dir, "package.json")) && (NeedsInstall(dir) || (stale && r.Runtime != "bun" && hasSharedCopy(dir))) {
 			rest = append(rest, Task{r, dir, "install"})
 		}
 	}
@@ -54,6 +110,12 @@ func Plan(w *workspace.Workspace) [][]Task {
 		}
 	}
 	return phases
+}
+
+// hasSharedCopy: the consumer depends on a copied @ipalpha/shared-js (not a symlink).
+func hasSharedCopy(dir string) bool {
+	st, err := os.Lstat(filepath.Join(dir, "node_modules", "@ipalpha", "shared-js"))
+	return err == nil && st.Mode()&os.ModeSymlink == 0
 }
 
 func exists(p string) bool { _, err := os.Stat(p); return err == nil }
@@ -123,6 +185,7 @@ func Run(w *workspace.Workspace, progress func(string)) error {
 	if jobs < 2 {
 		jobs = 2
 	}
+	stamp := SharedStamp(w)
 	logDir := filepath.Join(w.LogsDir(), "npm")
 	_ = os.MkdirAll(logDir, 0o755)
 	for _, phase := range Plan(w) {
@@ -131,6 +194,7 @@ func Run(w *workspace.Workspace, progress func(string)) error {
 		}
 	}
 	RefreshSharedCopies(w, progress)
+	writeStamp(w, stamp)
 	return nil
 }
 

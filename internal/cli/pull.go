@@ -16,6 +16,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/ipalpha-dev/tooling/internal/catalog"
+	"github.com/ipalpha-dev/tooling/internal/deps"
 	"github.com/ipalpha-dev/tooling/internal/env"
 	"github.com/ipalpha-dev/tooling/internal/i18n"
 	"github.com/ipalpha-dev/tooling/internal/materialize"
@@ -94,6 +95,9 @@ func pull(w *workspace.Workspace) error {
 	}
 	if err := materialize.Write(w, self()); err != nil {
 		return ui.Wrap(i18n.T("setup_files"), err)
+	}
+	if err := deps.SyncShared(w, func(s string) { ui.Raw("%s", s) }); err != nil {
+		problems = append(problems, err.Error())
 	}
 	ui.Done(i18n.T("pull_done"))
 	if len(problems) > 0 {

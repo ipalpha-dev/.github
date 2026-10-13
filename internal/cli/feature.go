@@ -5,6 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/ipalpha-dev/tooling/internal/deps"
 	"github.com/ipalpha-dev/tooling/internal/feature"
 	"github.com/ipalpha-dev/tooling/internal/i18n"
 	"github.com/ipalpha-dev/tooling/internal/infra"
@@ -134,7 +135,11 @@ func featureCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return feature.Rebase(w, slug)
+			if err := feature.Rebase(w, slug); err != nil {
+				return err
+			}
+			// shared-js may have moved with the rebase: rebuild and reinstall only then.
+			return deps.SyncShared(w, func(s string) { ui.Raw("%s", s) })
 		},
 	}
 	destroyCmd := &cobra.Command{

@@ -111,7 +111,10 @@ Non-interactive (CI): `ipalpha setup <folder> --yes` with `IPALPHA_SUPERUSER_PHO
 3. Infra containers (MongoDB, Redis, RabbitMQ + UI, Mailpit, RustFS, cpamc simulator) up and healthy (`docker compose --wait`),
    then the `photos`, `church-email-images` and `documents` buckets are created in RustFS when missing (one-shot
    `rustfs-init`, safe to repeat).
-4. `.env` completion, npm installs (shared-js built first, consumers' copies refreshed).
+4. `.env` completion, npm installs (shared-js built first, consumers' copies refreshed). A build stamp
+   (`.ipalpha/.state/shared-js.stamp`: shared-js git HEAD plus a hash of uncommitted changes) records what was built; when
+   shared-js moved, `./run`, `./pull` and `./feature rebase` rebuild it and reinstall every consumer's copied
+   `file:../shared-js` (so no service runs a stale dist). Unchanged stamp: nothing runs.
 5. auth-api signing keys, then the **local** auth database is reconciled: drifted client secrets, `allowedScopes`
    (exactly the `SEED_CLIENTS_JSON` entry, so new grants reach clients auth-api seeded earlier), the `appId` of
    app-bound clients of the local services (removed from a client that is no longer bound, e.g. sign-api) and the `localhost` origins/callbacks of the built-in apps (so sign-in keeps working when a web
