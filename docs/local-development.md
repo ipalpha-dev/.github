@@ -157,7 +157,9 @@ stay in memory and are never persisted on the device. Guests forms never invoke 
 `forms.person.requested`. Image redo replaces its MongoDB slot, max 700,000 bytes of compressed WebP.
 
 Remembered pages start (web apps) and open once their server answers. Default: Auth Web (starts, never gets
-a tab — it is the sign-in popup), Oikos, Mailpit. Starting/opening a page in the panel remembers it, `x`
+a tab — it is the sign-in popup), Oikos, Mailpit. Mailpit (it has the sign-in codes) always opens on a `./run`
+that opens pages, whatever `browser_apps` holds, even with no other app chosen; `x` on it does not forget it and
+`./ipalpha apps` does not list it. Starting/opening a page in the panel remembers it, `x`
 forgets it. Outside the panel: `./ipalpha apps` (menu), `./run apps set oikos-webapp mailpit`,
 `./run apps defaults`. `IPALPHA_OPEN_BROWSERS=0` or `--no-browser` skips opening once.
 

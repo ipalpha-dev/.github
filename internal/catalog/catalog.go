@@ -131,6 +131,10 @@ var DefaultBrowserApps = []string{"auth-webapp", "oikos-webapp", "sign-webapp", 
 // NeverAutoOpen pages start but never get their own tab (auth is a popup the other apps open).
 var NeverAutoOpen = map[string]bool{"auth-webapp": true}
 
+// AlwaysAutoOpen pages open on every ./run that opens pages, whatever browser_apps holds (Mailpit has the sign-in
+// codes). NeverAutoOpen still wins.
+var AlwaysAutoOpen = map[string]bool{"mailpit": true}
+
 // WebBackend is the API a web app's Vite proxy reaches first (others are mounted at /api/<name>).
 var WebBackend = map[string]string{
 	"auth-webapp":           "auth-api",

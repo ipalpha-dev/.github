@@ -315,7 +315,6 @@ func appsCmd() *cobra.Command {
 			for _, r := range catalog.Webs() {
 				opts = append(opts, ui.Option{Value: r.Name, Label: r.Label(), Hint: fmt.Sprintf("http://localhost:%d", w.Settings.Port(r.Name))})
 			}
-			opts = append(opts, ui.Option{Value: "mailpit", Label: "Mailpit", Hint: i18n.T("apps_mailpit_hint")})
 			opts = append(opts, ui.Option{Value: "rabbitmq-mgmt", Label: "RabbitMQ UI", Hint: fmt.Sprintf("http://localhost:%d", w.Settings.Port("rabbitmq-mgmt"))})
 			sel, err := ui.MultiSelect(i18n.T("apps_choose"), i18n.T("apps_choose_desc"), opts, w.Settings.Browsers())
 			if err != nil {

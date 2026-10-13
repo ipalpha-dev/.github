@@ -89,6 +89,14 @@ func (c *Controller) watchInfra() {
 	}
 }
 
+// shouldOpen reports whether ./run opens a row's page: always-open pages, or the remembered ones.
+func (c *Controller) shouldOpen(sp *Spec) bool {
+	if sp.URL == "" || catalog.NeverAutoOpen[sp.ID] {
+		return false
+	}
+	return catalog.AlwaysAutoOpen[sp.ID] || c.S.W.Settings.BrowserSelected(sp.Browser())
+}
+
 // openRemembered opens each remembered page once its server answers (at most two minutes).
 func (c *Controller) openRemembered() {
 	deadline := time.Now().Add(2 * time.Minute)
@@ -96,7 +104,7 @@ func (c *Controller) openRemembered() {
 	for time.Now().Before(deadline) {
 		pending := 0
 		for _, p := range c.Procs {
-			if p.Spec.URL == "" || catalog.NeverAutoOpen[p.Spec.ID] || !c.S.W.Settings.BrowserSelected(p.Spec.Browser()) {
+			if !c.shouldOpen(p.Spec) {
 				continue
 			}
 			c.mu.Lock()
@@ -207,6 +215,9 @@ func (c *Controller) Restart(p *Proc) string {
 // StopRemember stops a row and forgets a web app/page for the next ./run.
 func (c *Controller) StopRemember(p *Proc) string {
 	if p.Spec.Kind == KindInfra {
+		if catalog.AlwaysAutoOpen[p.Spec.ID] {
+			return i18n.T("panel_always_opens", p.Spec.Name)
+		}
 		if p.Spec.URL != "" {
 			c.remember(p.Spec.Browser(), false)
 			return i18n.T("panel_page_forgotten", p.Spec.Name)
