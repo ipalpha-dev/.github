@@ -281,7 +281,7 @@ func (c *Controller) movePort(p *Proc) string {
 	for _, q := range c.Procs {
 		taken[q.Spec.Port] = true
 	}
-	np, err := sys.FreePort(old+1, func(x int) bool { return taken[x] || catalog.IsDefaultPort(x) })
+	np, err := sys.FreePort(old+1, func(x int) bool { return taken[x] || catalog.IsDefaultPort(x) || catalog.BrowserRestrictedPort(x) })
 	if err != nil {
 		return err.Error()
 	}

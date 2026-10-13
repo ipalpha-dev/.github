@@ -417,11 +417,25 @@ func excludeEnv(dir string) {
 	_ = os.WriteFile(path, []byte(text+".env\n"), 0o644)
 }
 
-// portOffset is the first +100·k block whose ports no other workspace recorded.
+// offsetBlocked reports whether any catalog port (APIs, web apps and infra) lands on a browser-restricted port once
+// shifted by off. Such a block is skipped: the browser would refuse to open that service.
+func offsetBlocked(off int) bool {
+	for _, p := range catalog.DefaultPorts() {
+		if catalog.BrowserRestrictedPort(p + off) {
+			return true
+		}
+	}
+	return false
+}
+
+// portOffset is the first +100·k block whose ports no other workspace recorded and that no browser refuses.
 func portOffset(main string) (int, error) {
 	used := workspace.UsedPorts(main)
 	for k := 1; k <= 60; k++ {
 		off := k * 100
+		if offsetBlocked(off) {
+			continue
+		}
 		ok := true
 		for _, key := range catalog.PortKeys() {
 			if used[catalog.DefaultPorts()[key]+off] {

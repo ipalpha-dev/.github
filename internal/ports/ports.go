@@ -75,7 +75,7 @@ func Resolve(preferred map[string]int, keys []string, probe Probe) Plan {
 		}
 		cand := p + 1
 		for ; cand < 65535; cand++ {
-			if taken[cand] || reserved[cand] || catalog.IsDefaultPort(cand) {
+			if taken[cand] || reserved[cand] || catalog.IsDefaultPort(cand) || catalog.BrowserRestrictedPort(cand) {
 				continue
 			}
 			if !probe.Busy(cand) {
