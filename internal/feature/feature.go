@@ -817,6 +817,17 @@ func same(a, b string) bool {
 	return err1 == nil && err2 == nil && os.SameFile(sa, sb)
 }
 
+// rebaseOnto puts the checked-out branch on top of nb. It rebases from the real merge-base with nb, not from the
+// stored base commit: a branch with nothing beyond nb fast-forwards, a branch already containing nb is left
+// alone, and commits whose patch is already in nb are skipped. A failed rebase is aborted, leaving none in progress.
+func rebaseOnto(dir, nb string) sys.Result {
+	res := sys.Cmd{Name: "git", Args: []string{"-C", dir, "rebase", "-q", nb}}.Run()
+	if res.Err != nil {
+		_, _ = sys.Git(dir, "rebase", "--abort")
+	}
+	return res
+}
+
 // Rebase moves the feature onto the local default-branch tip of every repository.
 func Rebase(w *workspace.Workspace, slug string) error {
 	main := mainOf(w)
@@ -845,10 +856,9 @@ func Rebase(w *workspace.Workspace, slug string) error {
 			continue
 		}
 		_, _ = sys.Git(dir, "fetch", "-q", "origin")
-		if res := (sys.Cmd{Name: "git", Args: []string{"-C", dir, "rebase", "-q", "--onto", nb, old}}).Run(); res.Err != nil {
-			_, _ = sys.Git(dir, "rebase", "--abort")
+		if res := rebaseOnto(dir, nb); res.Err != nil {
 			return &ui.Problem{Step: step, Cause: i18n.T("feature_rebase_conflict", r.Name), Tail: ui.Tail(res.Output, 6),
-				Fix: []string{fmt.Sprintf("git -C %s rebase --onto %s %s", dir, nb, old)}}
+				Fix: []string{fmt.Sprintf("git -C %s rebase %s", dir, nb)}}
 		}
 		head, _ := sys.Git(dir, "rev-parse", "HEAD")
 		reposMap[r.Name]["baseCommit"] = nb
