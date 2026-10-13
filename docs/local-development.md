@@ -282,8 +282,8 @@ CORS for `http://localhost:5116` and Oikos (`5110`). Oikos' Vite proxy reads `DR
 `core/virtual-assistant` (port **3019**, MongoDB `virtual-assistant`, audience `ipalpha:assistant`, RustFS bucket
 `virtual-assistant`; the design's 3018 was already Drive's). The repo has an origin (`ipalpha-dev/virtual-assistant`), so `./pull` and `./feature` clone and fetch it. Locally it listens on **3019**; in the cluster it stays on 3018. WhatsApp is off unless `WHATSAPP_ENABLED=true` (`./pull` only adds the missing `WHATSAPP_ENABLED=false`, never overwriting your value); the Meta `WHATSAPP_*` vars are required only then, and Twilio voice works independently. Its
 `.env` fallback holds dummy WhatsApp/Twilio keys (nothing reaches a provider locally), the `EXCHANGE_ASSISTANT_*`
-names and `S3_*` keys from `.ipalpha/.env`. Added keys only: ai-api gets `ASSISTANT_CALLERS=virtual-assistant` and
-`ASSISTANT_BILLING_PROJECT_ID` (a local placeholder id); dispatch-api gets `VIRTUAL_ASSISTANT_API_URL` and the two
+names and `S3_*` keys from `.ipalpha/.env`. Added keys only: ai-api gets `ON_BEHALF_CALLERS=virtual-assistant`;
+dispatch-api gets `VIRTUAL_ASSISTANT_API_URL` and the two
 `EXCHANGE_ASSISTANT_*` names; auth-api gets `ipalpha:assistant` in `AUTH_RESOURCE_AUDIENCES_JSON`. The `rustfs-init`
 job creates the bucket. Web apps receive `VIRTUAL_ASSISTANT_API_URL` from `./run` (Oikos mounts `/api/virtual-assistant`).
 

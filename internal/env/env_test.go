@@ -339,7 +339,7 @@ func TestVirtualAssistantEnvAndPeerKeys(t *testing.T) {
 		t.Fatalf("virtual-assistant env: %v", v)
 	}
 	ai := envfile.Read(filepath.Join(w.Repo("ai-api"), ".env"))
-	if ai["ASSISTANT_CALLERS"] != "virtual-assistant" || ai["ASSISTANT_BILLING_PROJECT_ID"] == "" {
+	if ai["ON_BEHALF_CALLERS"] != "virtual-assistant" || ai["ASSISTANT_BILLING_PROJECT_ID"] != "" {
 		t.Fatalf("ai-api env: %v", ai)
 	}
 	d := envfile.Read(filepath.Join(w.Repo("dispatch-api"), ".env"))
