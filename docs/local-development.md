@@ -238,6 +238,10 @@ are kept). Acampa Kids' backend is an `./run` process (see "Acampa Kids" below);
 Oikos reaches photos-api at `/api/photos` through its Vite proxy; `./run` hands it `PHOTOS_API_URL` for the port of
 the run, like every other API.
 
+### Local developers-api AI (auto-translation)
+
+developers-api needs `AI_API_URL` (ai-api, port 3008), `AI_API_AUDIENCE=ipalpha:ai` and `AI_BILLING_PROJECT_ID=ipalpha-developers` (required at boot; `TRANSLATE_DAILY_CAP` is optional, default 200). `./pull` and `./feature` only add the missing keys, never overwriting yours. Its local system client gets `ai:invoke`, and ai-api's `AI_INVOKE_CALLER_SERVICE_IDS` gains `developers-api` (an existing list is only extended). Without them `/translate` answers 503 `aiUnavailable`.
+
 ### Local app features and directory (apps-api)
 
 apps-api (port 3015, MongoDB `apps`, audience `ipalpha:apps`) owns per-app features, skills, directory listings, links

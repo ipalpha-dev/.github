@@ -297,6 +297,14 @@ func fillLocal(w *workspace.Workspace, r catalog.Repo, f *envfile.File) []string
 			}
 		}
 	}
+	if r.Name == "ai-api" {
+		// developers-api calls POST /internal/complete (auto-translation); an existing list is kept and only extended.
+		if cur, ok := f.Get("AI_INVOKE_CALLER_SERVICE_IDS"); ok {
+			if merged, changedList := addCSV(cur, "developers-api"); changedList {
+				set("AI_INVOKE_CALLER_SERVICE_IDS", merged)
+			}
+		}
+	}
 	if r.Name == "auth-api" {
 		fill("WEBHOOK_SECRET_KEY", randomB64(32))
 		// sign-api is an unbound core client that sends e-mail templates (IPAlpha Sign is a core tool).
