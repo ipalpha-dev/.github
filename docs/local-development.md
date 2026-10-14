@@ -242,6 +242,10 @@ the run, like every other API.
 
 developers-api needs `AI_API_URL` (ai-api, port 3008), `AI_API_AUDIENCE=ipalpha:ai` and `AI_BILLING_PROJECT_ID=ipalpha-developers` (required at boot; `TRANSLATE_DAILY_CAP` is optional, default 200). `./pull` and `./feature` only add the missing keys, never overwriting yours. Its local system client gets `ai:invoke`, and ai-api's `AI_INVOKE_CALLER_SERVICE_IDS` gains `developers-api` (an existing list is only extended). Without them `/translate` answers 503 `aiUnavailable`.
 
+### Local developers-api link check
+
+developers-api checks the links of external apps daily (`POST /internal/link-check/run`). Locally nothing schedules it and there is no tool command: trigger it by hand. `NOTIFICATIONS_API_URL` (notifications-api, port 3004) is optional; `./run` supplies it, and `./pull` / `./feature` only add it when missing. Without it the run reports `emailsSkipped:true` (no warning e-mails). Setup seeds the client `developers-link-check` (scope `developers:link-check` on `ipalpha:developers`, fixed development secret `local-dev-link-check-secret-not-for-production`) and gives the `developers-api` client `apps:link-check` and `notifications:send-template`. The README of developers-api has the `curl`: token from `/oauth/token` (client credentials, `resource=ipalpha:developers`), then `POST /internal/link-check/run`.
+
 ### Local app features and directory (apps-api)
 
 apps-api (port 3015, MongoDB `apps`, audience `ipalpha:apps`) owns per-app features, skills, directory listings, links

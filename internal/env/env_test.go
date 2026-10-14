@@ -143,6 +143,32 @@ func TestRetiredScopesAndAppBindingDropped(t *testing.T) {
 	}
 }
 
+// developers-api's daily link check: its client gains the two peer scopes and the CronJob client is seeded locally.
+func TestLinkCheckClientSeeded(t *testing.T) {
+	w := ws(t)
+	auth := filepath.Join(w.Repo("auth-api"), ".env")
+	os.WriteFile(auth, []byte("SEED_CLIENTS_JSON=''\n"), 0o600)
+	os.MkdirAll(w.Repo("developers-api"), 0o755)
+	os.WriteFile(filepath.Join(w.Repo("developers-api"), ".env"), []byte("AUTH_CLIENT_ID=developers-api\nAUTH_CLIENT_SECRET=developers-secret-long\n"), 0o600)
+	if err := SeedClients(w); err != nil {
+		t.Fatal(err)
+	}
+	var clients []SeedClient
+	json.Unmarshal([]byte(envfile.Read(auth)["SEED_CLIENTS_JSON"]), &clients)
+	byID := map[string]SeedClient{}
+	for _, c := range clients {
+		byID[c.ClientID] = c
+	}
+	dev := strings.Join(byID["developers-api"].Scopes, ",")
+	if !strings.Contains(dev, "apps:link-check") || !strings.Contains(dev, "notifications:send-template") {
+		t.Fatalf("developers-api scopes: %s", dev)
+	}
+	lc := byID["developers-link-check"]
+	if strings.Join(lc.Scopes, ",") != "developers:link-check" || lc.AppID != "" || len(lc.Secret) < 16 {
+		t.Fatalf("link-check client: %+v", lc)
+	}
+}
+
 func TestOperatorClientsKept(t *testing.T) {
 	w := ws(t)
 	auth := filepath.Join(w.Repo("auth-api"), ".env")

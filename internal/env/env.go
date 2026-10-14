@@ -392,6 +392,11 @@ var retiredScopes = map[string][]string{
 	"virtual-assistant": {"ai:assistant"},
 }
 
+const (
+	linkCheckClientID    = "developers-link-check"
+	linkCheckLocalSecret = "local-dev-link-check-secret-not-for-production"
+)
+
 // SeedClient is one entry of auth-api's SEED_CLIENTS_JSON. AppID binds the client to an app
 // (system-clients.json `appBound`; empty today: every internal client is unbound) for app-bound-only scopes.
 type SeedClient struct {
@@ -426,6 +431,17 @@ func SeedClients(w *workspace.Workspace) error {
 			scopes = []string{}
 		}
 		ours = append(ours, SeedClient{ClientID: e["AUTH_CLIENT_ID"], Secret: e["AUTH_CLIENT_SECRET"], ServiceID: r.Name, AppID: bound[r.Name], Scopes: scopes})
+	}
+	// developers-link-check has no repo of its own: it is the client of the daily link check that developers-api
+	// serves (POST /internal/link-check/run). Locally it is seeded with a fixed development secret so the
+	// documented manual curl works; production creates it by hand.
+	for _, o := range ours {
+		if o.ServiceID == "developers-api" {
+			if scopes, ok := approved[linkCheckClientID]; ok {
+				ours = append(ours, SeedClient{ClientID: linkCheckClientID, Secret: linkCheckLocalSecret, ServiceID: linkCheckClientID, Scopes: scopes})
+			}
+			break
+		}
 	}
 	var current []map[string]any
 	if raw, _ := auth.Get("SEED_CLIENTS_JSON"); strings.TrimSpace(raw) != "" {
