@@ -304,6 +304,12 @@ func fillLocal(w *workspace.Workspace, r catalog.Repo, f *envfile.File) []string
 				set("AI_INVOKE_CALLER_SERVICE_IDS", merged)
 			}
 		}
+		// documents-api reads scanned agreements through POST /internal/vision; same rule.
+		if cur, ok := f.Get("AI_VISION_CALLER_SERVICE_IDS"); ok {
+			if merged, changedList := addCSV(cur, "documents-api"); changedList {
+				set("AI_VISION_CALLER_SERVICE_IDS", merged)
+			}
+		}
 	}
 	if r.Name == "auth-api" {
 		fill("WEBHOOK_SECRET_KEY", randomB64(32))

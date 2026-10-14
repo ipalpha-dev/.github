@@ -256,6 +256,13 @@ consent). `./run` starts it with the other APIs and hands every consumer `DOCUME
 at `/api/documents`. persons-api verifies the consent version a client sends with a live call to it, so
 consent writes answer 503 while documents-api is down.
 
+Scanned agreements: documents-api also needs `AI_API_URL` (ai-api, port 3008) and `AI_API_AUDIENCE=ipalpha:ai`
+(required at boot), plus an optional `AI_BILLING_PROJECT_ID` (empty: scanned uploads answer 503 `scanNotConfigured`
+unless a project template is used). Its local system client gets `ai:vision`, and ai-api's
+`AI_VISION_CALLER_SERVICE_IDS` gains `documents-api` (an existing list is only extended; `AI_VISION_MODEL`,
+`AI_VISION_MAX_*`, `AI_VISION_TIMEOUT_MS`, `AI_VISION_RATE_PER_MINUTE` are optional). Rendering PDF scans needs
+`pdftoppm` (poppler-utils); jpg/png scans work without it.
+
 Env added for this: persons-api gets the `EXCHANGE_PERSON_PHOTO_*` / `EXCHANGE_PERSON_CONSENT_CHANGED`
 exchanges, `DOCUMENTS_API_URL`, `DOCUMENTS_API_AUDIENCE`, `MEMBERSHIP_TERM_DOCUMENT_SLUG` and
 `FACE_RECOGNITION_DOCUMENT_SLUG`; photos-api gets `TOKEN_AUDIENCE=ipalpha:photos`, `PERSONS_API_URL` /
