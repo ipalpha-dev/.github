@@ -12,7 +12,7 @@
     "developers-api": ["revocations:read", "apps:provision", "apps:read", "projects:provision", "persons:eligibility", "app-features:provision", "ai:invoke", "apps:suspend", "notifications:send-template"],
     "developers-link-check": ["developers:link-check"],
     "photos-api": ["revocations:read", "projects:read", "persons:links", "persons:consents", "persons:face-photos", "persons:access-log", "documents:read", "schedule:read"],
-    "documents-api": ["revocations:read", "persons:signing-fields", "persons:access-log", "projects:read", "ai:vision"],
+    "documents-api": ["revocations:read", "persons:signing-fields", "persons:access-log", "projects:read", "ai:vision", "apps:read"],
     "sign-api": ["revocations:read", "notifications:send-template"],
     "drive-api": ["revocations:read", "projects:read"],
     "virtual-assistant": ["revocations:read", "persons:read", "persons:access-log", "ai:on-behalf", "persons:eligibility", "organizations:snapshot", "notifications:send"],

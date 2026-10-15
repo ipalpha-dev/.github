@@ -267,6 +267,11 @@ unless a project template is used). Its local system client gets `ai:vision`, an
 `AI_VISION_MAX_*`, `AI_VISION_TIMEOUT_MS`, `AI_VISION_RATE_PER_MINUTE` are optional). Rendering PDF scans needs
 `pdftoppm` (poppler-utils); jpg/png scans work without it.
 
+App category: documents-api reads it from auth-api `GET /internal/apps/:appId/policy` (church apps may sign their people's own
+required documents), so its local system client also gets `apps:read` (no new env: `AUTH_API_URL` / `AUTH_API_AUDIENCE` exist).
+`./run` adds the scope to the client in `SEED_CLIENTS_JSON`, but auth-api seeds insert-if-absent: a local auth database already seeded
+keeps the old client. Recreate the local auth database, or add `apps:read` to the `documents-api` client in Oikos -> Clientes.
+
 Env added for this: persons-api gets the `EXCHANGE_PERSON_PHOTO_*` / `EXCHANGE_PERSON_CONSENT_CHANGED`
 exchanges, `DOCUMENTS_API_URL`, `DOCUMENTS_API_AUDIENCE`, `MEMBERSHIP_TERM_DOCUMENT_SLUG` and
 `FACE_RECOGNITION_DOCUMENT_SLUG`; photos-api gets `TOKEN_AUDIENCE=ipalpha:photos`, `PERSONS_API_URL` /
