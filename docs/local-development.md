@@ -119,6 +119,14 @@ Non-interactive (CI): `ipalpha setup <folder> --yes` with `IPALPHA_SUPERUSER_PHO
    (exactly the `SEED_CLIENTS_JSON` entry, so new grants reach clients auth-api seeded earlier), the `appId` of
    app-bound clients of the local services (removed from a client that is no longer bound, e.g. sign-api) and the `localhost` origins/callbacks of the built-in apps (so sign-in keeps working when a web
    port moved). Clients of outside apps (services with no entry in `system-clients.json`, e.g. Services Kids, registered through the portal) only get their secret synced: their `appId` and scopes (`login:relay`...) are never rewritten. Only loopback MongoDB; non-loopback entries are never touched.
+   **In a feature workspace** (`features/<slug>/`, own Mongo) the same step also **clones the outside-app registrations**
+   from the main workspace's auth database: every non-builtin `apps` document (entry points, approved audiences, mail
+   client keys), the clients bound to those apps (e.g. Services Kids' `login:relay` client) and their church allowlist
+   rows. Loopback origins/redirect URIs move from the base ports to the feature's planned ports for this run. It is
+   idempotent and additive: a record the feature already has is never overwritten; an existing client only gains an
+   `appId`/`entryPointId` it lacks and scopes it does not have. Hashes are copied as stored, never printed. Local only
+   (both databases must be loopback MongoDB). `./feature new` has no database yet, so the clone runs on the feature's
+   first `./run` (and every later one); the base stack must be running, else the run notes that nothing was cloned.
 6. Every API and the remembered web apps start at once — nothing waits on a peer. Each API's `GET /ready`
    drives its dot: ● ready, ◐ starting/not ready, ✖ failed, ○ stopped.
 
@@ -535,7 +543,7 @@ missing keys and filling blanks: `MONGO_URI`, `WEB_ORIGINS` /
 `PUBLIC_WEB_URL` (`http://localhost:5114`), `AUTH_API_URL`, `AUTH_TOKEN_ISSUER`, `PROJECTS|PERSONS|SCHEDULE|PHOTOS|PLACES_API_URL`, and the optional `DISPATCH_API_URL` (`http://127.0.0.1:3007/api/dispatch`; empty turns the photos-push relay off).
 
 Sign-in uses auth-api's login relay, so the app needs an **app-bound client with `login:relay`** and a relay
-entry point. The tooling does not seed these (no local app id exists): register the app in the Developers portal /
+entry point. The tooling does not seed these in the main workspace (no local app id exists; feature workspaces clone them from main's auth database, see "`./run`"): register the app in the Developers portal /
 Oikos, then paste `AUTH_CLIENT_ID`, `AUTH_CLIENT_SECRET`, `RELAY_CLIENT_ID` and `RELAY_ENTRY_POINT` into
 `services-photo-api/.env`. Until then the API boots but sign-in answers unavailable.
 
@@ -566,7 +574,7 @@ pair, base64url, generated once and kept), `VAPID_SUBJECT=mailto:dev@example.tes
 
 As with Services Photo, register the app in the Developers portal / Oikos and paste `AUTH_CLIENT_ID`, `AUTH_CLIENT_SECRET`
 (app-bound, `login:relay` + `notifications:send-template`), `RELAY_CLIENT_ID`, `RELAY_ENTRY_POINT` and `OAUTH_CLIENT_ID`
-into `services-kids-api/.env`; the tooling does not seed them or the app record, so approve the `ipalpha:drive` scope for the Services Kids app in Oikos (otherwise sign-in carries no Drive token and the SMS relay mints none).
+into `services-kids-api/.env`; the tooling does not seed them or the app record in the main workspace (a feature workspace clones them from main's auth database on `./run`, ports remapped), so approve the `ipalpha:drive` scope for the Services Kids app in Oikos (otherwise sign-in carries no Drive token and the SMS relay mints none).
 
 ## Acampa Kids (app outside core)
 

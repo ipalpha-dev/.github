@@ -318,6 +318,8 @@ func reconcileEntries(ctx context.Context, col *mongo.Collection, entries []Entr
 func stringList(v any) []string {
 	var out []string
 	switch list := v.(type) {
+	case []string:
+		return list
 	case bson.A:
 		for _, x := range list {
 			if s, ok := x.(string); ok {
