@@ -253,7 +253,7 @@ func TestSignClientsAndEnv(t *testing.T) {
 	dispatch := filepath.Join(w.Repo("dispatch-api"), ".env")
 	os.WriteFile(dispatch, []byte("SOCKET_ALLOWED_ORIGINS=http://localhost:5106,http://localhost:5110\n"), 0o600)
 	auth := filepath.Join(w.Repo("auth-api"), ".env")
-	os.WriteFile(auth, []byte(`AUTH_RESOURCE_AUDIENCES_JSON='["ipalpha:auth"]'`+"\nSEND_TEMPLATE_UNBOUND_CLIENT_IDS=schedule-api\n"), 0o600)
+	os.WriteFile(auth, []byte(`AUTH_RESOURCE_AUDIENCES_JSON='["ipalpha:auth"]'`+"\nSEND_TEMPLATE_UNBOUND_CLIENT_IDS=schedule-api,my-local-client\n"), 0o600)
 	if _, err := Prepare(w); err != nil {
 		t.Fatal(err)
 	}
@@ -269,7 +269,7 @@ func TestSignClientsAndEnv(t *testing.T) {
 	if sign.AppID != "" || strings.Join(sign.Scopes, ",") != "revocations:read,notifications:send-template" {
 		t.Fatalf("sign-api client: %+v", sign)
 	}
-	if u := envfile.Read(auth)["SEND_TEMPLATE_UNBOUND_CLIENT_IDS"]; u != "schedule-api,sign-api" {
+	if u := envfile.Read(auth)["SEND_TEMPLATE_UNBOUND_CLIENT_IDS"]; u != "schedule-api,my-local-client,sign-api,developers-api" {
 		t.Fatalf("unbound send-template clients: %q", u)
 	}
 	if byID["persons-api"].AppID != "" || strings.Contains(envfile.Read(auth)["SEED_CLIENTS_JSON"], `"appId":""`) {
