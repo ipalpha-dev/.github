@@ -321,9 +321,10 @@ func fillLocal(w *workspace.Workspace, r catalog.Repo, f *envfile.File) []string
 	}
 	if r.Name == "auth-api" {
 		fill("WEBHOOK_SECRET_KEY", randomB64(32))
-		// sign-api is an unbound core client that sends e-mail templates (IPAlpha Sign is a core tool).
+		// sign-api (IPAlpha Sign is a core tool) and developers-api are unbound core clients that send e-mail
+		// templates; an existing list keeps its local additions and only gains the missing ids.
 		if cur, ok := f.Get("SEND_TEMPLATE_UNBOUND_CLIENT_IDS"); ok {
-			if merged, changedList := addCSV(cur, "sign-api"); changedList {
+			if merged, changedList := addCSV(cur, "sign-api", "developers-api"); changedList {
 				set("SEND_TEMPLATE_UNBOUND_CLIENT_IDS", merged)
 			}
 		}

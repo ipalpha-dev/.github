@@ -334,7 +334,7 @@ Env for this (`./pull` and `setup` only add missing keys and fill blanks; yours 
 
 - auth-api: `BUILTIN_FORMS_RESPONDENT_CLIENT_SECRET` (the respondent entry point is a confidential client;
   ≥ 16 characters, local default `dev-forms-respondent-secret-change-me`), `EXCHANGE_PERSON_DELETED`;
-  `sign-api` is appended to an existing `SEND_TEMPLATE_UNBOUND_CLIENT_IDS`. `FORMS_API_URL` and
+  `sign-api` and `developers-api` are appended to an existing `SEND_TEMPLATE_UNBOUND_CLIENT_IDS` (local additions kept). `FORMS_API_URL` and
   `PREFILL_TRANSACTION_TTL_SEC` are no longer read (delete them when you like).
 - forms-api: `RABBITMQ_URL`, `EXCHANGE_FORMS_RESPONSE_CREATED`, `EXCHANGE_FORMS_PERSON_REQUESTED`,
   `FORMS_RESPONDENT_CLIENT_ID` / `FORMS_RESPONDENT_CLIENT_SECRET` / `FORMS_RESPONDENT_REDIRECT_URI` (filled from
