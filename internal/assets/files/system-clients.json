@@ -1,7 +1,7 @@
 {
   "_comment": "Fallback snapshot of deployment/base/core/auth-api/system-clients.json. Prefer the workspace's canonical manifest; these are existing approved scopes, not new grants.",
   "clients": {
-    "projects-api": ["revocations:read", "apps:read", "organizations:snapshot"],
+    "projects-api": ["revocations:read", "apps:read", "organizations:snapshot", "persons:links"],
     "auth-api": ["app-features:read"],
     "persons-api": ["revocations:read", "projects:read", "ai:invoke", "projects:import-memberships", "documents:read"],
     "organizations-api": ["revocations:read"],
