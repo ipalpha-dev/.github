@@ -91,22 +91,3 @@ func TestAcampaFrontendProxiesToThisRunsBackendAndBackendRunsWithBun(t *testing.
 		t.Fatal("a backend without package.json must say why it cannot start")
 	}
 }
-
-func TestDriveWebappSignInEnvFollowsThePlannedPort(t *testing.T) {
-	w := &workspace.Workspace{Root: t.TempDir(), Settings: workspace.NewSettings()}
-	web, _ := catalog.Get("drive-webapp")
-	plan := ports.Plan{Actual: catalog.DefaultPorts(), Preferred: catalog.DefaultPorts()}
-	plan.Actual["drive-webapp"] = 5216
-	values, _ := webEnv(w, web, plan, ports.NewRewriter(plan))
-	got := envfile.Parse(strings.Join(values, "\n"))
-	if got["VITE_DRIVE_CLIENT_ID"] != "drive-web" || got["VITE_DRIVE_ENTRY_POINT"] != "church" || got["VITE_DRIVE_CALLBACK_URI"] != "http://localhost:5216/auth/callback" {
-		t.Fatalf("drive env: %v", got)
-	}
-	auth := filepath.Join(w.Repo("auth-api"), ".env")
-	os.MkdirAll(filepath.Dir(auth), 0o755)
-	os.WriteFile(auth, []byte("BUILTIN_DRIVE_CLIENT_ID=drive-custom\n"), 0o600)
-	values, _ = webEnv(w, web, plan, ports.NewRewriter(plan))
-	if got = envfile.Parse(strings.Join(values, "\n")); got["VITE_DRIVE_CLIENT_ID"] != "drive-custom" {
-		t.Fatalf("client id from auth-api: %v", got)
-	}
-}

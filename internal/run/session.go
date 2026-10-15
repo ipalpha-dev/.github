@@ -353,10 +353,6 @@ func webEnv(w *workspace.Workspace, r catalog.Repo, plan ports.Plan, rw ports.Re
 		def("VITE_RESPONDENT_LOGIN_CALLBACK_URI", "http://localhost:5106/respond/login/callback")
 		def("VITE_CREATOR_CALLBACK_URI", "http://localhost:5106/auth/callback")
 		def("VITE_RESPONDENT_CALLBACK_URI", "http://localhost:5106/respond/callback")
-	case "drive-webapp":
-		def("VITE_DRIVE_CLIENT_ID", firstNonEmpty(auth["BUILTIN_DRIVE_CLIENT_ID"], "drive-web"))
-		def("VITE_DRIVE_ENTRY_POINT", "church")
-		def("VITE_DRIVE_CALLBACK_URI", self+"/auth/callback")
 	case "sign-webapp":
 		def("VITE_SIGN_CLIENT_ID", firstNonEmpty(auth["BUILTIN_SIGN_CLIENT_ID"], "sign-web"))
 		def("VITE_SIGN_ENTRY_POINT", "church")

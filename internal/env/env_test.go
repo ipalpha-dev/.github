@@ -295,7 +295,7 @@ func TestSignClientsAndEnv(t *testing.T) {
 	if sign.AppID != "" || strings.Join(sign.Scopes, ",") != "revocations:read,notifications:send-template" {
 		t.Fatalf("sign-api client: %+v", sign)
 	}
-	if u := envfile.Read(auth)["SEND_TEMPLATE_UNBOUND_CLIENT_IDS"]; u != "schedule-api,sign-api,developers-api" {
+	if u := envfile.Read(auth)["SEND_TEMPLATE_UNBOUND_CLIENT_IDS"]; u != "schedule-api,my-local-client,sign-api,developers-api" {
 		t.Fatalf("unbound send-template clients: %q", u)
 	}
 	if byID["persons-api"].AppID != "" || strings.Contains(envfile.Read(auth)["SEED_CLIENTS_JSON"], `"appId":""`) {

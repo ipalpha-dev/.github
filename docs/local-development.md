@@ -297,9 +297,6 @@ gets `DRIVE_API_URL`, `EXCHANGE_DRIVE_ITEMS_CHANGED`, `EXCHANGE_DRIVE_USAGE_CHAN
 gets `ipalpha:drive` in `AUTH_RESOURCE_AUDIENCES_JSON`. The `rustfs-init` job also creates the `drive` bucket and applies
 CORS for `http://localhost:5116` and Oikos (`5110`). Oikos' Vite proxy reads `DRIVE_API_URL` like every other API.
 
-`./run` gives drive-webapp its sign-in env without a hand-written `.env`: `VITE_DRIVE_CLIENT_ID` (auth-api's
-`BUILTIN_DRIVE_CLIENT_ID`, else `drive-web`), `VITE_DRIVE_ENTRY_POINT=church` and `VITE_DRIVE_CALLBACK_URI`
-(`<this run's drive-webapp origin>/auth/callback`, so it follows a feature workspace's port). Your own `.env` values win.
 A web app starts only when it is in `browser_apps`; there is no dependency between pages. An app that signs people into or
 links to Drive (Services Kids printer releases) does not start drive-webapp: add it once per workspace with
 `./run apps set <the apps you use> drive-webapp` (the list is replaced, so repeat the ones you want to keep) or start it from the panel.
