@@ -378,3 +378,19 @@ func TestAuthAPIGetsDriveBuiltinKeys(t *testing.T) {
 		t.Fatalf("auth-api env: %v", a)
 	}
 }
+
+func TestVirtualAssistantUsesLocalDefaultsNotAppDefaults(t *testing.T) {
+	w := ws(t)
+	repo, _ := catalog.Get("virtual-assistant")
+	os.MkdirAll(repo.Path(w.Root), 0o755)
+	if _, err := Complete(w, repo); err != nil {
+		t.Fatal(err)
+	}
+	v := envfile.Read(filepath.Join(repo.Path(w.Root), ".env"))
+	if v["PORT"] != "3019" || v["AUTH_CLIENT_ID"] == "" || v["TOKEN_AUDIENCE"] == "" {
+		t.Fatalf("missing local defaults: %v", v)
+	}
+	if _, ok := v["CORS_ORIGIN"]; ok || strings.Contains(v["MONGO_URI"], "27019") {
+		t.Fatalf("app defaults leaked: %v", v)
+	}
+}

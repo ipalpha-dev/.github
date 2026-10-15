@@ -342,7 +342,11 @@ func initialize(w *workspace.Workspace, folder string, dry bool) error {
 		return ui.NewProblem(i18n.T("cmd_publish"), i18n.T("publish_initialize_folder"))
 	}
 	dir := r.Path(w.Root)
-	for _, f := range []string{"package.json", ".gitignore"} {
+	manifest := "package.json"
+	if r.IsGo(dir) {
+		manifest = "go.mod"
+	}
+	for _, f := range []string{manifest, ".gitignore"} {
 		if _, err := os.Stat(filepath.Join(dir, f)); err != nil {
 			return ui.NewProblem(i18n.T("cmd_publish"), i18n.T("publish_initialize_needs", folder))
 		}
