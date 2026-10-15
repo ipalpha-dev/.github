@@ -551,7 +551,7 @@ The repositories have an origin, so `./pull`, `setup` and `./feature` clone them
 missing keys and filling blanks: `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` (one Web Push P-256
 pair, base64url, generated once and kept), `VAPID_SUBJECT=mailto:dev@example.test`, `MONGO_URI`, `WEB_ORIGINS` /
 `PUBLIC_WEB_URL` (`http://localhost:5115`), `COOKIE_SECURE=false`, `AUTH_API_URL`,
-`PROJECTS|PERSONS|PLACES|SCHEDULE|NOTIFICATIONS_API_URL`, `WHATSAPP_ENABLED=false`.
+`PROJECTS|PERSONS|PLACES|SCHEDULE|NOTIFICATIONS_API_URL`, `WHATSAPP_ENABLED=false`, optional blank `ASSISTANT_CLIENT_ID` + `ASSISTANT_PRIVATE_KEY` (both or neither).
 
 As with Services Photo, register the app in the Developers portal / Oikos and paste `AUTH_CLIENT_ID`, `AUTH_CLIENT_SECRET`
 (app-bound, `login:relay` + `notifications:send-template`), `RELAY_CLIENT_ID`, `RELAY_ENTRY_POINT` and `OAUTH_CLIENT_ID`
