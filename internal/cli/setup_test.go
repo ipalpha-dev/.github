@@ -16,7 +16,10 @@ func TestEnsureToolsUnattendedStopsOnMissingRequiredTool(t *testing.T) {
 	t.Cleanup(func() { tools.All = saved })
 	checks := 0
 	tools.All = []tools.Tool{{ID: "node", Name: "Node.js", Required: true, Why: "tool_why_node", URL: "https://nodejs.org",
-		Check: func() (string, error) { checks++; return "", errors.New(`exec: "node": executable file not found in $PATH`) }}}
+		Check: func() (string, error) {
+			checks++
+			return "", errors.New(`exec: "node": executable file not found in $PATH`)
+		}}}
 
 	done := make(chan error, 1)
 	go func() { done <- ensureTools(true) }()
