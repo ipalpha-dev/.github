@@ -1,6 +1,10 @@
 package catalog
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 func TestFaceServiceLivesInCore(t *testing.T) {
 	r, ok := Get("face-service")
@@ -88,4 +92,28 @@ func TestAcampaKidsRunsAsABunBackendAndAViteFrontend(t *testing.T) {
 		}
 	}
 	t.Fatal("Webs() lacks the Acampa frontend")
+}
+
+func TestVirtualAssistantGoDetectionFollowsTheCheckout(t *testing.T) {
+	r, _ := Get("virtual-assistant")
+	if r.Lang != "go" || r.Runtime != "" || !r.HasEnv() {
+		t.Fatalf("virtual-assistant: %+v", r)
+	}
+	dir := t.TempDir()
+	if r.IsGo(dir) {
+		t.Fatal("empty checkout is not Go")
+	}
+	os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module x\n"), 0o644)
+	if !r.IsGo(dir) {
+		t.Fatal("go.mod without package.json is Go")
+	}
+	os.WriteFile(filepath.Join(dir, "package.json"), []byte("{}"), 0o644)
+	if r.IsGo(dir) {
+		t.Fatal("package.json (Node master) must win")
+	}
+	other, _ := Get("persons-api")
+	os.Remove(filepath.Join(dir, "package.json"))
+	if other.IsGo(dir) {
+		t.Fatal("repos without Lang are never Go")
+	}
 }

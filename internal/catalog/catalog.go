@@ -3,6 +3,7 @@
 package catalog
 
 import (
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -47,6 +48,10 @@ type Repo struct {
 	// Runtime is how ./run starts a repo that is not a Node/NestJS core API: "bun" (Acampa Kids backend,
 	// `bun run dev`). Empty for everything else.
 	Runtime string
+	// Lang marks a core repo that may be a Go module ("go"). It is a candidate, not a verdict: IsGo(dir) decides
+	// from the checkout (go.mod present, package.json absent), so the same entry works on the Node master
+	// before a cutover and on the Go master after it. Unlike Runtime it changes nothing about env or ports.
+	Lang string
 	// Frontend marks an optional app repo that ./run serves with Vite like a web app.
 	Frontend bool
 }
@@ -78,7 +83,7 @@ var Repos = []Repo{
 	// Services Kids (app outside core).
 	{Name: "services-kids-api", Kind: KindAPI, App: "services-kids", Port: 3017, Display: "Services Kids API"},
 	// Virtual assistant (core). Repo name has no "-api" suffix.
-	{Name: "virtual-assistant", Kind: KindAPI, Port: 3019, Display: "Virtual Assistant"},
+	{Name: "virtual-assistant", Kind: KindAPI, Lang: "go", Port: 3019, Display: "Virtual Assistant"},
 	{Name: "dispatch-api", Kind: KindAPI, Port: 3007, Display: "Dispatch"},
 	{Name: "auth-webapp", Kind: KindWeb, Port: 5100, Display: "Auth Web"},
 	{Name: "forms-webapp", Kind: KindWeb, Port: 5106, Display: "Forms Web"},
@@ -180,6 +185,19 @@ func (r Repo) Path(root string) string { return filepath.Join(root, filepath.Fro
 
 // HasEnv: APIs (and the Bun backend of an app) get a .env completed from .env.example / fallback templates.
 func (r Repo) HasEnv() bool { return r.Kind == KindAPI || r.Runtime != "" }
+
+// IsGo reports that the checkout in dir is a Go service: the repo is a Go candidate (Lang) and holds a go.mod
+// and no package.json. A Node checkout of the same repo answers false.
+func (r Repo) IsGo(dir string) bool {
+	if r.Lang != "go" {
+		return false
+	}
+	if _, err := os.Stat(filepath.Join(dir, "go.mod")); err != nil {
+		return false
+	}
+	_, err := os.Stat(filepath.Join(dir, "package.json"))
+	return err != nil
+}
 
 // Runs: APIs and web apps are processes of ./run, and so are the optional app repos that have a port
 // (Acampa Kids backend + frontend).

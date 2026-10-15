@@ -431,3 +431,6 @@ func Npx() string {
 	}
 	return "npx"
 }
+
+// Go is the Go toolchain binary (go.exe on Windows is found by exec.LookPath either way).
+func Go() string { return "go" }

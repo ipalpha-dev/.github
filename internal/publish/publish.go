@@ -59,6 +59,9 @@ func CurrentVersion(dir string) string {
 		}
 		return "0.0.0"
 	}
+	if v := readVersionFile(dir); v != "" {
+		return v
+	}
 	if tag, err := sys.Git(dir, "describe", "--tags", "--abbrev=0"); err == nil {
 		return strings.TrimPrefix(tag, "v")
 	}
@@ -360,12 +363,24 @@ func Preflight(dirs []string, apply bool) error {
 	return nil
 }
 
+// readVersionFile: the one-line VERSION file of a repo without package.json (Go services).
+func readVersionFile(dir string) string {
+	data, err := os.ReadFile(filepath.Join(dir, "VERSION"))
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(data))
+}
+
 // SetVersion writes package.json and package-lock.json versions, preserving formatting.
 func SetVersion(dir, version string) error {
 	re := regexp.MustCompile(`("version"\s*:\s*")[^"]*(")`)
 	pj := filepath.Join(dir, "package.json")
 	data, err := os.ReadFile(pj)
 	if err != nil {
+		if _, verr := os.Stat(filepath.Join(dir, "VERSION")); verr == nil {
+			return os.WriteFile(filepath.Join(dir, "VERSION"), []byte(version+"\n"), 0o644)
+		}
 		return nil
 	}
 	loc := re.FindIndex(data)

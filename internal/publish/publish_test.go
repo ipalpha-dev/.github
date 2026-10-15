@@ -230,3 +230,20 @@ func TestBreakingMarkerAndCapMajor(t *testing.T) {
 		t.Fatal("BREAKING CHANGE footer must be detected")
 	}
 }
+
+func TestVersionFileForGoRepos(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "VERSION"), []byte("0.5.0\n"), 0o644)
+	if got := CurrentVersion(dir); got != "0.5.0" {
+		t.Fatal(got)
+	}
+	if err := SetVersion(dir, "0.5.1"); err != nil {
+		t.Fatal(err)
+	}
+	if data, _ := os.ReadFile(filepath.Join(dir, "VERSION")); string(data) != "0.5.1\n" {
+		t.Fatalf("%q", data)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "package.json")); err == nil {
+		t.Fatal("package.json created")
+	}
+}

@@ -446,7 +446,11 @@ func buildSpecs(w *workspace.Workspace, eng *infra.Engine, plan ports.Plan, rw p
 		if !r.IsWeb() {
 			sp.Kind = KindAPI
 			sp.Env, sp.Refs = apiEnv(w, r, plan, rw)
-			if r.Runtime == "bun" {
+			if r.IsGo(dir) {
+				// Go core service: `go run` recompiles on every start, so the r key is the hot reload. No Node
+				// environment; the process group kill (sys.Cmd) takes the compiled child down with go run.
+				sp.Command, sp.Args = sys.Go(), []string{"run", "./cmd/" + r.Name}
+			} else if r.Runtime == "bun" {
 				// Acampa Kids backend: Bun (Hono), `bun run dev` (watch mode), no Node environment.
 				sp.Command, sp.Args = "bun", []string{"run", "dev"}
 			} else {
@@ -473,7 +477,13 @@ func buildSpecs(w *workspace.Workspace, eng *infra.Engine, plan ports.Plan, rw p
 		case !exists(dir):
 			sp.Missing = i18n.T("run_missing_repo", r.Rel())
 			sp.Autostart = false
-		case !exists(filepath.Join(dir, "package.json")):
+		case r.Lang == "go" && !exists(filepath.Join(dir, "package.json")) && !exists(filepath.Join(dir, "go.mod")):
+			sp.Missing = i18n.T("run_missing_gomod", r.Rel())
+			sp.Autostart = false
+		case r.IsGo(dir) && !deps.GoInstalled():
+			sp.Missing = i18n.T("run_missing_go", r.Label())
+			sp.Autostart = false
+		case !r.IsGo(dir) && !exists(filepath.Join(dir, "package.json")):
 			sp.Missing = i18n.T("run_missing_package", r.Rel())
 			sp.Autostart = false
 		case r.Runtime == "bun" && !deps.BunInstalled():

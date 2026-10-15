@@ -99,6 +99,12 @@ func Plan(w *workspace.Workspace) [][]Task {
 	}
 	for _, r := range w.PresentRuns() {
 		dir := r.Path(w.Root)
+		if r.IsGo(dir) {
+			if GoNeedsDownload(dir) {
+				rest = append(rest, Task{r, dir, "install"})
+			}
+			continue
+		}
 		if exists(filepath.Join(dir, "package.json")) && (NeedsInstall(dir) || (stale && r.Runtime != "bun" && hasSharedCopy(dir))) {
 			rest = append(rest, Task{r, dir, "install"})
 		}
@@ -239,6 +245,9 @@ func runTask(t Task, logDir string) error {
 		return err
 	}
 	defer f.Close()
+	if t.Repo.IsGo(t.Dir) {
+		return runGoDownload(t, f, logPath)
+	}
 	if t.Repo.Runtime == "bun" {
 		return runBunInstall(t, f, logPath)
 	}
@@ -403,4 +412,52 @@ func copyFile(src, dst string) error {
 		return err
 	}
 	return out.Close()
+}
+
+// GoInstalled reports whether the Go toolchain is on PATH (Go core services need it).
+func GoInstalled() bool { return sys.Has(sys.Go()) }
+
+// goStampPath remembers the go.sum last downloaded, outside the checkout so the repo stays clean for ./publish.
+func goStampPath(dir string) string {
+	base, err := os.UserCacheDir()
+	if err != nil {
+		base = os.TempDir()
+	}
+	sum := sha256.Sum256([]byte(dir))
+	return filepath.Join(base, "ipalpha", "go-"+hex.EncodeToString(sum[:6])+".stamp")
+}
+
+func goSumHash(dir string) string {
+	data, err := os.ReadFile(filepath.Join(dir, "go.sum"))
+	if err != nil {
+		data, _ = os.ReadFile(filepath.Join(dir, "go.mod"))
+	}
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:8])
+}
+
+// GoNeedsDownload: go.sum (or go.mod) changed since the last `go mod download` of this checkout. Never asks
+// for npm; a machine without Go is reported by ./run (run_missing_go) and tools, not by a failing task.
+func GoNeedsDownload(dir string) bool {
+	if !GoInstalled() {
+		return false
+	}
+	old, _ := os.ReadFile(goStampPath(dir))
+	return strings.TrimSpace(string(old)) != goSumHash(dir)
+}
+
+// runGoDownload warms the module cache (`go mod download`) and records the go.sum it saw.
+func runGoDownload(t Task, f *os.File, logPath string) error {
+	res := sys.Cmd{Dir: t.Dir, Name: sys.Go(), Args: []string{"mod", "download"}, Log: io.Writer(f)}.Run()
+	if res.Err != nil {
+		return &ui.Problem{
+			Step:  i18n.T("deps_failed", "go mod download", t.Repo.Rel()),
+			Cause: i18n.T("deps_cause_network"),
+			Tail:  ui.Tail(res.Output, 20),
+			Log:   logPath,
+		}
+	}
+	stamp := goStampPath(t.Dir)
+	_ = os.MkdirAll(filepath.Dir(stamp), 0o755)
+	return os.WriteFile(stamp, []byte(goSumHash(t.Dir)+"\n"), 0o644)
 }
