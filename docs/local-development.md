@@ -358,6 +358,9 @@ Env for this (`./pull` and `setup` only add missing keys and fill blanks; yours 
   `ipalpha:sign` is appended to an existing `AUTH_RESOURCE_AUDIENCES_JSON`. `./run` reconciles the Sign entry's
   localhost origin and callback like the other built-in apps and hands sign-webapp `VITE_SIGN_CLIENT_ID`,
   `VITE_SIGN_ENTRY_POINT`, `VITE_SIGN_CALLBACK_URI`, `VITE_OIKOS_URL`.
+- drive-webapp: `./run` hands it `VITE_DRIVE_CLIENT_ID` (`BUILTIN_DRIVE_CLIENT_ID`, default `drive-web`),
+  `VITE_DRIVE_ENTRY_POINT=church` and `VITE_DRIVE_CALLBACK_URI` on this run's drive-webapp port, so no hand-written
+  `core/drive-webapp/.env` is needed.
 
 Signed PDFs live in documents-api: it stores them in the RustFS bucket `documents` and seals them with a
 generated self-signed key locally (`SEAL_DEV_SELF_SIGNED=true`; production uses the church seal certificate in
