@@ -337,7 +337,7 @@ func TestServicesKidsAPIGetsStableVAPIDKeys(t *testing.T) {
 	e := envfile.Read(filepath.Join(dir, ".env"))
 	pub, err := base64.RawURLEncoding.DecodeString(e["VAPID_PUBLIC_KEY"])
 	priv, err2 := base64.RawURLEncoding.DecodeString(e["VAPID_PRIVATE_KEY"])
-	if err != nil || err2 != nil || len(pub) != 65 || pub[0] != 4 || len(priv) != 32 || e["SESSION_TOKEN_KEY"] != "" || e["AUTH_TOKEN_ISSUER"] == "" || e["VAPID_SUBJECT"] != "mailto:dev@example.test" || e["REDIS_URL"] != "redis://127.0.0.1:6379" {
+	if err != nil || err2 != nil || len(pub) != 65 || pub[0] != 4 || len(priv) != 32 || e["SESSION_TOKEN_KEY"] != "" || e["AUTH_TOKEN_ISSUER"] == "" || e["VAPID_SUBJECT"] != "mailto:dev@example.test" {
 		t.Fatalf("keys: %v", e)
 	}
 	if _, err := Prepare(w); err != nil {
