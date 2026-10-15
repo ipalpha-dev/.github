@@ -404,3 +404,22 @@ func TestAuthAPIGetsDriveBuiltinKeys(t *testing.T) {
 		t.Fatalf("auth-api env: %v", a)
 	}
 }
+
+// auth-api refuses to boot without the org-chart keys (manager token revocation): an existing .env gets them added.
+func TestAuthAPIGetsOrgChartKeys(t *testing.T) {
+	w := ws(t)
+	auth := filepath.Join(w.Repo("auth-api"), ".env")
+	os.MkdirAll(filepath.Dir(auth), 0o755)
+	os.WriteFile(auth, []byte("ORGANIZATIONS_API_URL=http://127.0.0.1:4999\n"), 0o600)
+	if _, err := Prepare(w); err != nil {
+		t.Fatal(err)
+	}
+	a := envfile.Read(auth)
+	for k, want := range map[string]string{"ORGANIZATIONS_API_URL": "http://127.0.0.1:4999",
+		"EXCHANGE_ORG_NODE_CHANGED": "organizations-api.orgNode.changed", "EXCHANGE_ORG_NODE_DELETED": "organizations-api.orgNode.deleted",
+		"EXCHANGE_ORG_ASSIGNMENT_CHANGED": "organizations-api.orgAssignment.changed", "EXCHANGE_ORG_ASSIGNMENT_DELETED": "organizations-api.orgAssignment.deleted"} {
+		if a[k] != want {
+			t.Fatalf("auth-api %s = %q, want %q", k, a[k], want)
+		}
+	}
+}
