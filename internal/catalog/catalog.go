@@ -82,6 +82,8 @@ var Repos = []Repo{
 	{Name: "services-photo-windows", Kind: KindDesktop, App: "services-photo", Display: "Services Photo Windows"},
 	// Services Kids (app outside core).
 	{Name: "services-kids-api", Kind: KindAPI, App: "services-kids", Port: 3017, Display: "Services Kids API"},
+	// Services Kids desktop agent (private repo, C# .NET 8): clone-only like the Services Photo desktop repos.
+	{Name: "services-kids-printer-windows", Kind: KindDesktop, App: "services-kids", Display: "Services Kids Printer Windows"},
 	// Virtual assistant (core). Repo name has no "-api" suffix.
 	{Name: "virtual-assistant", Kind: KindAPI, Lang: "go", Port: 3019, Display: "Virtual Assistant"},
 	{Name: "dispatch-api", Kind: KindAPI, Port: 3007, Display: "Dispatch"},

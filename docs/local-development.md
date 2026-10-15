@@ -314,6 +314,8 @@ job creates the bucket. Since 0.2.0 it needs Redis (the shared local Redis `./ru
 `apps/services-photo/services-photo-macos` (SwiftUI; open in Xcode) and `apps/services-photo/services-photo-windows`
 (WinUI 3 / C#; open in Visual Studio on Windows) are private repos. `./pull` clones them and `./feature new/rebase/destroy`
 handle their worktrees, but they have no port or `.env`, are not started by `./run` and are not published or deployed.
+`apps/services-kids/services-kids-printer-windows` (C# .NET 8 WinForms label printer agent, built with `./build.sh <version>`)
+is handled the same way: a clone-only desktop repo of Services Kids that runs on a developer machine, never from `./run`.
 
 ### Forms and IPAlpha Sign (core tools)
 
