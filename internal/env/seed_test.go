@@ -21,6 +21,8 @@ func TestSeedChoiceOwnsSeedKeys(t *testing.T) {
 	sk := filepath.Join(w.Repo("services-kids-api"), ".env")
 	notif := filepath.Join(w.Repo("notifications-api"), ".env")
 	app := filepath.Join(acampa.Path(w.Root), ".env")
+	os.MkdirAll(w.Repo("developers-api"), 0o755)
+	dev := filepath.Join(w.Repo("developers-api"), ".env")
 	prep := func() {
 		t.Helper()
 		if _, err := Prepare(w); err != nil {
@@ -55,6 +57,9 @@ func TestSeedChoiceOwnsSeedKeys(t *testing.T) {
 		if v["SEED_DATA"] != "true" || v["IPALPHA_ENV"] != "dev" {
 			t.Fatalf("%s: SEED_DATA/IPALPHA_ENV not owned by the tool: %v %v", name, v["SEED_DATA"], v["IPALPHA_ENV"])
 		}
+	}
+	if d := envfile.Read(dev); d["SEED_DATA"] != "true" || d["IPALPHA_ENV"] != "dev" || d["SEED_KEY"] != "" {
+		t.Fatalf("developers-api seed mode (and no SEED_KEY): %v", d)
 	}
 	if len(a["SEED_KEY"]) != 64 || a["SEED_KEY"] != ap["SEED_KEY"] {
 		t.Fatalf("SEED_KEY not shared: %q %q", a["SEED_KEY"], ap["SEED_KEY"])

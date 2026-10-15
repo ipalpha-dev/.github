@@ -405,6 +405,20 @@ func TestAuthAPIGetsDriveBuiltinKeys(t *testing.T) {
 	}
 }
 
+// developers-api: local apps register on http://localhost, so the old default false is flipped; other values stay.
+func TestDevelopersAPILoopbackURIs(t *testing.T) {
+	w := ws(t)
+	dev := filepath.Join(w.Repo("developers-api"), ".env")
+	os.MkdirAll(filepath.Dir(dev), 0o755)
+	os.WriteFile(dev, []byte("ALLOW_LOOPBACK_URIS=false\n"), 0o600)
+	if _, err := Prepare(w); err != nil {
+		t.Fatal(err)
+	}
+	if v := envfile.Read(dev)["ALLOW_LOOPBACK_URIS"]; v != "true" {
+		t.Fatalf("ALLOW_LOOPBACK_URIS = %q", v)
+	}
+}
+
 // auth-api refuses to boot without the org-chart keys (manager token revocation): an existing .env gets them added.
 func TestAuthAPIGetsOrgChartKeys(t *testing.T) {
 	w := ws(t)

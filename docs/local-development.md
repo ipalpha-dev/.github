@@ -436,7 +436,7 @@ if it never chose; `--no-seed` makes that feature `off` without touching main) a
 `deployment`). The default is **yes**; change it later with `ipalpha config set seed on|off` (which rewrites the keys at once).
 
 The choice owns these keys in the `.env` of auth-api, persons-api, organizations-api, places-api, projects-api, schedule-api,
-drive-api, photos-api, documents-api, sign-api, forms-api, services-kids-api and the Acampa Kids backend. **This is the one explicit exception to
+drive-api, photos-api, documents-api, sign-api, forms-api, services-kids-api, developers-api and the Acampa Kids backend. **This is the one explicit exception to
 "never overwrite a local value"**: setup, `./pull` and `config set seed` rewrite them whenever the choice differs, and blank
 them when it is off (nothing is written while the workspace has not chosen):
 

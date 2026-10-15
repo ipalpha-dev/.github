@@ -297,6 +297,14 @@ func fillLocal(w *workspace.Workspace, r catalog.Repo, f *envfile.File) []string
 			}
 		}
 	}
+	if r.Name == "developers-api" {
+		// A local workspace registers apps on http://localhost origins/callbacks, so loopback URIs must be allowed
+		// (like AUTH_ALLOW_LOOPBACK_REDIRECTS in auth-api). Only the old default "false" is flipped; real
+		// production never reads this file.
+		if cur, ok := f.Get("ALLOW_LOOPBACK_URIS"); ok && strings.EqualFold(strings.TrimSpace(cur), "false") {
+			set("ALLOW_LOOPBACK_URIS", "true")
+		}
+	}
 	if r.Name == "ai-api" {
 		// developers-api calls POST /internal/complete (auto-translation); an existing list is kept and only extended.
 		if cur, ok := f.Get("AI_INVOKE_CALLER_SERVICE_IDS"); ok {
