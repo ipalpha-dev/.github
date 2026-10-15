@@ -154,6 +154,13 @@ func Prepare(w *workspace.Workspace, opt Options) (*Session, error) {
 				s.Notes = append(s.Notes, i18n.T("run_redirects_synced", strings.Join(res.Redirects, ", ")))
 			}
 		}
+		if w.IsFeature() {
+			if res, err := cloneOutsideApps(w, rw, s.Plan); err != nil {
+				s.Notes = append(s.Notes, i18n.T("run_clone_apps_failed")+": "+firstLine(err.Error()))
+			} else if len(res.Apps)+len(res.Clients) > 0 {
+				s.Notes = append(s.Notes, i18n.T("run_clone_apps_done", strings.Join(append(res.Apps, res.Clients...), ", ")))
+			}
+		}
 	}
 
 	s.Specs = buildSpecs(w, s.Engine, s.Plan, rw)
@@ -551,6 +558,36 @@ func reconcileDB(w *workspace.Workspace, rw ports.Rewriter, plan ports.Plan) (lo
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 	return localdb.Reconcile(ctx, uri, env.SeedClientList(w), env.ExternalClientIDs(w), entries)
+}
+
+// cloneOutsideApps copies the outside-app registrations (apps, their clients, allowlist rows) from the main
+// workspace's auth database into this feature's, moving loopback addresses from the base ports to this run's.
+// Additive and idempotent; a base stack that is not running is skipped quietly.
+func cloneOutsideApps(w *workspace.Workspace, rw ports.Rewriter, plan ports.Plan) (localdb.CloneResult, error) {
+	main, err := workspace.Open(w.Main())
+	if err != nil {
+		return localdb.CloneResult{}, nil
+	}
+	baseEnv := envfile.Read(filepath.Join(main.Repo("auth-api"), ".env"))
+	featEnv := envfile.Read(filepath.Join(w.Repo("auth-api"), ".env"))
+	if baseEnv["MONGO_URI"] == "" || featEnv["MONGO_URI"] == "" {
+		return localdb.CloneResult{}, nil
+	}
+	basePlan, _ := ports.Load(main.StateDir())
+	ports.NewRewriter(basePlan).Env(baseEnv)
+	rw.Env(featEnv)
+	from := map[int]int{}
+	for key, def := range catalog.DefaultPorts() {
+		to := plan.Port(key)
+		for _, p := range []int{def, main.Settings.Port(key), basePlan.Actual[key]} {
+			if p > 0 && p != to {
+				from[p] = to
+			}
+		}
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	return localdb.CloneOutsideApps(ctx, baseEnv["MONGO_URI"], featEnv["MONGO_URI"], localdb.PortRemapper(from))
 }
 
 func loopbackOnly(list string) []string {
