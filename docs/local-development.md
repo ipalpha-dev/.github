@@ -551,11 +551,11 @@ The repositories have an origin, so `./pull`, `setup` and `./feature` clone them
 missing keys and filling blanks: `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` (one Web Push P-256
 pair, base64url, generated once and kept), `VAPID_SUBJECT=mailto:dev@example.test`, `MONGO_URI`, `WEB_ORIGINS` /
 `PUBLIC_WEB_URL` (`http://localhost:5115`), `COOKIE_SECURE=false`, `AUTH_API_URL`,
-`PROJECTS|PERSONS|PLACES|SCHEDULE|NOTIFICATIONS_API_URL`, `WHATSAPP_ENABLED=false`, `AI_API_URL` (ai-api, blank = the WhatsApp listener asks no AI), optional blank `ASSISTANT_CLIENT_ID` + `ASSISTANT_PRIVATE_KEY` (both or neither).
+`PROJECTS|PERSONS|PLACES|SCHEDULE|NOTIFICATIONS_API_URL`, `WHATSAPP_ENABLED=false`, `AI_API_URL` (ai-api, blank = the WhatsApp listener asks no AI), `DRIVE_API_URL` (`http://127.0.0.1:3018`) and `DRIVE_WEB_URL` (`http://localhost:5116`, the folder link; both optional, but the printer-release screen answers 503 `peerNotConfigured` without them and needs drive-api, drive-webapp and RustFS running), optional blank `ASSISTANT_CLIENT_ID` + `ASSISTANT_PRIVATE_KEY` (both or neither).
 
 As with Services Photo, register the app in the Developers portal / Oikos and paste `AUTH_CLIENT_ID`, `AUTH_CLIENT_SECRET`
 (app-bound, `login:relay` + `notifications:send-template`), `RELAY_CLIENT_ID`, `RELAY_ENTRY_POINT` and `OAUTH_CLIENT_ID`
-into `services-kids-api/.env`; the tooling does not seed them.
+into `services-kids-api/.env`; the tooling does not seed them or the app record, so approve the `ipalpha:drive` scope for the Services Kids app in Oikos (otherwise sign-in carries no Drive token and the SMS relay mints none).
 
 ## Acampa Kids (app outside core)
 
