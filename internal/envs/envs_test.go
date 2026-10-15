@@ -68,7 +68,9 @@ func TestGatherRows(t *testing.T) {
 		Procs: func() []Proc {
 			return []Proc{{"claude", feat + "/core/auth-api"}, {"pi", feat}, {"claude", main + "/core"}, {"codex", "/elsewhere"}}
 		},
-		Sessions: func() map[string]bool { return map[string]bool{"ipalpha-forms": true} },
+		Sessions: func() map[string][]string {
+			return map[string][]string{"ipalpha-forms": {"claude", "run"}}
+		},
 		RunInfo: func(root string) RunInfo {
 			if root == feat {
 				return RunInfo{Owner: 42, Up: 3, Total: 5, URL: "http://localhost:5210"}
@@ -99,7 +101,7 @@ func TestGatherRows(t *testing.T) {
 		t.Errorf("run: %+v", f.Run)
 	}
 	table := PlainTable(rows)
-	for _, want := range []string{"forms *", "3/5 up", "stopped", "feat/forms ×2", "±2 ↑3", "[claude, pi]", "2 request(s)"} {
+	for _, want := range []string{"forms *", "3/5 up", "stopped", "claude,run", "feat/forms ×2", "±2 ↑3", "[claude, pi]", "2 request(s)"} {
 		if !strings.Contains(table, want) {
 			t.Errorf("table missing %q:\n%s", want, table)
 		}
@@ -135,11 +137,17 @@ func TestParseAgents(t *testing.T) {
 }
 
 func TestFilter(t *testing.T) {
-	rows := []Row{{Name: "main", Branches: "master"}, {Name: "forms", Branches: "feat/forms", Agents: map[string]int{"claude": 1}}}
+	rows := []Row{
+		{Name: "main", Branches: "master"},
+		{Name: "forms", Branches: "feat/forms", Agents: map[string]int{"claude": 1}, Session: true, Windows: []string{"claude", "run"}},
+	}
 	if got := Filter(rows, "feat"); len(got) != 1 || got[0].Name != "forms" {
 		t.Fatal(got)
 	}
 	if got := Filter(rows, "CLAUDE forms"); len(got) != 1 {
+		t.Fatal(got)
+	}
+	if got := Filter(rows, "run"); len(got) != 1 || got[0].Name != "forms" {
 		t.Fatal(got)
 	}
 	if got := Filter(rows, "zzz"); len(got) != 0 {
@@ -147,6 +155,18 @@ func TestFilter(t *testing.T) {
 	}
 	if got := Filter(rows, " "); len(got) != 2 {
 		t.Fatal(got)
+	}
+}
+
+func TestSessionMark(t *testing.T) {
+	if got := SessionMark(Row{}); got != "-" {
+		t.Fatalf("%q", got)
+	}
+	if got := SessionMark(Row{Session: true}); got != "yes" {
+		t.Fatalf("%q", got)
+	}
+	if got := SessionMark(Row{Session: true, Windows: []string{"claude", "run", "claude"}}); got != "claude,run,claude" {
+		t.Fatalf("%q", got)
 	}
 }
 
@@ -172,7 +192,8 @@ func TestSummarizeBranches(t *testing.T) {
 type fake struct {
 	calls    []string
 	sessions map[string]bool
-	windows  map[string]bool
+	windows  map[string]bool // window names of the session under test (hasWindow / Window)
+	allWins  []string        // "session\tindex\tname" lines for list-windows -a
 }
 
 func (f *fake) Output(args ...string) (string, error) {
@@ -184,6 +205,9 @@ func (f *fake) Output(args ...string) (string, error) {
 		}
 		return "", fmt.Errorf("no session")
 	case "list-windows":
+		if len(args) >= 2 && args[1] == "-a" {
+			return strings.Join(f.allWins, "\n"), nil
+		}
 		var out []string
 		for w := range f.windows {
 			out = append(out, w)
@@ -284,5 +308,26 @@ func TestMissingTmux(t *testing.T) {
 	}
 	if len(f.calls) != 0 || len(tm.Sessions()) != 0 {
 		t.Fatal("must not call tmux")
+	}
+}
+
+func TestSessionsListsWindowsInIndexOrder(t *testing.T) {
+	f := &fake{allWins: []string{
+		"ipalpha-forms\t1\trun",
+		"ipalpha-forms\t0\tclaude",
+		"ipalpha-forms\t2\tclaude",
+		"ipalpha-main\t0\tbash",
+		"other\t0\tx",
+	}}
+	tm := &Tmux{R: f, Installed: true}
+	got := tm.Sessions()
+	if !reflect.DeepEqual(got["ipalpha-forms"], []string{"claude", "run", "claude"}) {
+		t.Fatalf("forms=%v", got["ipalpha-forms"])
+	}
+	if !reflect.DeepEqual(got["ipalpha-main"], []string{"bash"}) {
+		t.Fatalf("main=%v", got["ipalpha-main"])
+	}
+	if _, ok := got["missing"]; ok {
+		t.Fatal("missing session should be absent")
 	}
 }

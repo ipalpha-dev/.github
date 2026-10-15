@@ -5,6 +5,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/ipalpha-dev/tooling/internal/i18n"
@@ -60,20 +62,40 @@ func ErrNoTmux() error {
 
 func exact(session string) string { return "=" + session }
 
-// Sessions lists the tmux sessions that exist (empty when tmux is missing or no server runs).
-func (t *Tmux) Sessions() map[string]bool {
-	out := map[string]bool{}
+// Sessions maps each tmux session to its window names in window-index order (empty when tmux
+// is missing or no server runs). A session always has at least one window.
+func (t *Tmux) Sessions() map[string][]string {
+	out := map[string][]string{}
 	if !t.Installed {
 		return out
 	}
-	s, err := t.R.Output("list-sessions", "-F", "#{session_name}")
+	s, err := t.R.Output("list-windows", "-a", "-F", "#{session_name}\t#{window_index}\t#{window_name}")
 	if err != nil {
 		return out
 	}
-	for _, n := range strings.Split(s, "\n") {
-		if n != "" {
-			out[n] = true
+	type win struct {
+		idx  int
+		name string
+	}
+	by := map[string][]win{}
+	for _, line := range strings.Split(s, "\n") {
+		if line == "" {
+			continue
 		}
+		parts := strings.SplitN(line, "\t", 3)
+		if len(parts) != 3 {
+			continue
+		}
+		idx, _ := strconv.Atoi(parts[1])
+		by[parts[0]] = append(by[parts[0]], win{idx, parts[2]})
+	}
+	for session, wins := range by {
+		sort.SliceStable(wins, func(i, j int) bool { return wins[i].idx < wins[j].idx })
+		names := make([]string, len(wins))
+		for i, w := range wins {
+			names[i] = w.name
+		}
+		out[session] = names
 	}
 	return out
 }

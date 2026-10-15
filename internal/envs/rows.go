@@ -44,7 +44,8 @@ type Row struct {
 	Current  bool // the workspace ./envs was called from
 	Branches string
 	Run      RunInfo
-	Session  bool // tmux session ipalpha-<name> exists
+	Session  bool     // tmux session ipalpha-<name> exists
+	Windows  []string // tmux window names in index order (empty when no session)
 	Agents   map[string]int
 	Dirty    int // uncommitted files over every repository
 	Ahead    int // commits ahead of the default branch over every repository
@@ -55,7 +56,7 @@ type Row struct {
 type Deps struct {
 	Git      func(dir string, args ...string) (string, error)
 	Procs    func() []Proc
-	Sessions func() map[string]bool
+	Sessions func() map[string][]string
 	RunInfo  func(root string) RunInfo
 	// QADir is ~/src/ipalpha-qa (requests/<area>/open/*.md); empty or missing skips requests.
 	QADir string
@@ -100,7 +101,10 @@ func Gather(main, current string, d Deps) []Row {
 	for i := range rows {
 		r := &rows[i]
 		r.Current = samePath(r.Root, current)
-		r.Session = sessions[SessionName(r.Name)]
+		if wins, ok := sessions[SessionName(r.Name)]; ok {
+			r.Session = true
+			r.Windows = wins
+		}
 		r.Requests = reqs[r.Name]
 		r.Agents = agentsIn(rows, r, procs)
 		if d.RunInfo != nil {

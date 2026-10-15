@@ -68,7 +68,7 @@ func (m *model) refresh() tea.Cmd {
 // visible rows after the filter.
 func (m *model) visible() []Row { return Filter(m.rows, m.filter) }
 
-// Filter keeps the rows whose name, branches or agents contain every word of q.
+// Filter keeps the rows whose name, branches, agents or tmux windows contain every word of q.
 func Filter(rows []Row, q string) []Row {
 	words := strings.Fields(strings.ToLower(q))
 	if len(words) == 0 {
@@ -76,7 +76,7 @@ func Filter(rows []Row, q string) []Row {
 	}
 	var out []Row
 	for _, r := range rows {
-		hay := strings.ToLower(r.Name + " " + r.Branches + " " + r.AgentsText())
+		hay := strings.ToLower(r.Name + " " + r.Branches + " " + r.AgentsText() + " " + SessionMark(r))
 		ok := true
 		for _, w := range words {
 			if !strings.Contains(hay, w) {
@@ -202,7 +202,7 @@ func (m *model) View() string {
 const (
 	wName = 18
 	wRun  = 34
-	wTmux = 5
+	wTmux = 18
 )
 
 // HeaderLine names the columns.
@@ -242,12 +242,15 @@ func RunText(r Row) string {
 	return i18n.T("envs_run_stopped")
 }
 
-// SessionMark shows whether the tmux session exists.
+// SessionMark lists the tmux window names ("claude,run"), or "-" when there is no session.
 func SessionMark(r Row) string {
-	if r.Session {
+	if !r.Session {
+		return "-"
+	}
+	if len(r.Windows) == 0 {
 		return "yes"
 	}
-	return "-"
+	return strings.Join(r.Windows, ",")
 }
 
 // RestText: branches, changes, agents, requests.
