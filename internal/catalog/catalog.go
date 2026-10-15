@@ -89,8 +89,8 @@ var Repos = []Repo{
 	{Name: "services-kids-api", Kind: KindAPI, App: "services-kids", Port: 3017, Display: "Services Kids API"},
 	// Services Kids desktop agent (private repo, C# .NET 8): clone-only like the Services Photo desktop repos.
 	{Name: "services-kids-printer-windows", Kind: KindDesktop, App: "services-kids", Display: "Services Kids Printer Windows"},
-	// Services Kids exceptional sync (private repo, temporary: MyKids / WhatsApp / Google Forms import). Uses the delegated
-	// sync grant, never an internal client. Webapp reaches it at /sync (INTEGRATIONS_URL).
+	// Services Kids exceptional sync (private repo, temporary: MyKids / WhatsApp / Google Forms import). Uses its sync
+	// credential (impersonation), never an internal client. Webapp reaches it at /sync (INTEGRATIONS_URL).
 	{Name: "services-kids-sync-api", Kind: KindAPI, App: "services-kids", Port: 3024, Display: "Services Kids Sync", Private: true, NoClient: true},
 	// Virtual assistant (core). Repo name has no "-api" suffix.
 	{Name: "virtual-assistant", Kind: KindAPI, Lang: "go", Port: 3019, Display: "Virtual Assistant"},

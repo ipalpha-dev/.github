@@ -454,7 +454,7 @@ func TestVirtualAssistantUsesLocalDefaultsNotAppDefaults(t *testing.T) {
 	}
 }
 
-// The private sync uses the delegated sync grant: it gets its fallback .env but no auth-api internal client.
+// The private sync uses its sync credential (impersonation): it gets its fallback .env but no auth-api internal client.
 func TestServicesKidsSyncGetsFallbackEnvAndNoInternalClient(t *testing.T) {
 	w := ws(t)
 	r, _ := catalog.Get("services-kids-sync-api")

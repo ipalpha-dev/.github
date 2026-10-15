@@ -267,7 +267,6 @@ documents-api (port 3012, MongoDB `documents`) holds versioned legal texts (memb
 consent). `./run` starts it with the other APIs and hands every consumer `DOCUMENTS_API_URL`; Oikos reaches it
 at `/api/documents`. persons-api verifies the consent version a client sends with a live call to it, so
 consent writes answer 503 while documents-api is down.
-Its `.env` also gets `REDIS_URL=redis://127.0.0.1:6379` (the local Redis, like persons-api and forms-api).
 
 Scanned agreements: documents-api also needs `AI_API_URL` (ai-api, port 3008) and `AI_API_AUDIENCE=ipalpha:ai`
 (required at boot), plus an optional `AI_BILLING_PROJECT_ID` (empty: scanned uploads answer 503 `scanNotConfigured`
@@ -599,9 +598,10 @@ the exceptional, temporary import from MyKids, WhatsApp groups and Google Forms 
 
 Its `.env` comes from its `.env.example` (else the embedded fallback) with every module off (`MYKIDS_ENABLED`,
 `WHATSAPP_ENABLED`, `FORMS_ENABLED=false`) and no secrets: with only `MONGO_URI` it boots and answers `/live`, `/ready`
-and `/sync/*`. It gets **no** auth-api internal client (`AUTH_CLIENT_ID`/`SECRET`): it authenticates with the delegated
-sync grant, so fill `SYNC_SECRET` (32+ chars), `SYNC_CREDENTIAL_ID`, `SYNC_PRIVATE_KEY`, `SYNC_PROJECT_ID` and
-`SYNC_ADMIN_PERSON_ID` by hand after registering the sync credential in Oikos. Never point a development machine at the
+and `/sync/*`. It gets **no** auth-api internal client (`AUTH_CLIENT_ID`/`SECRET`): it signs in with its sync credential
+(impersonation, plain bearer), so fill `SYNC_SECRET` (32+ chars), `SYNC_CREDENTIAL_ID`, `SYNC_PRIVATE_KEY`, `SYNC_PROJECT_ID`,
+`SYNC_ADMIN_PERSON_ID` and `SERVICES_KIDS_APP_ID` by hand after registering the sync credential in Oikos
+(`SERVICES_KIDS_ORIGIN`, sent as Origin on Services Kids writes, defaults to `http://localhost:5115`). Never point a development machine at the
 real MyKids. When the sync is cloned, `./run` gives services-kids-webapp `INTEGRATIONS_URL` (the sync's local URL), and
 its Vite proxy mounts it same-origin at `/sync`; without it there is no proxy and the webapp hides its sync section.
 
