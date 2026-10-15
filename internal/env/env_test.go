@@ -160,7 +160,7 @@ func TestLinkCheckClientSeeded(t *testing.T) {
 		byID[c.ClientID] = c
 	}
 	dev := strings.Join(byID["developers-api"].Scopes, ",")
-	if !strings.Contains(dev, "apps:link-check") || !strings.Contains(dev, "notifications:send-template") {
+	if !strings.Contains(dev, "apps:suspend") || !strings.Contains(dev, "notifications:send-template") {
 		t.Fatalf("developers-api scopes: %s", dev)
 	}
 	lc := byID["developers-link-check"]

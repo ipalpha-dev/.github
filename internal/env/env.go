@@ -390,6 +390,7 @@ var retiredScopes = map[string][]string{
 	"forms-api":         {"prefill:purpose", "prefill:redeem", "prefill:read", "persons:write", "dispatch:events", "revocations:read"},
 	"sign-api":          {"dispatch:app-channel"},
 	"virtual-assistant": {"ai:assistant"},
+	"developers-api":    {"apps:link-check"}, // replaced by the generic apps:suspend
 }
 
 const (
