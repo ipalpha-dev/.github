@@ -435,6 +435,8 @@ func TestAuthAPIGetsOrgChartKeys(t *testing.T) {
 		if a[k] != want {
 			t.Fatalf("auth-api %s = %q, want %q", k, a[k], want)
 		}
+	}
+}
 
 func TestVirtualAssistantUsesLocalDefaultsNotAppDefaults(t *testing.T) {
 	w := ws(t)
