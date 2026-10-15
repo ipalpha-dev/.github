@@ -297,10 +297,32 @@ func fillLocal(w *workspace.Workspace, r catalog.Repo, f *envfile.File) []string
 			}
 		}
 	}
+	if r.Name == "developers-api" {
+		// A local workspace registers apps on http://localhost origins/callbacks, so loopback URIs must be allowed
+		// (like AUTH_ALLOW_LOOPBACK_REDIRECTS in auth-api). Only the old default "false" is flipped; real
+		// production never reads this file.
+		if cur, ok := f.Get("ALLOW_LOOPBACK_URIS"); ok && strings.EqualFold(strings.TrimSpace(cur), "false") {
+			set("ALLOW_LOOPBACK_URIS", "true")
+		}
+	}
+	if r.Name == "ai-api" {
+		// developers-api calls POST /internal/complete (auto-translation); an existing list is kept and only extended.
+		if cur, ok := f.Get("AI_INVOKE_CALLER_SERVICE_IDS"); ok {
+			if merged, changedList := addCSV(cur, "developers-api"); changedList {
+				set("AI_INVOKE_CALLER_SERVICE_IDS", merged)
+			}
+		}
+		// documents-api reads scanned agreements through POST /internal/vision; same rule.
+		if cur, ok := f.Get("AI_VISION_CALLER_SERVICE_IDS"); ok {
+			if merged, changedList := addCSV(cur, "documents-api"); changedList {
+				set("AI_VISION_CALLER_SERVICE_IDS", merged)
+			}
+		}
+	}
 	if r.Name == "auth-api" {
 		fill("WEBHOOK_SECRET_KEY", randomB64(32))
 		// sign-api (IPAlpha Sign is a core tool) and developers-api are unbound core clients that send e-mail
-		// templates. An existing list keeps every local entry; only these ids are appended when missing.
+		// templates; an existing list keeps its local additions and only gains the missing ids.
 		if cur, ok := f.Get("SEND_TEMPLATE_UNBOUND_CLIENT_IDS"); ok {
 			if merged, changedList := addCSV(cur, "sign-api", "developers-api"); changedList {
 				set("SEND_TEMPLATE_UNBOUND_CLIENT_IDS", merged)
@@ -377,7 +399,13 @@ var retiredScopes = map[string][]string{
 	"forms-api":         {"prefill:purpose", "prefill:redeem", "prefill:read", "persons:write", "dispatch:events", "revocations:read"},
 	"sign-api":          {"dispatch:app-channel"},
 	"virtual-assistant": {"ai:assistant"},
+	"developers-api":    {"apps:link-check"}, // replaced by the generic apps:suspend
 }
+
+const (
+	linkCheckClientID    = "developers-link-check"
+	linkCheckLocalSecret = "local-dev-link-check-secret-not-for-production"
+)
 
 // SeedClient is one entry of auth-api's SEED_CLIENTS_JSON. AppID binds the client to an app
 // (system-clients.json `appBound`; empty today: every internal client is unbound) for app-bound-only scopes.
@@ -413,6 +441,17 @@ func SeedClients(w *workspace.Workspace) error {
 			scopes = []string{}
 		}
 		ours = append(ours, SeedClient{ClientID: e["AUTH_CLIENT_ID"], Secret: e["AUTH_CLIENT_SECRET"], ServiceID: r.Name, AppID: bound[r.Name], Scopes: scopes})
+	}
+	// developers-link-check has no repo of its own: it is the client of the daily link check that developers-api
+	// serves (POST /internal/link-check/run). Locally it is seeded with a fixed development secret so the
+	// documented manual curl works; production creates it by hand.
+	for _, o := range ours {
+		if o.ServiceID == "developers-api" {
+			if scopes, ok := approved[linkCheckClientID]; ok {
+				ours = append(ours, SeedClient{ClientID: linkCheckClientID, Secret: linkCheckLocalSecret, ServiceID: linkCheckClientID, Scopes: scopes})
+			}
+			break
+		}
 	}
 	var current []map[string]any
 	if raw, _ := auth.Get("SEED_CLIENTS_JSON"); strings.TrimSpace(raw) != "" {

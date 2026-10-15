@@ -362,6 +362,10 @@ func webEnv(w *workspace.Workspace, r catalog.Repo, plan ports.Plan, rw ports.Re
 		def("VITE_SIGN_ENTRY_POINT", "church")
 		def("VITE_SIGN_CALLBACK_URI", "http://localhost:5113/auth/callback")
 		def("VITE_OIKOS_URL", "http://localhost:5110")
+	case "drive-webapp":
+		def("VITE_DRIVE_CLIENT_ID", firstNonEmpty(auth["BUILTIN_DRIVE_CLIENT_ID"], "drive-web"))
+		def("VITE_DRIVE_ENTRY_POINT", "church")
+		def("VITE_DRIVE_CALLBACK_URI", "http://localhost:"+strconv.Itoa(port)+"/auth/callback")
 	}
 	refs := rw.Env(vals)
 	for _, api := range catalog.APIs() {

@@ -47,10 +47,11 @@ func TestVirtualAssistantIsACoreAPI(t *testing.T) {
 	}
 }
 
-func TestServicesPhotoDesktopReposAreCloneOnly(t *testing.T) {
+func TestDesktopReposAreCloneOnly(t *testing.T) {
 	for name, rel := range map[string]string{
-		"services-photo-macos":   "apps/services-photo/services-photo-macos",
-		"services-photo-windows": "apps/services-photo/services-photo-windows",
+		"services-photo-macos":          "apps/services-photo/services-photo-macos",
+		"services-photo-windows":        "apps/services-photo/services-photo-windows",
+		"services-kids-printer-windows": "apps/services-kids/services-kids-printer-windows",
 	} {
 		r, ok := Get(name)
 		if !ok || r.Kind != KindDesktop || r.Rel() != rel || r.Port != 0 {

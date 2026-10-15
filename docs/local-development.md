@@ -238,6 +238,14 @@ are kept). Acampa Kids' backend is an `./run` process (see "Acampa Kids" below);
 Oikos reaches photos-api at `/api/photos` through its Vite proxy; `./run` hands it `PHOTOS_API_URL` for the port of
 the run, like every other API.
 
+### Local developers-api AI (auto-translation)
+
+developers-api needs `AI_API_URL` (ai-api, port 3008), `AI_API_AUDIENCE=ipalpha:ai` and `AI_BILLING_PROJECT_ID=ipalpha-developers` (required at boot; `TRANSLATE_DAILY_CAP` is optional, default 200). `./pull` and `./feature` only add the missing keys, never overwriting yours. Its local system client gets `ai:invoke`, and ai-api's `AI_INVOKE_CALLER_SERVICE_IDS` gains `developers-api` (an existing list is only extended). Without them `/translate` answers 503 `aiUnavailable`.
+
+### Local developers-api link check
+
+developers-api checks the links of external apps daily (`POST /internal/link-check/run`). Locally nothing schedules it and there is no tool command: trigger it by hand. `NOTIFICATIONS_API_URL` (notifications-api, port 3004) is optional; `./run` supplies it, and `./pull` / `./feature` only add it when missing. Without it the run reports `emailsSkipped:true` (no warning e-mails). Setup seeds the client `developers-link-check` (scope `developers:link-check` on `ipalpha:developers`, fixed development secret `local-dev-link-check-secret-not-for-production`) and gives the `developers-api` client `apps:suspend` and `notifications:send-template`. The README of developers-api has the `curl`: token from `/oauth/token` (client credentials, `resource=ipalpha:developers`), then `POST /internal/link-check/run`.
+
 ### Local app features and directory (apps-api)
 
 apps-api (port 3015, MongoDB `apps`, audience `ipalpha:apps`) owns per-app features, skills, directory listings, links
@@ -251,6 +259,18 @@ documents-api (port 3012, MongoDB `documents`) holds versioned legal texts (memb
 consent). `./run` starts it with the other APIs and hands every consumer `DOCUMENTS_API_URL`; Oikos reaches it
 at `/api/documents`. persons-api verifies the consent version a client sends with a live call to it, so
 consent writes answer 503 while documents-api is down.
+
+Scanned agreements: documents-api also needs `AI_API_URL` (ai-api, port 3008) and `AI_API_AUDIENCE=ipalpha:ai`
+(required at boot), plus an optional `AI_BILLING_PROJECT_ID` (empty: scanned uploads answer 503 `scanNotConfigured`
+unless a project template is used). Its local system client gets `ai:vision`, and ai-api's
+`AI_VISION_CALLER_SERVICE_IDS` gains `documents-api` (an existing list is only extended; `AI_VISION_MODEL`,
+`AI_VISION_MAX_*`, `AI_VISION_TIMEOUT_MS`, `AI_VISION_RATE_PER_MINUTE` are optional). Rendering PDF scans needs
+`pdftoppm` (poppler-utils); jpg/png scans work without it.
+
+App category: documents-api reads it from auth-api `GET /internal/apps/:appId/policy` (church apps may sign their people's own
+required documents), so its local system client also gets `apps:read` (no new env: `AUTH_API_URL` / `AUTH_API_AUDIENCE` exist).
+`./run` adds the scope to the client in `SEED_CLIENTS_JSON`, but auth-api seeds insert-if-absent: a local auth database already seeded
+keeps the old client. Recreate the local auth database, or add `apps:read` to the `documents-api` client in Oikos -> Clientes.
 
 Env added for this: persons-api gets the `EXCHANGE_PERSON_PHOTO_*` / `EXCHANGE_PERSON_CONSENT_CHANGED`
 exchanges, `DOCUMENTS_API_URL`, `DOCUMENTS_API_AUDIENCE`, `MEMBERSHIP_TERM_DOCUMENT_SLUG` and
@@ -301,6 +321,8 @@ job creates the bucket. Since 0.2.0 it needs Redis (the shared local Redis `./ru
 `apps/services-photo/services-photo-macos` (SwiftUI; open in Xcode) and `apps/services-photo/services-photo-windows`
 (WinUI 3 / C#; open in Visual Studio on Windows) are private repos. `./pull` clones them and `./feature new/rebase/destroy`
 handle their worktrees, but they have no port or `.env`, are not started by `./run` and are not published or deployed.
+`apps/services-kids/services-kids-printer-windows` (C# .NET 8 WinForms label printer agent, built with `./build.sh <version>`)
+is handled the same way: a clone-only desktop repo of Services Kids that runs on a developer machine, never from `./run`.
 
 ### Forms and IPAlpha Sign (core tools)
 
@@ -319,7 +341,7 @@ Env for this (`./pull` and `setup` only add missing keys and fill blanks; yours 
 
 - auth-api: `BUILTIN_FORMS_RESPONDENT_CLIENT_SECRET` (the respondent entry point is a confidential client;
   ≥ 16 characters, local default `dev-forms-respondent-secret-change-me`), `EXCHANGE_PERSON_DELETED`;
-  `sign-api` and `developers-api` are appended to an existing `SEND_TEMPLATE_UNBOUND_CLIENT_IDS` (your other ids stay). `FORMS_API_URL` and
+  `sign-api` and `developers-api` are appended to an existing `SEND_TEMPLATE_UNBOUND_CLIENT_IDS` (local additions kept). `FORMS_API_URL` and
   `PREFILL_TRANSACTION_TTL_SEC` are no longer read (delete them when you like).
 - forms-api: `RABBITMQ_URL`, `EXCHANGE_FORMS_RESPONSE_CREATED`, `EXCHANGE_FORMS_PERSON_REQUESTED`,
   `FORMS_RESPONDENT_CLIENT_ID` / `FORMS_RESPONDENT_CLIENT_SECRET` / `FORMS_RESPONDENT_REDIRECT_URI` (filled from
@@ -343,6 +365,9 @@ Env for this (`./pull` and `setup` only add missing keys and fill blanks; yours 
   `ipalpha:sign` is appended to an existing `AUTH_RESOURCE_AUDIENCES_JSON`. `./run` reconciles the Sign entry's
   localhost origin and callback like the other built-in apps and hands sign-webapp `VITE_SIGN_CLIENT_ID`,
   `VITE_SIGN_ENTRY_POINT`, `VITE_SIGN_CALLBACK_URI`, `VITE_OIKOS_URL`.
+- drive-webapp: `./run` hands it `VITE_DRIVE_CLIENT_ID` (`BUILTIN_DRIVE_CLIENT_ID`, default `drive-web`),
+  `VITE_DRIVE_ENTRY_POINT=church` and `VITE_DRIVE_CALLBACK_URI` on this run's drive-webapp port, so no hand-written
+  `core/drive-webapp/.env` is needed.
 
 Signed PDFs live in documents-api: it stores them in the RustFS bucket `documents` and seals them with a
 generated self-signed key locally (`SEAL_DEV_SELF_SIGNED=true`; production uses the church seal certificate in
@@ -371,7 +396,7 @@ sign-api's old `appId` from `SEED_CLIENTS_JSON`; every other scope you added is 
    image `registry.kevyn.com.br/ip-alpha/apps/acampa-kids/{backend,frontend}:<version>` built with the repository
    as context, and only the tag in `deployment/base/apps/acampa-kids` is bumped (never `base/core`). With `--ci`
    no local build runs and the push starts no TeamCity build (`IpAlpha_AcampaKids_{Backend,Frontend}_Build` has no VCS trigger):
-   the manual `IpAlpha_AcampaKids` Deploy builds the images. `./publish` never triggers an app's or Core's Deploy. `face-service` (`core/face-service`) is not published here: Core's
+   the manual `IpAlpha_AcampaKids` Deploy builds the images. `./publish` never triggers an app's Deploy (apps keep their manual one). **Core is different:** the image tag bump `./publish` pushes to `deployment` master touches production paths, so TeamCity "Core — Deploy" (`IpAlpha_Core_Deploy`) starts on that push and a core service reaches production once its build is green (not triggered: `previews/**`, `releases/**`, apps' own overlays, tests, docs, `[core-release]`/`[preview-ci]` commits). `face-service` (`core/face-service`) is not published here: Core's
    TeamCity builds its image.
 
 `-d` shows the plan and offers to apply exactly that plan · `-f <repo>` one repo · `--engine/--model` one-off
@@ -430,7 +455,7 @@ if it never chose; `--no-seed` makes that feature `off` without touching main) a
 `deployment`). The default is **yes**; change it later with `ipalpha config set seed on|off` (which rewrites the keys at once).
 
 The choice owns these keys in the `.env` of auth-api, persons-api, organizations-api, places-api, projects-api, schedule-api,
-drive-api, photos-api, documents-api, sign-api, forms-api, services-kids-api and the Acampa Kids backend. **This is the one explicit exception to
+drive-api, photos-api, documents-api, sign-api, forms-api, services-kids-api, developers-api and the Acampa Kids backend. **This is the one explicit exception to
 "never overwrite a local value"**: setup, `./pull` and `config set seed` rewrite them whenever the choice differs, and blank
 them when it is off (nothing is written while the workspace has not chosen):
 
@@ -540,11 +565,11 @@ The repositories have an origin, so `./pull`, `setup` and `./feature` clone them
 missing keys and filling blanks: `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` (one Web Push P-256
 pair, base64url, generated once and kept), `VAPID_SUBJECT=mailto:dev@example.test`, `MONGO_URI`, `WEB_ORIGINS` /
 `PUBLIC_WEB_URL` (`http://localhost:5115`), `COOKIE_SECURE=false`, `AUTH_API_URL`,
-`PROJECTS|PERSONS|PLACES|SCHEDULE|NOTIFICATIONS_API_URL`, `WHATSAPP_ENABLED=false`.
+`PROJECTS|PERSONS|PLACES|SCHEDULE|NOTIFICATIONS_API_URL`, `WHATSAPP_ENABLED=false`, `AI_API_URL` (ai-api, blank = the WhatsApp listener asks no AI), `DRIVE_API_URL` (`http://127.0.0.1:3018`) and `DRIVE_WEB_URL` (`http://localhost:5116`, the folder link; both optional, but the printer-release screen answers 503 `peerNotConfigured` without them and needs drive-api, drive-webapp and RustFS running), optional blank `ASSISTANT_CLIENT_ID` + `ASSISTANT_PRIVATE_KEY` (both or neither).
 
 As with Services Photo, register the app in the Developers portal / Oikos and paste `AUTH_CLIENT_ID`, `AUTH_CLIENT_SECRET`
 (app-bound, `login:relay` + `notifications:send-template`), `RELAY_CLIENT_ID`, `RELAY_ENTRY_POINT` and `OAUTH_CLIENT_ID`
-into `services-kids-api/.env`; the tooling does not seed them.
+into `services-kids-api/.env`; the tooling does not seed them or the app record, so approve the `ipalpha:drive` scope for the Services Kids app in Oikos (otherwise sign-in carries no Drive token and the SMS relay mints none).
 
 ## Acampa Kids (app outside core)
 

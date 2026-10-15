@@ -143,6 +143,32 @@ func TestRetiredScopesAndAppBindingDropped(t *testing.T) {
 	}
 }
 
+// developers-api's daily link check: its client gains the two peer scopes and the CronJob client is seeded locally.
+func TestLinkCheckClientSeeded(t *testing.T) {
+	w := ws(t)
+	auth := filepath.Join(w.Repo("auth-api"), ".env")
+	os.WriteFile(auth, []byte("SEED_CLIENTS_JSON=''\n"), 0o600)
+	os.MkdirAll(w.Repo("developers-api"), 0o755)
+	os.WriteFile(filepath.Join(w.Repo("developers-api"), ".env"), []byte("AUTH_CLIENT_ID=developers-api\nAUTH_CLIENT_SECRET=developers-secret-long\n"), 0o600)
+	if err := SeedClients(w); err != nil {
+		t.Fatal(err)
+	}
+	var clients []SeedClient
+	json.Unmarshal([]byte(envfile.Read(auth)["SEED_CLIENTS_JSON"]), &clients)
+	byID := map[string]SeedClient{}
+	for _, c := range clients {
+		byID[c.ClientID] = c
+	}
+	dev := strings.Join(byID["developers-api"].Scopes, ",")
+	if !strings.Contains(dev, "apps:suspend") || !strings.Contains(dev, "notifications:send-template") {
+		t.Fatalf("developers-api scopes: %s", dev)
+	}
+	lc := byID["developers-link-check"]
+	if strings.Join(lc.Scopes, ",") != "developers:link-check" || lc.AppID != "" || len(lc.Secret) < 16 {
+		t.Fatalf("link-check client: %+v", lc)
+	}
+}
+
 func TestOperatorClientsKept(t *testing.T) {
 	w := ws(t)
 	auth := filepath.Join(w.Repo("auth-api"), ".env")
@@ -269,7 +295,7 @@ func TestSignClientsAndEnv(t *testing.T) {
 	if sign.AppID != "" || strings.Join(sign.Scopes, ",") != "revocations:read,notifications:send-template" {
 		t.Fatalf("sign-api client: %+v", sign)
 	}
-	if u := envfile.Read(auth)["SEND_TEMPLATE_UNBOUND_CLIENT_IDS"]; u != "schedule-api,my-local-client,sign-api,developers-api" {
+	if u := envfile.Read(auth)["SEND_TEMPLATE_UNBOUND_CLIENT_IDS"]; u != "schedule-api,sign-api,developers-api" {
 		t.Fatalf("unbound send-template clients: %q", u)
 	}
 	if byID["persons-api"].AppID != "" || strings.Contains(envfile.Read(auth)["SEED_CLIENTS_JSON"], `"appId":""`) {
@@ -376,6 +402,39 @@ func TestAuthAPIGetsDriveBuiltinKeys(t *testing.T) {
 	if a["BUILTIN_DRIVE_CLIENT_ID"] != "drive-web" || a["BUILTIN_DRIVE_ORIGINS"] != "http://localhost:6116" ||
 		a["BUILTIN_DRIVE_REDIRECT_URIS"] != "http://localhost:5116/auth/callback" || !strings.Contains(a["AUTH_RESOURCE_AUDIENCES_JSON"], "ipalpha:drive") {
 		t.Fatalf("auth-api env: %v", a)
+	}
+}
+
+// developers-api: local apps register on http://localhost, so the old default false is flipped; other values stay.
+func TestDevelopersAPILoopbackURIs(t *testing.T) {
+	w := ws(t)
+	dev := filepath.Join(w.Repo("developers-api"), ".env")
+	os.MkdirAll(filepath.Dir(dev), 0o755)
+	os.WriteFile(dev, []byte("ALLOW_LOOPBACK_URIS=false\n"), 0o600)
+	if _, err := Prepare(w); err != nil {
+		t.Fatal(err)
+	}
+	if v := envfile.Read(dev)["ALLOW_LOOPBACK_URIS"]; v != "true" {
+		t.Fatalf("ALLOW_LOOPBACK_URIS = %q", v)
+	}
+}
+
+// auth-api refuses to boot without the org-chart keys (manager token revocation): an existing .env gets them added.
+func TestAuthAPIGetsOrgChartKeys(t *testing.T) {
+	w := ws(t)
+	auth := filepath.Join(w.Repo("auth-api"), ".env")
+	os.MkdirAll(filepath.Dir(auth), 0o755)
+	os.WriteFile(auth, []byte("ORGANIZATIONS_API_URL=http://127.0.0.1:4999\n"), 0o600)
+	if _, err := Prepare(w); err != nil {
+		t.Fatal(err)
+	}
+	a := envfile.Read(auth)
+	for k, want := range map[string]string{"ORGANIZATIONS_API_URL": "http://127.0.0.1:4999",
+		"EXCHANGE_ORG_NODE_CHANGED": "organizations-api.orgNode.changed", "EXCHANGE_ORG_NODE_DELETED": "organizations-api.orgNode.deleted",
+		"EXCHANGE_ORG_ASSIGNMENT_CHANGED": "organizations-api.orgAssignment.changed", "EXCHANGE_ORG_ASSIGNMENT_DELETED": "organizations-api.orgAssignment.deleted"} {
+		if a[k] != want {
+			t.Fatalf("auth-api %s = %q, want %q", k, a[k], want)
+		}
 	}
 }
 

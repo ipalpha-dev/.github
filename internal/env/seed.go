@@ -25,7 +25,7 @@ const (
 var seedServices = map[string]bool{
 	"auth-api": true, "persons-api": true, "organizations-api": true, "places-api": true, "projects-api": true,
 	"schedule-api": true, "drive-api": true, "photos-api": true, "documents-api": true, "sign-api": true,
-	"forms-api": true, "acampa-kids-backend": true, "services-kids-api": true,
+	"forms-api": true, "acampa-kids-backend": true, "services-kids-api": true, "developers-api": true,
 }
 
 // seedKeyServices also get SEED_KEY (the same value everywhere) while seeding is on: auth-api honors it, the others
