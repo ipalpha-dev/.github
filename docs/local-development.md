@@ -309,7 +309,7 @@ links to Drive (Services Kids printer releases) does not start drive-webapp: add
 names and `S3_*` keys from `.ipalpha/.env`. Added keys only: ai-api gets `ON_BEHALF_CALLERS=virtual-assistant`;
 dispatch-api gets `VIRTUAL_ASSISTANT_API_URL` and the two
 `EXCHANGE_ASSISTANT_*` names; auth-api gets `ipalpha:assistant` in `AUTH_RESOURCE_AUDIENCES_JSON`. The `rustfs-init`
-job creates the bucket. Since 0.2.0 it needs Redis (the shared local Redis `./run` already starts; `REDIS_URL`), and its fallback adds `ORGANIZATIONS_API_URL`/`ORGANIZATIONS_API_AUDIENCE`, `ASSISTANT_BILLING_PROJECT_ID` (a local placeholder; any non-empty string works) and `EXCHANGE_COSTS_USAGE_RECORDED`. `MAX_CALL_MINUTES` and `CALL_END_GRACE_MS` are gone (existing `.env` files just keep the unused lines). Calls need organizations-api and ai-api up, but boot never waits on a peer. The local `virtual-assistant` system client gets `ai:on-behalf` (replaces `ai:assistant`), `persons:eligibility` and `organizations:snapshot`, and persons-api's `ELIGIBILITY_CALLER_SERVICE_IDS` gains `virtual-assistant`. The assistant's behaviour is edited in Oikos (`/assistant-settings`). Web apps receive `VIRTUAL_ASSISTANT_API_URL` from `./run` (Oikos mounts `/api/virtual-assistant`).
+job creates the bucket. Since 0.2.0 it needs Redis (the shared local Redis `./run` already starts; `REDIS_URL`), and its fallback adds `ORGANIZATIONS_API_URL`/`ORGANIZATIONS_API_AUDIENCE`, and `EXCHANGE_COSTS_USAGE_RECORDED` (`ASSISTANT_BILLING_PROJECT_ID` is gone: the billing service replaced the interim bill holder). `MAX_CALL_MINUTES` and `CALL_END_GRACE_MS` are gone (existing `.env` files just keep the unused lines). Calls need organizations-api and ai-api up, but boot never waits on a peer. The local `virtual-assistant` system client gets `ai:on-behalf` (replaces `ai:assistant`), `persons:eligibility` and `organizations:snapshot`, and persons-api's `ELIGIBILITY_CALLER_SERVICE_IDS` gains `virtual-assistant`. The assistant's behaviour is edited in Oikos (`/assistant-settings`). Web apps receive `VIRTUAL_ASSISTANT_API_URL` from `./run` (Oikos mounts `/api/virtual-assistant`).
 
 **Go service.** The tools decide from the checkout: a `core/virtual-assistant` with a `go.mod` and no `package.json` is the Go service, otherwise the Node one is used as before. For the Go service `./run` starts `go run ./cmd/virtual-assistant` (needs Go ≥ 1.26, https://go.dev/dl; without it the row shows it cannot start), with no Node environment and no `air`: the `r` key stops the whole process group and runs `go run` again, which recompiles, so that is the hot reload. The port stays 3019, the env comes from `.env` like every core API (same names; optional `LOG_LEVEL`, `PACER_LEAD_FRAMES`, `TERMINATION_GRACE_SECONDS`, commented in the fallback; the dropped `AUDIO_PACER`, `GPT_LIVE_CODEC`, `GPT_LIVE_ICE_PREFER` are ignored with a boot warning), and readiness is `GET /live` and `GET /ready`. `./pull` and `setup` run `go mod download` instead of `npm install` when `go.sum` changes, and `./publish` keeps the version in a one-line `VERSION` file (no `package.json`) with the usual tag and deployment bump; its image is built from the root `Dockerfile`.
 
@@ -521,6 +521,17 @@ block (or use `ipalpha config` > Ports inside the workspace), then `./stop` and 
 | apps-api | 3015 | services-kids-api | 3017 |
 | virtual-assistant | 3019 | services-kids-webapp | 5115 |
 | acampa-kids-backend | 3020 | acampa-kids-frontend | 5117 |
+| costs-api | 3021 | | |
+
+## Costs API (billing service, core)
+
+`core/costs-api` (port **3021**, MongoDB `costs`, audience `ipalpha:costs`) records every running cost for Oikos "Custos"
+(design `.ipalpha/design/billing.md`). Its fallback mirrors the repo's `.env.example` key by key. Producers (ai-api,
+notifications-api, virtual-assistant) get `EXCHANGE_COSTS_USAGE_RECORDED=costs.usage.recorded`; dispatch-api gets
+`EXCHANGE_COSTS_CHANGED=costs-api.costs.changed`. auth-api gets `ipalpha:costs` in `AUTH_RESOURCE_AUDIENCES_JSON`; the local
+`costs-api` system client has `revocations:read`, `projects:read` and `organizations:snapshot`, and `dispatch-api` gains
+`organizations:snapshot`. Optional, no fallback: `SMS_PRICE_MICROS_SMSBARATO` / `SMS_PRICE_MICROS_COMTELE` (notifications-api).
+Oikos proxies `/api/costs` to port 3021.
 
 ## Services Photo (app outside core)
 

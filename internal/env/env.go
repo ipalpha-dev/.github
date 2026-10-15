@@ -330,7 +330,7 @@ func fillLocal(w *workspace.Workspace, r catalog.Repo, f *envfile.File) []string
 		}
 		// An existing list is kept; only the audiences new services need are appended.
 		if cur, ok := f.Get("AUTH_RESOURCE_AUDIENCES_JSON"); ok {
-			if merged, changedList := addAudiences(cur, "ipalpha:photos", "ipalpha:documents", "ipalpha:schedule", "ipalpha:sign", "ipalpha:apps", "ipalpha:drive", "ipalpha:assistant"); changedList {
+			if merged, changedList := addAudiences(cur, "ipalpha:photos", "ipalpha:documents", "ipalpha:schedule", "ipalpha:sign", "ipalpha:apps", "ipalpha:drive", "ipalpha:assistant", "ipalpha:costs"); changedList {
 				set("AUTH_RESOURCE_AUDIENCES_JSON", merged)
 			}
 		}

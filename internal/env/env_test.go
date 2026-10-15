@@ -374,7 +374,7 @@ func TestVirtualAssistantEnvAndPeerKeys(t *testing.T) {
 			t.Fatalf("virtual-assistant %s = %q, want %q", k, v[k], want)
 		}
 	}
-	if v["ASSISTANT_BILLING_PROJECT_ID"] == "" || v["MAX_CALL_MINUTES"] != "" || v["CALL_END_GRACE_MS"] != "" {
+	if _, has := v["ASSISTANT_BILLING_PROJECT_ID"]; has || v["MAX_CALL_MINUTES"] != "" || v["CALL_END_GRACE_MS"] != "" {
 		t.Fatalf("virtual-assistant billing/removed keys: %v", v)
 	}
 	if p := envfile.Read(filepath.Join(w.Repo("persons-api"), ".env")); !strings.Contains(p["ELIGIBILITY_CALLER_SERVICE_IDS"], "virtual-assistant") {

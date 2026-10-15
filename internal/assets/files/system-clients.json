@@ -7,7 +7,7 @@
     "organizations-api": ["revocations:read"],
     "notifications-api": ["revocations:read", "projects:read", "persons:contact", "persons:birthdays", "organizations:snapshot"],
     "forms-api": ["persons:read"],
-    "dispatch-api": ["revocations:read", "apps:read", "apps:webhook-secret", "persons:import-results", "projects:read"],
+    "dispatch-api": ["revocations:read", "apps:read", "apps:webhook-secret", "persons:import-results", "projects:read", "organizations:snapshot"],
     "ai-api": ["revocations:read", "projects:read", "skills:mint", "grants:read", "app-features:read"],
     "developers-api": ["revocations:read", "apps:provision", "apps:read", "projects:provision", "persons:eligibility", "app-features:provision", "ai:invoke", "apps:suspend", "notifications:send-template"],
     "developers-link-check": ["developers:link-check"],
@@ -18,7 +18,8 @@
     "virtual-assistant": ["revocations:read", "persons:read", "persons:access-log", "ai:on-behalf", "persons:eligibility", "organizations:snapshot", "notifications:send"],
     "places-api": ["revocations:read", "projects:read", "organizations:snapshot"],
     "schedule-api": ["revocations:read", "projects:read", "organizations:snapshot", "places:read", "notifications:schedule-reminder", "notifications:send-template", "persons:coordination"],
-    "apps-api": ["revocations:read", "apps:read"]
+    "apps-api": ["revocations:read", "apps:read"],
+    "costs-api": ["revocations:read", "projects:read", "organizations:snapshot"]
   },
   "_comment_appBound": "Internal clients bound to an app (SEED_CLIENTS_JSON entry carries appId): app-bound-only scopes. None today: sign-api is an unbound core client.",
   "appBound": {}

@@ -118,3 +118,10 @@ func TestVirtualAssistantGoDetectionFollowsTheCheckout(t *testing.T) {
 		t.Fatal("repos without Lang are never Go")
 	}
 }
+
+func TestCostsAPIIsACoreAPIOnPort3021(t *testing.T) {
+	r, ok := Get("costs-api")
+	if !ok || r.Port != 3021 || r.Kind != KindAPI || r.Rel() != "core/costs-api" {
+		t.Fatalf("costs-api catalog entry: %+v ok=%v", r, ok)
+	}
+}

@@ -87,6 +87,8 @@ var Repos = []Repo{
 	// Virtual assistant (core). Repo name has no "-api" suffix.
 	{Name: "virtual-assistant", Kind: KindAPI, Lang: "go", Port: 3019, Display: "Virtual Assistant"},
 	{Name: "dispatch-api", Kind: KindAPI, Port: 3007, Display: "Dispatch"},
+	// Billing service (core): records every running cost for Oikos "Custos".
+	{Name: "costs-api", Kind: KindAPI, Port: 3021, Display: "Costs"},
 	{Name: "auth-webapp", Kind: KindWeb, Port: 5100, Display: "Auth Web"},
 	{Name: "forms-webapp", Kind: KindWeb, Port: 5106, Display: "Forms Web"},
 	{Name: "sign-webapp", Kind: KindWeb, Port: 5113, Display: "Sign Web"},
