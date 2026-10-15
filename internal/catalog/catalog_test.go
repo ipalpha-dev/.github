@@ -125,3 +125,13 @@ func TestCostsAPIIsACoreAPIOnPort3021(t *testing.T) {
 		t.Fatalf("costs-api catalog entry: %+v ok=%v", r, ok)
 	}
 }
+
+func TestServicesKidsSyncIsAPrivateOptionalAppAPI(t *testing.T) {
+	r, ok := Get("services-kids-sync-api")
+	if !ok || r.Kind != KindAPI || r.Port != 3024 || r.Rel() != "apps/services-kids/services-kids-sync-api" {
+		t.Fatalf("sync entry: %+v", r)
+	}
+	if !r.SkippedWhenMissing() || !r.Runs() || !r.HasEnv() || !r.Publishable() || !r.NoClient {
+		t.Fatalf("sync must be skipped when missing, run, have .env, publish and get no internal client: %+v", r)
+	}
+}

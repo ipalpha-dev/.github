@@ -267,6 +267,7 @@ documents-api (port 3012, MongoDB `documents`) holds versioned legal texts (memb
 consent). `./run` starts it with the other APIs and hands every consumer `DOCUMENTS_API_URL`; Oikos reaches it
 at `/api/documents`. persons-api verifies the consent version a client sends with a live call to it, so
 consent writes answer 503 while documents-api is down.
+Its `.env` also gets `REDIS_URL=redis://127.0.0.1:6379` (the local Redis, like persons-api and forms-api).
 
 Scanned agreements: documents-api also needs `AI_API_URL` (ai-api, port 3008) and `AI_API_AUDIENCE=ipalpha:ai`
 (required at boot), plus an optional `AI_BILLING_PROJECT_ID` (empty: scanned uploads answer 503 `scanNotConfigured`
@@ -529,7 +530,7 @@ block (or use `ipalpha config` > Ports inside the workspace), then `./stop` and 
 | apps-api | 3015 | services-kids-api | 3017 |
 | virtual-assistant | 3019 | services-kids-webapp | 5115 |
 | acampa-kids-backend | 3020 | acampa-kids-frontend | 5117 |
-| costs-api | 3021 | | |
+| costs-api | 3021 | services-kids-sync-api (private) | 3024 |
 
 ## Costs API (billing service, core)
 
@@ -581,11 +582,28 @@ The repositories have an origin, so `./pull`, `setup` and `./feature` clone them
 missing keys and filling blanks: `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` (one Web Push P-256
 pair, base64url, generated once and kept), `VAPID_SUBJECT=mailto:dev@example.test`, `MONGO_URI`, `WEB_ORIGINS` /
 `PUBLIC_WEB_URL` (`http://localhost:5115`), `COOKIE_SECURE=false`, `AUTH_API_URL`,
-`PROJECTS|PERSONS|PLACES|SCHEDULE|NOTIFICATIONS_API_URL`, `WHATSAPP_ENABLED=false`, `AI_API_URL` (ai-api, blank = the WhatsApp listener asks no AI), `DRIVE_API_URL` (`http://127.0.0.1:3018`) and `DRIVE_WEB_URL` (`http://localhost:5116`, the folder link; both optional, but the printer-release screen answers 503 `peerNotConfigured` without them and needs drive-api, drive-webapp and RustFS running), optional blank `ASSISTANT_CLIENT_ID` + `ASSISTANT_PRIVATE_KEY` (both or neither).
+`PROJECTS|PERSONS|PLACES|SCHEDULE|NOTIFICATIONS_API_URL`, `DRIVE_API_URL` (`http://127.0.0.1:3018`) and `DRIVE_WEB_URL` (`http://localhost:5116`, the folder link; both optional, but the printer-release screen answers 503 `peerNotConfigured` without them and needs drive-api, drive-webapp and RustFS running). The WhatsApp assistant left Services Kids: `WHATSAPP_ENABLED`, `AI_API_URL`, `ASSISTANT_CLIENT_ID` and
+`ASSISTANT_PRIVATE_KEY` are no longer written (an existing `.env` keeps them; they are ignored, delete them by hand).
 
 As with Services Photo, register the app in the Developers portal / Oikos and paste `AUTH_CLIENT_ID`, `AUTH_CLIENT_SECRET`
 (app-bound, `login:relay` + `notifications:send-template`), `RELAY_CLIENT_ID`, `RELAY_ENTRY_POINT` and `OAUTH_CLIENT_ID`
 into `services-kids-api/.env`; the tooling does not seed them or the app record in the main workspace (a feature workspace clones them from main's auth database on `./run`, ports remapped), so approve the `ipalpha:drive` scope for the Services Kids app in Oikos (otherwise sign-in carries no Drive token and the SMS relay mints none).
+
+### Services Kids sync (private, temporary)
+
+`apps/services-kids/services-kids-sync-api` (**Services Kids Sync**, port **3024**, NestJS, MongoDB `services_kids_sync`) is
+the exceptional, temporary import from MyKids, WhatsApp groups and Google Forms into Services Kids. The repository is
+**private** (`ipalpha-dev/services-kids-sync-api`, never public): without access `./pull`, `setup`, `./feature` and
+`./doctor` skip it quietly and everything else works; when it is cloned, `./run` starts it like any other API and
+`./publish` builds `apps/services-kids/services-kids-sync-api`. Services Kids API never references it.
+
+Its `.env` comes from its `.env.example` (else the embedded fallback) with every module off (`MYKIDS_ENABLED`,
+`WHATSAPP_ENABLED`, `FORMS_ENABLED=false`) and no secrets: with only `MONGO_URI` it boots and answers `/live`, `/ready`
+and `/sync/*`. It gets **no** auth-api internal client (`AUTH_CLIENT_ID`/`SECRET`): it authenticates with the delegated
+sync grant, so fill `SYNC_SECRET` (32+ chars), `SYNC_CREDENTIAL_ID`, `SYNC_PRIVATE_KEY`, `SYNC_PROJECT_ID` and
+`SYNC_ADMIN_PERSON_ID` by hand after registering the sync credential in Oikos. Never point a development machine at the
+real MyKids. When the sync is cloned, `./run` gives services-kids-webapp `INTEGRATIONS_URL` (the sync's local URL), and
+its Vite proxy mounts it same-origin at `/sync`; without it there is no proxy and the webapp hides its sync section.
 
 ## Acampa Kids (app outside core)
 

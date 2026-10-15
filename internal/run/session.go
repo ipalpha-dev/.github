@@ -383,6 +383,14 @@ func webEnv(w *workspace.Workspace, r catalog.Repo, plan ports.Plan, rw ports.Re
 		vals["IPALPHA_WEB_PROXY_API"] = urlOf(backend)
 		refs[backend] = true
 	}
+	if r.Name == "services-kids-webapp" {
+		// The private sync (when cloned) is mounted same-origin at /sync by the webapp's Vite proxy; without it the
+		// webapp has no proxy and hides its sync section.
+		if sync := w.Repo("services-kids-sync-api"); dirExists(sync) {
+			vals["INTEGRATIONS_URL"] = urlOf(plan.Port("services-kids-sync-api"))
+			refs[plan.Port("services-kids-sync-api")] = true
+		}
+	}
 	vals["IPALPHA_WEB_PORT"] = strconv.Itoa(port)
 	vals["IPALPHA_WEB_URL"] = self
 	vals["IPALPHA_VITE_CACHE"] = filepath.Join(w.Dir(), ".vite", r.Name)
@@ -599,4 +607,9 @@ func loopbackOnly(list string) []string {
 		}
 	}
 	return out
+}
+
+func dirExists(dir string) bool {
+	st, err := os.Stat(dir)
+	return err == nil && st.IsDir()
 }

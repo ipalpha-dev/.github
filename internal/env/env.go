@@ -335,7 +335,11 @@ func fillLocal(w *workspace.Workspace, r catalog.Repo, f *envfile.File) []string
 			}
 		}
 	}
-	// Machine credentials of this service, registered in auth-api through SEED_CLIENTS_JSON.
+	// Machine credentials of this service, registered in auth-api through SEED_CLIENTS_JSON (not for NoClient APIs:
+	// the Services Kids sync authenticates with the delegated sync grant).
+	if r.NoClient {
+		return changed
+	}
 	fill("AUTH_CLIENT_ID", r.Name)
 	fill("AUTH_CLIENT_SECRET", randomHex(24))
 	return changed

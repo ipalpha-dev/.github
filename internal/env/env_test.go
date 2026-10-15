@@ -453,3 +453,22 @@ func TestVirtualAssistantUsesLocalDefaultsNotAppDefaults(t *testing.T) {
 		t.Fatalf("app defaults leaked: %v", v)
 	}
 }
+
+// The private sync uses the delegated sync grant: it gets its fallback .env but no auth-api internal client.
+func TestServicesKidsSyncGetsFallbackEnvAndNoInternalClient(t *testing.T) {
+	w := ws(t)
+	r, _ := catalog.Get("services-kids-sync-api")
+	if err := os.MkdirAll(r.Path(w.Root), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Complete(w, r); err != nil {
+		t.Fatal(err)
+	}
+	e := envfile.Read(filepath.Join(r.Path(w.Root), ".env"))
+	if e["PORT"] != "3024" || !strings.Contains(e["MONGO_URI"], "/services_kids_sync?") || e["MYKIDS_ENABLED"] != "false" || e["WHATSAPP_ENABLED"] != "false" || e["FORMS_ENABLED"] != "false" {
+		t.Fatalf("sync env: %v", e)
+	}
+	if _, ok := e["AUTH_CLIENT_ID"]; ok {
+		t.Fatalf("sync must not get an internal client: %v", e)
+	}
+}

@@ -54,6 +54,11 @@ type Repo struct {
 	Lang string
 	// Frontend marks an optional app repo that ./run serves with Vite like a web app.
 	Frontend bool
+	// Private marks a repo most developers cannot clone (services-kids-sync-api): ./pull, ./feature and ./doctor skip
+	// it quietly when it is missing; when present it runs and publishes like any other repo of its kind.
+	Private bool
+	// NoClient: an API that gets no auth-api internal client (AUTH_CLIENT_ID/SECRET) from the tooling.
+	NoClient bool
 }
 
 // Repos in run order: nothing waits for a peer (GET /ready), the order only reads peers-first.
@@ -84,6 +89,9 @@ var Repos = []Repo{
 	{Name: "services-kids-api", Kind: KindAPI, App: "services-kids", Port: 3017, Display: "Services Kids API"},
 	// Services Kids desktop agent (private repo, C# .NET 8): clone-only like the Services Photo desktop repos.
 	{Name: "services-kids-printer-windows", Kind: KindDesktop, App: "services-kids", Display: "Services Kids Printer Windows"},
+	// Services Kids exceptional sync (private repo, temporary: MyKids / WhatsApp / Google Forms import). Uses the delegated
+	// sync grant, never an internal client. Webapp reaches it at /sync (INTEGRATIONS_URL).
+	{Name: "services-kids-sync-api", Kind: KindAPI, App: "services-kids", Port: 3024, Display: "Services Kids Sync", Private: true, NoClient: true},
 	// Virtual assistant (core). Repo name has no "-api" suffix.
 	{Name: "virtual-assistant", Kind: KindAPI, Lang: "go", Port: 3019, Display: "Virtual Assistant"},
 	{Name: "dispatch-api", Kind: KindAPI, Port: 3007, Display: "Dispatch"},
@@ -223,7 +231,7 @@ func (r Repo) HasImage() bool {
 // SkippedWhenMissing: repositories a developer may not have (no access, or not created yet) are skipped
 // quietly by ./pull, ./doctor and ./feature instead of failing them.
 func (r Repo) SkippedWhenMissing() bool {
-	return r.Kind == KindOptional || r.Kind == KindService || r.Kind == KindDesktop
+	return r.Private || r.Kind == KindOptional || r.Kind == KindService || r.Kind == KindDesktop
 }
 
 // Publishable by ./publish (release mode): core services, web apps, libraries and the images of
