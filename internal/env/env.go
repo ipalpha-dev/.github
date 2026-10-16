@@ -436,6 +436,9 @@ func SeedClients(w *workspace.Workspace) error {
 	}
 	var ours []SeedClient
 	for _, r := range w.Present(catalog.KindAPI) {
+		if _, own := selfRegistering[r.Name]; own {
+			continue // its app seed creates AUTH_CLIENT_ID bound to the app; an unbound one would block that (409 clientExists)
+		}
 		e := envfile.Read(filepath.Join(r.Path(w.Root), ".env"))
 		if e["AUTH_CLIENT_ID"] == "" || e["AUTH_CLIENT_SECRET"] == "" {
 			continue
@@ -469,7 +472,9 @@ func SeedClients(w *workspace.Workspace) error {
 	}
 	var merged []any
 	for _, c := range current {
-		if id, _ := c["clientId"].(string); !ids[id] {
+		id, _ := c["clientId"].(string)
+		service, _ := c["serviceId"].(string)
+		if _, own := selfRegistering[service]; !ids[id] && !own {
 			merged = append(merged, c)
 		}
 	}

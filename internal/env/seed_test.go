@@ -137,3 +137,39 @@ func mustRead(t *testing.T, p string) []byte {
 	}
 	return b
 }
+
+func TestSelfRegisteringAppsGetRelayIdsAndLeaveSeedClients(t *testing.T) {
+	w := ws(t)
+	w.Settings.Seed = "on"
+	auth := filepath.Join(w.Repo("auth-api"), ".env")
+	// An older workspace seeded both as unbound core clients: they are dropped, other clients are kept.
+	os.WriteFile(auth, []byte(`SEED_CLIENTS_JSON='[{"clientId":"services-kids-api","secret":"x","serviceId":"services-kids-api","scopes":[]},{"clientId":"operator","secret":"y","serviceId":"operator","scopes":[]}]'`+"\n"), 0o600)
+	for _, name := range []string{"services-kids-api", "services-photo-api"} {
+		os.MkdirAll(w.Repo(name), 0o755)
+	}
+	if _, err := Prepare(w); err != nil {
+		t.Fatal(err)
+	}
+	kids, photo := envfile.Read(filepath.Join(w.Repo("services-kids-api"), ".env")), envfile.Read(filepath.Join(w.Repo("services-photo-api"), ".env"))
+	if !strings.HasPrefix(kids["RELAY_CLIENT_ID"], "services-kids-") || len(kids["RELAY_CLIENT_ID"]) != len("services-kids-")+12 || kids["RELAY_ENTRY_POINT"] != "web" {
+		t.Fatalf("services-kids relay ids: %v", kids)
+	}
+	if !strings.HasPrefix(photo["RELAY_CLIENT_ID"], "services-photo-") || photo["RELAY_ENTRY_POINT"] != "web" || photo["SEED_DATA"] != "true" || len(photo["SEED_KEY"]) != 64 {
+		t.Fatalf("services-photo seed keys: %v", photo)
+	}
+	if photo["DEVELOPERS_API_URL"] == "" || kids["DEVELOPERS_API_URL"] == "" || kids["AUTH_CLIENT_ID"] == "" {
+		t.Fatalf("DEVELOPERS_API_URL / AUTH_CLIENT_ID missing: %v %v", kids, photo)
+	}
+	seeded := envfile.Read(auth)["SEED_CLIENTS_JSON"]
+	if strings.Contains(seeded, "services-kids-api") || strings.Contains(seeded, "services-photo-api") || !strings.Contains(seeded, `"operator"`) {
+		t.Fatalf("SEED_CLIENTS_JSON: %s", seeded)
+	}
+
+	// A second pass keeps the chosen ids (they are the same values the app seed registered).
+	if _, err := Prepare(w); err != nil {
+		t.Fatal(err)
+	}
+	if again := envfile.Read(filepath.Join(w.Repo("services-kids-api"), ".env")); again["RELAY_CLIENT_ID"] != kids["RELAY_CLIENT_ID"] {
+		t.Fatalf("relay client id changed: %q -> %q", kids["RELAY_CLIENT_ID"], again["RELAY_CLIENT_ID"])
+	}
+}

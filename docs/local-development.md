@@ -460,7 +460,7 @@ if it never chose; `--no-seed` makes that feature `off` without touching main) a
 `deployment`). The default is **yes**; change it later with `ipalpha config set seed on|off` (which rewrites the keys at once).
 
 The choice owns these keys in the `.env` of auth-api, persons-api, organizations-api, places-api, projects-api, schedule-api,
-drive-api, photos-api, documents-api, sign-api, forms-api, services-kids-api, developers-api and the Acampa Kids backend. **This is the one explicit exception to
+drive-api, photos-api, documents-api, sign-api, forms-api, services-kids-api, services-photo-api, developers-api and the Acampa Kids backend. **This is the one explicit exception to
 "never overwrite a local value"**: setup, `./pull` and `config set seed` rewrite them whenever the choice differs, and blank
 them when it is off (nothing is written while the workspace has not chosen):
 
@@ -468,12 +468,12 @@ them when it is off (nothing is written while the workspace has not chosen):
 | --- | --- | --- |
 | `SEED_DATA` | `true` | all of the services above |
 | `IPALPHA_ENV` | `dev` (previews use `preview:<slug>` in their configmaps) | all of the services above |
-| `SEED_KEY` | 32 random bytes in hex, generated once per workspace (`.ipalpha/seed.env`), the same value everywhere | auth-api, organizations-api, projects-api, schedule-api, drive-api, photos-api, sign-api, forms-api, services-kids-api, Acampa Kids backend (not persons-api: it seeds in-process; a stale `SEED_KEY` in its `.env` is removed by setup/`./pull`; not documents-api or places-api) |
+| `SEED_KEY` | 32 random bytes in hex, generated once per workspace (`.ipalpha/seed.env`), the same value everywhere | auth-api, organizations-api, projects-api, schedule-api, drive-api, photos-api, sign-api, forms-api, services-kids-api, services-photo-api, Acampa Kids backend (not persons-api: it seeds in-process; a stale `SEED_KEY` in its `.env` is removed by setup/`./pull`; not documents-api or places-api) |
 
 A service refuses to boot with `SEED_DATA=true` unless `IPALPHA_ENV` is `dev` or `preview*`; production never gets either
 key. For the Acampa Kids backend, while seeding is on, setup also generates once (same values the app's seed sends to auth-api,
 filled only where blank): `IPALPHA_CLIENT_ID` (`acampa-kids-<hex>`), `IPALPHA_CLIENT_SECRET`, `IPALPHA_SYSTEM_CLIENT_SECRET`
-(64 hex characters each), plus `IPALPHA_SYSTEM_CLIENT_ID=acampa-kids` and `IPALPHA_DEVELOPERS_API_URL`. `SUPER_ADMIN_PERSON_IDS` is no longer written: the sample people have normal generated ids, and the coordination (Marina Duarte (exemplo), +55 11 90000-0011) works through her project role. Every service that takes `SEED_KEY` finds the sample people by phone through persons-api under the seed-actor token, so its `.env` also needs `AUTH_API_URL` and `PERSONS_API_URL` (both in the env-fallback files; schedule-api also `PROJECTS_API_URL`). Services Kids API (`SERVICES_KIDS_PROJECT_ID` may stay blank while seeding: its seed creates the `services-kids` project and keeps the id in its own `seedState`; with seed off you set it) finds the sample people by phone (guardians 0041-0044, volunteers 0045-0048) and needs `AUTH_API_URL`, `PROJECTS_API_URL` and optionally `PLACES_API_URL`. The first `./run` boot applies the seeds; setup
+(64 hex characters each), plus `IPALPHA_SYSTEM_CLIENT_ID=acampa-kids` and `IPALPHA_DEVELOPERS_API_URL`; for services-kids-api and services-photo-api `RELAY_CLIENT_ID` (`services-kids-<hex>` / `services-photo-<hex>`) and `RELAY_ENTRY_POINT=web`. These three apps register themselves on the first seeded boot (see their sections). `SUPER_ADMIN_PERSON_IDS` is no longer written: the sample people have normal generated ids, and the coordination (Marina Duarte (exemplo), +55 11 90000-0011) works through her project role. Every service that takes `SEED_KEY` finds the sample people by phone through persons-api under the seed-actor token, so its `.env` also needs `AUTH_API_URL` and `PERSONS_API_URL` (both in the env-fallback files; schedule-api also `PROJECTS_API_URL`). Services Kids API (`SERVICES_KIDS_PROJECT_ID` may stay blank while seeding: its seed creates the `services-kids` project and keeps the id in its own `seedState`; with seed off you set it) finds the sample people by phone (guardians 0041-0044, volunteers 0045-0048) and needs `AUTH_API_URL`, `PROJECTS_API_URL` and optionally `PLACES_API_URL`. The first `./run` boot applies the seeds; setup
 prints the sample phones once (all fictional, `@example.test`): core `+55 11 90000-0001` Ana and `0002` Bruno (stewards), `0003` Carla, `0005` Elisa, `0006` Fernanda (responsável), not verified; Acampa Kids `0011`..`0020` (Marina is the coordination), verified; Services Kids at Tamboré `0041`..`0048` (guardians and volunteers), verified.
 `SEED_PERSON_IDS_JSON` and `SEED_OWNER_PERSON_ID` are retired and there are no fixed ids: `./pull` removes them from your `.env`.
 The matching developer guide is `/docs/local-seeding` in the developer portal.
@@ -554,9 +554,12 @@ missing keys and filling blanks: `MONGO_URI`, `WEB_ORIGINS` /
 `PUBLIC_WEB_URL` (`http://localhost:5114`), `AUTH_API_URL`, `AUTH_TOKEN_ISSUER`, `PROJECTS|PERSONS|SCHEDULE|PHOTOS|PLACES_API_URL`, and the optional `DISPATCH_API_URL` (`http://127.0.0.1:3007/api/dispatch`; empty turns the photos-push relay off).
 
 Sign-in uses auth-api's login relay, so the app needs an **app-bound client with `login:relay`** and a relay
-entry point. The tooling does not seed these in the main workspace (no local app id exists; feature workspaces clone them from main's auth database, see "`./run`"): register the app in the Developers portal /
-Oikos, then paste `AUTH_CLIENT_ID`, `AUTH_CLIENT_SECRET`, `RELAY_CLIENT_ID` and `RELAY_ENTRY_POINT` into
-`services-photo-api/.env`. Until then the API boots but sign-in answers unavailable.
+entry point. With seeding on, the app registers itself on the first `./run` like Services Kids (registration only, no sample
+data): setup writes `SEED_DATA`, `IPALPHA_ENV`, `SEED_KEY`, `RELAY_CLIENT_ID` (`services-photo-<hex>`), `RELAY_ENTRY_POINT=web` and
+`DEVELOPERS_API_URL`; `services-photo-api` is no longer an unbound client in `SEED_CLIENTS_JSON` (an older auth database needs
+one wipe, `./stop --volumes`). With seeding off, register it in the Developers portal / Oikos and paste `AUTH_CLIENT_ID`,
+`AUTH_CLIENT_SECRET`, `RELAY_CLIENT_ID` and `RELAY_ENTRY_POINT` into `services-photo-api/.env`. Until then the API boots but
+sign-in answers unavailable.
 
 New core env for this feature (added, never overwritten): schedule-api `PERSONS_API_URL`, `PERSONS_API_AUDIENCE=ipalpha:persons`
 (and the system-client scope `persons:coordination`); persons-api `PROFILE_CALLER_SERVICE_IDS=auth-api`,
@@ -584,9 +587,16 @@ pair, base64url, generated once and kept), `VAPID_SUBJECT=mailto:dev@example.tes
 `PROJECTS|PERSONS|PLACES|SCHEDULE|NOTIFICATIONS_API_URL`, `DRIVE_API_URL` (`http://127.0.0.1:3018`) and `DRIVE_WEB_URL` (`http://localhost:5116`, the folder link; both optional, but the printer-release screen answers 503 `peerNotConfigured` without them and needs drive-api, drive-webapp and RustFS running). The WhatsApp assistant left Services Kids: `WHATSAPP_ENABLED`, `AI_API_URL`, `ASSISTANT_CLIENT_ID` and
 `ASSISTANT_PRIVATE_KEY` are no longer written (an existing `.env` keeps them; they are ignored, delete them by hand).
 
-As with Services Photo, register the app in the Developers portal / Oikos and paste `AUTH_CLIENT_ID`, `AUTH_CLIENT_SECRET`
-(app-bound, `login:relay` + `notifications:send-template`), `RELAY_CLIENT_ID`, `RELAY_ENTRY_POINT` and `OAUTH_CLIENT_ID`
-into `services-kids-api/.env`; the tooling does not seed them or the app record in the main workspace (a feature workspace clones them from main's auth database on `./run`, ports remapped), so approve the `ipalpha:drive` scope for the Services Kids app in Oikos (otherwise sign-in carries no Drive token and the SMS relay mints none).
+With seeding on, the app registers itself in the local core on the first `./run` (its dev seed, same as Services Photo and
+Acampa Kids): a developers-api `app` request (internal, entry point `web` on the local webapp origin), approved by the seed
+actor, then `AUTH_CLIENT_ID` (`services-kids-api`, `login:relay` + `notifications:send-template`) created bound to the app and
+the setup-generated secrets applied (`PUT /seed/apps/:appId/secrets`). Setup fills once, kept in `.ipalpha/seed.env`:
+`RELAY_CLIENT_ID` (`services-kids-<hex>`, the entry point's client id) and `RELAY_ENTRY_POINT=web`, plus `DEVELOPERS_API_URL`
+from the fallback; `AUTH_CLIENT_SECRET` is the entry point's secret too unless `OAUTH_CLIENT_SECRET` is set. `services-kids-api`
+is therefore no longer in auth-api's `SEED_CLIENTS_JSON` (an unbound client would block the bound one): an auth database from
+before this change needs one wipe (`./stop --volumes`), and the app seed says so. With seeding off, register it in the
+Developers portal / Oikos and paste those keys; until then the API boots and the SMS sign-in answers 503 `relayUnavailable`.
+Approve the `ipalpha:drive` scope for the app in Oikos for the printer-release Drive folder (not requestable in the portal).
 
 ### Services Kids sync (private, temporary)
 

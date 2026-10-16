@@ -25,7 +25,7 @@ const (
 var seedServices = map[string]bool{
 	"auth-api": true, "persons-api": true, "organizations-api": true, "places-api": true, "projects-api": true,
 	"schedule-api": true, "drive-api": true, "photos-api": true, "documents-api": true, "sign-api": true,
-	"forms-api": true, "acampa-kids-backend": true, "services-kids-api": true, "developers-api": true,
+	"forms-api": true, "acampa-kids-backend": true, "services-kids-api": true, "services-photo-api": true, "developers-api": true,
 }
 
 // seedKeyServices also get SEED_KEY (the same value everywhere) while seeding is on: auth-api honors it, the others
@@ -35,6 +35,16 @@ var seedServices = map[string]bool{
 var seedKeyServices = map[string]bool{
 	"auth-api": true, "organizations-api": true, "projects-api": true, "schedule-api": true, "drive-api": true,
 	"photos-api": true, "sign-api": true, "forms-api": true, "acampa-kids-backend": true, "services-kids-api": true,
+	"services-photo-api": true,
+}
+
+// selfRegistering are the NestJS app APIs outside core whose dev seed registers their own app in the local core
+// (developers-api request -> approval -> app-bound AUTH_CLIENT_ID -> PUT /seed/apps/:appId/secrets). While seeding is on
+// they get the setup-chosen relay client id (kept in seed.env under the key named here) and the entry point key `web`.
+// Their AUTH_CLIENT_ID is never seeded as an unbound core client (SeedClients): the app seed creates it bound.
+var selfRegistering = map[string]string{
+	"services-kids-api":  "SERVICES_KIDS_RELAY_CLIENT_ID",
+	"services-photo-api": "SERVICES_PHOTO_RELAY_CLIENT_ID",
 }
 
 // retiredKeys are no longer read by any service. Removed from existing .env files.
@@ -86,10 +96,17 @@ func applySeed(w *workspace.Workspace, r catalog.Repo, f *envfile.File) []string
 		fill("IPALPHA_SYSTEM_CLIENT_SECRET", secrets["IPALPHA_SYSTEM_CLIENT_SECRET"])
 		fill("IPALPHA_SYSTEM_CLIENT_ID", "acampa-kids")
 	}
+	if key, ok := selfRegistering[r.Name]; ok {
+		for _, kv := range [][2]string{{"RELAY_CLIENT_ID", secrets[key]}, {"RELAY_ENTRY_POINT", "web"}} {
+			if f.SetIfEmpty(kv[0], kv[1]) {
+				changed = append(changed, kv[0])
+			}
+		}
+	}
 	return changed
 }
 
-var seedSecretKeys = []string{"SEED_KEY", "IPALPHA_CLIENT_ID", "IPALPHA_CLIENT_SECRET", "IPALPHA_SYSTEM_CLIENT_SECRET"}
+var seedSecretKeys = []string{"SEED_KEY", "IPALPHA_CLIENT_ID", "IPALPHA_CLIENT_SECRET", "IPALPHA_SYSTEM_CLIENT_SECRET", "SERVICES_KIDS_RELAY_CLIENT_ID", "SERVICES_PHOTO_RELAY_CLIENT_ID"}
 
 // seedSecrets returns the per-workspace values that must be equal in several .env files, generated once and
 // kept in .ipalpha/seed.env (0600). A feature workspace has its own.
@@ -100,8 +117,13 @@ func seedSecrets(w *workspace.Workspace) map[string]string {
 	for _, k := range seedSecretKeys {
 		if cur[k] == "" {
 			cur[k] = randomHex(32) // 64 hex chars: SEED_KEY is 32 random bytes, the client secrets need >= 32
-			if k == "IPALPHA_CLIENT_ID" {
-				cur[k] = "acampa-kids-" + randomHex(6) // a setup-chosen public client id, accepted by auth-api in seed mode
+			switch k { // setup-chosen public client ids, accepted by auth-api in seed mode
+			case "IPALPHA_CLIENT_ID":
+				cur[k] = "acampa-kids-" + randomHex(6)
+			case "SERVICES_KIDS_RELAY_CLIENT_ID":
+				cur[k] = "services-kids-" + randomHex(6)
+			case "SERVICES_PHOTO_RELAY_CLIENT_ID":
+				cur[k] = "services-photo-" + randomHex(6)
 			}
 			dirty = true
 		}
