@@ -465,7 +465,7 @@ func TestServicesKidsSyncGetsFallbackEnvAndNoInternalClient(t *testing.T) {
 		t.Fatal(err)
 	}
 	e := envfile.Read(filepath.Join(r.Path(w.Root), ".env"))
-	if e["PORT"] != "3024" || !strings.Contains(e["MONGO_URI"], "/services_kids_sync?") || e["MYKIDS_ENABLED"] != "false" || e["WHATSAPP_ENABLED"] != "false" || e["FORMS_ENABLED"] != "false" {
+	if e["PORT"] != "3024" || !strings.Contains(e["MONGO_URI"], "/services_kids_sync?") || e["MYKIDS_ENABLED"] != "false" || e["WHATSAPP_ENABLED"] != "false" || e["FORMS_ENABLED"] != "false" || e["SYNC_NOTIFY_ENABLED"] != "false" || e["NOTIFICATIONS_API_URL"] == "" || e["SYNC_NOTIFY_CLIENT_SECRET"] != "" {
 		t.Fatalf("sync env: %v", e)
 	}
 	if _, ok := e["AUTH_CLIENT_ID"]; ok {
