@@ -1,6 +1,11 @@
 package env
 
 import (
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/x509"
+	"encoding/base64"
+	"encoding/pem"
 	"os"
 	"path/filepath"
 	"strings"
@@ -107,10 +112,34 @@ func applySeed(w *workspace.Workspace, r catalog.Repo, f *envfile.File) []string
 			}
 		}
 	}
+	if r.Name == "services-kids-sync-api" {
+		// The sync prepares itself for every developer: its secret and signing key are generated once (the key's public half
+		// is registered as a sync credential by the sync's own dev seed through core), and WhatsApp is on so the admin page
+		// can show the linking QR. WA_LINK_QR_TERMINAL stays false: the QR never goes to a terminal.
+		for _, kv := range [][2]string{{"SYNC_SECRET", secrets["SYNC_SECRET"]}, {"SYNC_PRIVATE_KEY", secrets["SYNC_PRIVATE_KEY"]}} {
+			if f.SetIfEmpty(kv[0], kv[1]) {
+				changed = append(changed, kv[0])
+			}
+		}
+		own("WHATSAPP_ENABLED", "true")
+	}
 	return changed
 }
 
-var seedSecretKeys = []string{"SEED_KEY", "IPALPHA_CLIENT_ID", "IPALPHA_CLIENT_SECRET", "IPALPHA_SYSTEM_CLIENT_SECRET", "SERVICES_KIDS_RELAY_CLIENT_ID", "SERVICES_PHOTO_RELAY_CLIENT_ID"}
+// newSyncPrivateKey returns a fresh Ed25519 private key as base64 of its PKCS#8 PEM (what SYNC_PRIVATE_KEY accepts).
+func newSyncPrivateKey() string {
+	_, key, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		return ""
+	}
+	der, err := x509.MarshalPKCS8PrivateKey(key)
+	if err != nil {
+		return ""
+	}
+	return base64.StdEncoding.EncodeToString(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der}))
+}
+
+var seedSecretKeys = []string{"SEED_KEY", "SYNC_SECRET", "SYNC_PRIVATE_KEY", "IPALPHA_CLIENT_ID", "IPALPHA_CLIENT_SECRET", "IPALPHA_SYSTEM_CLIENT_SECRET", "SERVICES_KIDS_RELAY_CLIENT_ID", "SERVICES_PHOTO_RELAY_CLIENT_ID"}
 
 // seedSecrets returns the per-workspace values that must be equal in several .env files, generated once and
 // kept in .ipalpha/seed.env (0600). A feature workspace has its own.
@@ -122,6 +151,8 @@ func seedSecrets(w *workspace.Workspace) map[string]string {
 		if cur[k] == "" {
 			cur[k] = randomHex(32) // 64 hex chars: SEED_KEY is 32 random bytes, the client secrets need >= 32
 			switch k {             // setup-chosen public client ids, accepted by auth-api in seed mode
+			case "SYNC_PRIVATE_KEY":
+				cur[k] = newSyncPrivateKey()
 			case "IPALPHA_CLIENT_ID":
 				cur[k] = "acampa-kids-" + randomHex(6)
 			case "SERVICES_KIDS_RELAY_CLIENT_ID":
