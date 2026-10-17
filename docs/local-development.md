@@ -611,7 +611,7 @@ Its `.env` comes from its `.env.example` (else the embedded fallback) with every
 and `/sync/*`. It gets **no** auth-api internal client (`AUTH_CLIENT_ID`/`SECRET`): it signs in with its sync credential
 (impersonation, plain bearer), so fill `SYNC_SECRET` (32+ chars), `SYNC_CREDENTIAL_ID`, `SYNC_PRIVATE_KEY`, `SYNC_PROJECT_ID`,
 `SYNC_ADMIN_PERSON_ID` and `SERVICES_KIDS_APP_ID` by hand after registering the sync credential in Oikos
-(`SERVICES_KIDS_ORIGIN`, sent as Origin on Services Kids writes, defaults to `http://localhost:5115`). Never point a development machine at the
+(on a seeded setup `SEED_DATA`/`IPALPHA_ENV`/`SEED_KEY` are written for it too, and while `SYNC_PROJECT_ID` or `SERVICES_KIDS_APP_ID` is blank it finds both itself in the background from the Services Kids seed, so `/sync/sources` works without editing them; a filled value always wins). (`SERVICES_KIDS_ORIGIN`, sent as Origin on Services Kids writes, defaults to `http://localhost:5115`). Never point a development machine at the
 real MyKids. When the sync is cloned, `./run` gives services-kids-webapp `INTEGRATIONS_URL` (the sync's local URL), and
 its Vite proxy mounts it same-origin at `/sync`; without it there is no proxy and the webapp hides its sync section.
 

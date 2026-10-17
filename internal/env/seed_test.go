@@ -18,6 +18,7 @@ func TestSeedChoiceOwnsSeedKeys(t *testing.T) {
 	persons := filepath.Join(w.Repo("persons-api"), ".env")
 	forms := filepath.Join(w.Repo("forms-api"), ".env")
 	os.MkdirAll(w.Repo("services-kids-api"), 0o755)
+	os.MkdirAll(w.Repo("services-kids-sync-api"), 0o755)
 	sk := filepath.Join(w.Repo("services-kids-api"), ".env")
 	notif := filepath.Join(w.Repo("notifications-api"), ".env")
 	app := filepath.Join(acampa.Path(w.Root), ".env")
@@ -66,6 +67,9 @@ func TestSeedChoiceOwnsSeedKeys(t *testing.T) {
 	}
 	if k := envfile.Read(sk); len(k["SEED_KEY"]) != 64 || k["SEED_KEY"] != a["SEED_KEY"] {
 		t.Fatalf("services-kids-api SEED_KEY not shared: %q", k["SEED_KEY"])
+	}
+	if k := envfile.Read(filepath.Join(w.Repo("services-kids-sync-api"), ".env")); k["SEED_DATA"] != "true" || k["IPALPHA_ENV"] != "dev" || k["SEED_KEY"] != a["SEED_KEY"] {
+		t.Fatalf("services-kids-sync-api seed keys missing: %v", k)
 	}
 	if _, ok := p["SEED_KEY"]; ok {
 		t.Fatal("persons-api must not get SEED_KEY (and a stale one is removed)")
@@ -153,6 +157,9 @@ func TestSelfRegisteringAppsGetRelayIdsAndLeaveSeedClients(t *testing.T) {
 	kids, photo := envfile.Read(filepath.Join(w.Repo("services-kids-api"), ".env")), envfile.Read(filepath.Join(w.Repo("services-photo-api"), ".env"))
 	if !strings.HasPrefix(kids["RELAY_CLIENT_ID"], "services-kids-") || len(kids["RELAY_CLIENT_ID"]) != len("services-kids-")+12 || kids["RELAY_ENTRY_POINT"] != "web" {
 		t.Fatalf("services-kids relay ids: %v", kids)
+	}
+	if kids["OAUTH_CLIENT_ID"] != kids["RELAY_CLIENT_ID"] || photo["OAUTH_CLIENT_ID"] != "" {
+		t.Fatalf("One Tap OAUTH_CLIENT_ID must equal RELAY_CLIENT_ID for services-kids only: %v %v", kids["OAUTH_CLIENT_ID"], photo["OAUTH_CLIENT_ID"])
 	}
 	if !strings.HasPrefix(photo["RELAY_CLIENT_ID"], "services-photo-") || photo["RELAY_ENTRY_POINT"] != "web" || photo["SEED_DATA"] != "true" || len(photo["SEED_KEY"]) != 64 {
 		t.Fatalf("services-photo seed keys: %v", photo)

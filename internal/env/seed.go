@@ -25,7 +25,7 @@ const (
 var seedServices = map[string]bool{
 	"auth-api": true, "persons-api": true, "organizations-api": true, "places-api": true, "projects-api": true,
 	"schedule-api": true, "drive-api": true, "photos-api": true, "documents-api": true, "sign-api": true,
-	"forms-api": true, "acampa-kids-backend": true, "services-kids-api": true, "services-photo-api": true, "developers-api": true,
+	"forms-api": true, "acampa-kids-backend": true, "services-kids-api": true, "services-kids-sync-api": true, "services-photo-api": true, "developers-api": true,
 }
 
 // seedKeyServices also get SEED_KEY (the same value everywhere) while seeding is on: auth-api honors it, the others
@@ -35,7 +35,7 @@ var seedServices = map[string]bool{
 var seedKeyServices = map[string]bool{
 	"auth-api": true, "organizations-api": true, "projects-api": true, "schedule-api": true, "drive-api": true,
 	"photos-api": true, "sign-api": true, "forms-api": true, "acampa-kids-backend": true, "services-kids-api": true,
-	"services-photo-api": true,
+	"services-photo-api": true, "services-kids-sync-api": true,
 }
 
 // selfRegistering are the NestJS app APIs outside core whose dev seed registers their own app in the local core
@@ -97,7 +97,11 @@ func applySeed(w *workspace.Workspace, r catalog.Repo, f *envfile.File) []string
 		fill("IPALPHA_SYSTEM_CLIENT_ID", "acampa-kids")
 	}
 	if key, ok := selfRegistering[r.Name]; ok {
-		for _, kv := range [][2]string{{"RELAY_CLIENT_ID", secrets[key]}, {"RELAY_ENTRY_POINT", "web"}} {
+		pairs := [][2]string{{"RELAY_CLIENT_ID", secrets[key]}, {"RELAY_ENTRY_POINT", "web"}}
+		if r.Name == "services-kids-api" { // "Entrar com IPAlpha" / One Tap uses the entry point's client id too
+			pairs = append(pairs, [2]string{"OAUTH_CLIENT_ID", secrets[key]})
+		}
+		for _, kv := range pairs {
 			if f.SetIfEmpty(kv[0], kv[1]) {
 				changed = append(changed, kv[0])
 			}
