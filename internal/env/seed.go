@@ -121,7 +121,7 @@ func seedSecrets(w *workspace.Workspace) map[string]string {
 	for _, k := range seedSecretKeys {
 		if cur[k] == "" {
 			cur[k] = randomHex(32) // 64 hex chars: SEED_KEY is 32 random bytes, the client secrets need >= 32
-			switch k { // setup-chosen public client ids, accepted by auth-api in seed mode
+			switch k {             // setup-chosen public client ids, accepted by auth-api in seed mode
 			case "IPALPHA_CLIENT_ID":
 				cur[k] = "acampa-kids-" + randomHex(6)
 			case "SERVICES_KIDS_RELAY_CLIENT_ID":

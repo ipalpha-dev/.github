@@ -88,3 +88,26 @@ func joinLines(lines []string) string {
 	}
 	return out
 }
+
+func TestServicesKidsWebappGetsOneTapOriginAndClientId(t *testing.T) {
+	root := t.TempDir()
+	w, err := workspace.Open(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	api, _ := catalog.Get("services-kids-api")
+	repo, _ := catalog.Get("services-kids-webapp")
+	for _, dir := range []string{api.Path(root), repo.Path(root), filepath.Join(root, ".ipalpha")} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(api.Path(root), ".env"), []byte("RELAY_CLIENT_ID=services-kids-abc\nOAUTH_CLIENT_ID=services-kids-abc\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	plan := ports.Plan{Actual: map[string]int{"services-kids-webapp": 5215, "auth-webapp": 5200, "auth-api": 3105}, Preferred: map[string]int{"services-kids-webapp": 5115, "auth-webapp": 5100, "auth-api": 3005}}
+	parsed := envfile.Parse(joinLines(func() []string { v, _ := webEnv(w, repo, plan, ports.NewRewriter(plan)); return v }()))
+	if parsed["VITE_IPALPHA_AUTH_ORIGIN"] != "http://localhost:5200" || parsed["VITE_IPALPHA_ONE_TAP_CLIENT_ID"] != "services-kids-abc" {
+		t.Fatalf("One Tap settings: %v %v", parsed["VITE_IPALPHA_AUTH_ORIGIN"], parsed["VITE_IPALPHA_ONE_TAP_CLIENT_ID"])
+	}
+}
