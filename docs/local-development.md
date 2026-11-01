@@ -530,6 +530,11 @@ block (or use `ipalpha config` > Ports inside the workspace), then `./stop` and 
 | virtual-assistant | 3019 | services-kids-webapp | 5115 |
 | acampa-kids-backend | 3020 | acampa-kids-frontend | 5117 |
 | costs-api | 3021 | services-kids-sync-api (private) | 3024 |
+| eklesia-sync-api | 3025 |  |  |
+
+## Eklesia Sync API (core)
+
+`core/eklesia-sync-api` (port **3025**, MongoDB `eklesia_sync`, audience `ipalpha:eklesia-sync`) keeps the baked Eklesia member export and answers `GET /members/search?q=` for **sync tokens only**. auth-api registers the audience; Services Kids seed requests it on its external entry point. System client scopes: `revocations:read` only.
 
 ## Costs API (billing service, core)
 
