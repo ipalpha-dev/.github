@@ -97,6 +97,7 @@ var Repos = []Repo{
 	{Name: "dispatch-api", Kind: KindAPI, Port: 3007, Display: "Dispatch"},
 	// Billing service (core): records every running cost for Oikos "Custos".
 	{Name: "costs-api", Kind: KindAPI, Port: 3021, Display: "Costs"},
+	{Name: "eklesia-sync-api", Kind: KindAPI, Port: 3025, Display: "Eklesia Sync"},
 	{Name: "auth-webapp", Kind: KindWeb, Port: 5100, Display: "Auth Web"},
 	{Name: "forms-webapp", Kind: KindWeb, Port: 5106, Display: "Forms Web"},
 	{Name: "sign-webapp", Kind: KindWeb, Port: 5113, Display: "Sign Web"},

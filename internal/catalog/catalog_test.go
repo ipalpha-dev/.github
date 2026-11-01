@@ -131,6 +131,10 @@ func TestServicesKidsSyncIsAPrivateOptionalAppAPI(t *testing.T) {
 	if !ok || r.Kind != KindAPI || r.Port != 3024 || r.Rel() != "apps/services-kids/services-kids-sync-api" {
 		t.Fatalf("sync entry: %+v", r)
 	}
+	eklesia, ok := Get("eklesia-sync-api")
+	if !ok || eklesia.Kind != KindAPI || eklesia.Port != 3025 || eklesia.Rel() != "core/eklesia-sync-api" {
+		t.Fatalf("eklesia-sync entry: %+v", eklesia)
+	}
 	if !r.SkippedWhenMissing() || !r.Runs() || !r.HasEnv() || !r.Publishable() || !r.NoClient {
 		t.Fatalf("sync must be skipped when missing, run, have .env, publish and get no internal client: %+v", r)
 	}
