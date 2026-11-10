@@ -13,6 +13,12 @@ Everything below is done by one program, `ipalpha` (Go, no runtime dependencies)
 copy in `.ipalpha/bin/` and small wrappers at its root (`run`, `pull`, … on macOS/Linux; `run.cmd`, … on
 Windows). Something wrong? `./doctor` lists what is missing with the fix for each item.
 
+## Name-access security configuration
+
+The existing unbound persons-api system client needs `security:report` on `ipalpha:auth`. Both auth-api and dispatch-api require `EXCHANGE_AUTH_SECURITY_INCIDENT_CHANGED=auth-api.security-incident.changed`. These defaults are included in the embedded system-client catalog and env fallbacks; setup/pull add missing values without overwriting local choices. No new service, port or shared-js release is needed.
+
+Explicit-ID name lookups accept at most 15 IDs, one request per user per 10 seconds. The page that would reach 60 distinct visible people within a rolling two minutes is withheld and opens a global suspension for superuser review in Oikos. Role listings are not included in this protection. Do not build automatic bulk ID scanners. The implementation and developer portal document release, evidence and retention behavior.
+
 ## Hosted One Tap SDK and local HTTPS/FedCM
 
 The auth-webapp development server and image both serve `/sdk/v1/client.js` and `/sdk/v1/client.css`.

@@ -3,7 +3,7 @@
   "clients": {
     "projects-api": ["revocations:read", "apps:read", "organizations:snapshot", "persons:links"],
     "auth-api": ["app-features:read"],
-    "persons-api": ["revocations:read", "projects:read", "ai:invoke", "projects:import-memberships", "documents:read"],
+    "persons-api": ["revocations:read", "projects:read", "ai:invoke", "projects:import-memberships", "documents:read", "security:report"],
     "organizations-api": ["revocations:read"],
     "notifications-api": ["revocations:read", "projects:read", "persons:contact", "persons:birthdays", "organizations:snapshot"],
     "forms-api": ["persons:read"],
