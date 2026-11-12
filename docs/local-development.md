@@ -736,6 +736,10 @@ Start with `./doctor` (`--ai` also tests the AI, `--copy` copies the report).
   `./ipalpha ai` to switch.
 
 ## FAQ
+- **"Muitas tentativas" while signing in**: on your machine auth-api has no sign-in limits:
+  `AUTH_DISABLE_RATE_LIMITS=true` in `core/auth-api/.env` (setup and `./pull` add it) turns off the per-IP and
+  per-contact limits, the resend wait and the wrong-code lockouts. Set it to `false` to test them. It is ignored when
+  `NODE_ENV=production`, so it never reaches a real environment.
 
 **Why are the APIs not in containers?** Node on the host keeps edit → restart fast and debuggable; only the
 infra runs in containers.
