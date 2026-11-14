@@ -89,6 +89,9 @@ var Repos = []Repo{
 	{Name: "services-kids-api", Kind: KindAPI, App: "services-kids", Port: 3017, Display: "Services Kids API"},
 	// Services Kids desktop agent (private repo, C# .NET 8): clone-only like the Services Photo desktop repos.
 	{Name: "services-kids-printer-windows", Kind: KindDesktop, App: "services-kids", Display: "Services Kids Printer Windows"},
+	// Services Kids totem (Flutter, kiosk at the Kids check-in) and Kids app (Flutter, parents): clone-only like the desktop repos.
+	{Name: "services-kids-totem", Kind: KindDesktop, App: "services-kids", Display: "Services Kids Totem"},
+	{Name: "kids-app", Kind: KindDesktop, App: "kids", Display: "Kids App"},
 	// Services Kids exceptional sync (private repo, temporary: MyKids / WhatsApp / Google Forms import). Uses its sync
 	// credential (impersonation), never an internal client. Webapp reaches it at /sync (INTEGRATIONS_URL).
 	{Name: "services-kids-sync-api", Kind: KindAPI, App: "services-kids", Port: 3024, Display: "Services Kids Sync", Private: true, NoClient: true},

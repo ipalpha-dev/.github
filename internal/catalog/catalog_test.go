@@ -52,6 +52,8 @@ func TestDesktopReposAreCloneOnly(t *testing.T) {
 		"services-photo-macos":          "apps/services-photo/services-photo-macos",
 		"services-photo-windows":        "apps/services-photo/services-photo-windows",
 		"services-kids-printer-windows": "apps/services-kids/services-kids-printer-windows",
+		"services-kids-totem":           "apps/services-kids/services-kids-totem",
+		"kids-app":                      "apps/kids/kids-app",
 	} {
 		r, ok := Get(name)
 		if !ok || r.Kind != KindDesktop || r.Rel() != rel || r.Port != 0 {
