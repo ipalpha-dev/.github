@@ -249,6 +249,13 @@ gains `documents:read` and `schedule:read`. places-api gets `AUDIT_RETENTION_DAY
 are kept). Acampa Kids' backend is an `./run` process (see "Acampa Kids" below); its `IPALPHA_SCHEDULE_API_URL`,
 `IPALPHA_PLACES_API_URL` and `IPALPHA_PHOTOS_API_URL` are filled in its own `.env`.
 
+Device face sign-in (Services Kids totem) adds, as missing keys only: auth-api `PHOTOS_API_URL` (photos-api's local URL; empty
+makes `POST /device/face-sign-in` answer 503 `facesUnavailable`) and `FACE_IDENTIFY_MARGIN=0.08`; photos-api `FACE_IDENTIFY_MIN=0.45`;
+notifications-api `PUSH_PROVIDER=log` (accepts and logs every push locally; `fcm` needs `FCM_PROJECT_ID` and `FCM_SERVICE_ACCOUNT_JSON`) with
+empty `FCM_PROJECT_ID`, `FCM_SERVICE_ACCOUNT_JSON` and `PUSH_DEVICE_APP_LINKS`; services-kids-api empty `FACE_CONSENT_VERSION` and
+`FACE_CONSENT_DOCUMENT` (set the version to ask the face-recognition consent at registration). The Flutter apps `services-kids-totem` and
+`kids-app` are not run by `./run` and have no port.
+
 Oikos reaches photos-api at `/api/photos` through its Vite proxy; `./run` hands it `PHOTOS_API_URL` for the port of
 the run, like every other API.
 
