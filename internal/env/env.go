@@ -297,11 +297,12 @@ func fillLocal(w *workspace.Workspace, r catalog.Repo, f *envfile.File) []string
 			}
 		}
 	}
-	if r.Name == "developers-api" {
-		// A local workspace registers apps on http://localhost origins/callbacks, so loopback URIs must be allowed
-		// (like AUTH_ALLOW_LOOPBACK_REDIRECTS in auth-api). Only the old default "false" is flipped; real
-		// production never reads this file.
-		if cur, ok := f.Get("ALLOW_LOOPBACK_URIS"); ok && strings.EqualFold(strings.TrimSpace(cur), "false") {
+	if r.Name == "developers-api" || r.Name == "apps-api" || r.Name == "ai-api" {
+		// A local workspace registers apps on http://localhost origins/callbacks and local AI skills on
+		// http://localhost:<port> (apps-api accepts them, ai-api calls them), so loopback URIs must be allowed
+		// (like AUTH_ALLOW_LOOPBACK_REDIRECTS in auth-api). Only "false" or blank is flipped; real production
+		// never reads this file.
+		if cur, ok := f.Get("ALLOW_LOOPBACK_URIS"); !ok || strings.TrimSpace(cur) == "" || strings.EqualFold(strings.TrimSpace(cur), "false") {
 			set("ALLOW_LOOPBACK_URIS", "true")
 		}
 	}
@@ -312,9 +313,9 @@ func fillLocal(w *workspace.Workspace, r catalog.Repo, f *envfile.File) []string
 				set("AI_INVOKE_CALLER_SERVICE_IDS", merged)
 			}
 		}
-		// documents-api reads scanned agreements through POST /internal/vision; same rule.
+		// documents-api reads scanned agreements and persons-api checks synced photos through POST /internal/vision; same rule.
 		if cur, ok := f.Get("AI_VISION_CALLER_SERVICE_IDS"); ok {
-			if merged, changedList := addCSV(cur, "documents-api"); changedList {
+			if merged, changedList := addCSV(cur, "documents-api", "persons-api"); changedList {
 				set("AI_VISION_CALLER_SERVICE_IDS", merged)
 			}
 		}

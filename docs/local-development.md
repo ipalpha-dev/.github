@@ -602,8 +602,12 @@ The repositories have an origin, so `./pull`, `setup` and `./feature` clone them
 missing keys and filling blanks: `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` (one Web Push P-256
 pair, base64url, generated once and kept), `VAPID_SUBJECT=mailto:dev@example.test`, `MONGO_URI`, `WEB_ORIGINS` /
 `PUBLIC_WEB_URL` (`http://localhost:5115`), `COOKIE_SECURE=false`, `AUTH_API_URL`,
-`PROJECTS|PERSONS|PLACES|SCHEDULE|NOTIFICATIONS_API_URL`, `DRIVE_API_URL` (`http://127.0.0.1:3018`) and `DRIVE_WEB_URL` (`http://localhost:5116`, the folder link; both optional, but the printer-release screen answers 503 `peerNotConfigured` without them and needs drive-api, drive-webapp and RustFS running). The WhatsApp assistant left Services Kids: `WHATSAPP_ENABLED`, `AI_API_URL`, `ASSISTANT_CLIENT_ID` and
-`ASSISTANT_PRIVATE_KEY` are no longer written (an existing `.env` keeps them; they are ignored, delete them by hand).
+`PROJECTS|PERSONS|PLACES|SCHEDULE|NOTIFICATIONS_API_URL`, `DRIVE_API_URL` (`http://127.0.0.1:3018`) and `DRIVE_WEB_URL` (`http://localhost:5116`, the folder link; both optional, but the printer-release screen answers 503 `peerNotConfigured` without them and needs drive-api, drive-webapp and RustFS running) and
+`AI_API_URL` (`http://127.0.0.1:3008`, optional: Kiko, the voice assistant, is off without it). Kiko's skills answer at
+`SKILLS_BASE_URL` (optional; default the API's own `http://localhost:$PORT`), a loopback address that apps-api and ai-api accept
+locally because setup sets their `ALLOW_LOOPBACK_URIS=true` (a `false` or blank value is flipped). The skills and the `ai-live`
+feature reach the local core with the app registration, so an app registered before them needs fresh local databases
+(`./stop --volumes`).
 
 With seeding on, the app registers itself in the local core on the first `./run` (its dev seed, same as Services Photo and
 Acampa Kids): a developers-api `app` request (internal, entry point `web` on the local webapp origin), approved by the seed
@@ -631,6 +635,8 @@ and `/sync/*`. It gets **no** auth-api internal client (`AUTH_CLIENT_ID`/`SECRET
 `SYNC_ADMIN_PERSON_ID` and `SERVICES_KIDS_APP_ID` by hand after registering the sync credential in Oikos
 (optional `SYNC_MANAGER_PHONES`: the pastor and the ministry admin as `+<E.164>:pastor,+<E.164>:projectLeader`, kept out of staff and
 teams by the staff import; personal data, so only in the local `.env`, never in code)
+(optional `SYNC_COORDINATION_PHONES`: exactly who is in Coordenação, as `+<E.164>,+<E.164>`; every staff import makes them Coordenação
+and moves anyone else back to Equipe, so a change on the Equipe page lasts until the next import; empty leaves Coordenação alone)
 (**on a seeded setup this is automatic**: `SEED_DATA`/`IPALPHA_ENV`/`SEED_KEY` are written for it too, `SYNC_SECRET` and an Ed25519 `SYNC_PRIVATE_KEY` are generated once (kept in `.ipalpha/seed.env`, filled only when blank), `WHATSAPP_ENABLED=true` is set while seeding is on and `WA_LINK_QR_TERMINAL` stays `false`. The sync's own dev seed (`DevSyncCredential`, only `SEED_DATA=true` + `IPALPHA_ENV=dev|preview*`) then registers the key's public half as a sync credential in the local core (seed-actor token, then the ordinary create and approve routes) and takes the project's first admin, so `SYNC_CREDENTIAL_ID`, `SYNC_ADMIN_PERSON_ID` need no pasting. To link WhatsApp, open Services Kids → Administração → Integrações as the project admin and scan the QR there; a dev machine links a device only when its developer scans it. Beyond that, while `SYNC_PROJECT_ID` or `SERVICES_KIDS_APP_ID` is blank it finds both itself in the background from the Services Kids seed, so `/sync/sources` works without editing them; a filled value always wins). (`SERVICES_KIDS_ORIGIN`, sent as Origin on Services Kids writes, defaults to `http://localhost:5115`). Never point a development machine at the
 real MyKids. When the sync is cloned, `./run` gives services-kids-webapp `INTEGRATIONS_URL` (the sync's local URL), and
 its Vite proxy mounts it same-origin at `/sync`; without it there is no proxy and the webapp hides its sync section.
@@ -741,12 +747,12 @@ Start with `./doctor` (`--ai` also tests the AI, `--copy` copies the report).
 - **Windows `EPERM`/`EBUSY` during npm install**: close editors/terminals using the folder and run again.
 - **AI fails in `./publish`**: the box shows the engine's message; type the version by hand or
   `./ipalpha ai` to switch.
-
-## FAQ
 - **"Muitas tentativas" while signing in**: on your machine auth-api has no sign-in limits:
   `AUTH_DISABLE_RATE_LIMITS=true` in `core/auth-api/.env` (setup and `./pull` add it) turns off the per-IP and
   per-contact limits, the resend wait and the wrong-code lockouts. Set it to `false` to test them. It is ignored when
   `NODE_ENV=production`, so it never reaches a real environment.
+
+## FAQ
 
 **Why are the APIs not in containers?** Node on the host keeps edit → restart fast and debuggable; only the
 infra runs in containers.

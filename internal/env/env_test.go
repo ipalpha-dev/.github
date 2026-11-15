@@ -405,17 +405,22 @@ func TestAuthAPIGetsDriveBuiltinKeys(t *testing.T) {
 	}
 }
 
-// developers-api: local apps register on http://localhost, so the old default false is flipped; other values stay.
-func TestDevelopersAPILoopbackURIs(t *testing.T) {
+// developers-api, apps-api and ai-api: local apps register on http://localhost and local AI skills answer there, so false or
+// blank is flipped to true.
+func TestLoopbackURIs(t *testing.T) {
 	w := ws(t)
-	dev := filepath.Join(w.Repo("developers-api"), ".env")
-	os.MkdirAll(filepath.Dir(dev), 0o755)
-	os.WriteFile(dev, []byte("ALLOW_LOOPBACK_URIS=false\n"), 0o600)
+	for _, repo := range []string{"developers-api", "apps-api", "ai-api"} {
+		dev := filepath.Join(w.Repo(repo), ".env")
+		os.MkdirAll(filepath.Dir(dev), 0o755)
+		os.WriteFile(dev, []byte("ALLOW_LOOPBACK_URIS=false\n"), 0o600)
+	}
 	if _, err := Prepare(w); err != nil {
 		t.Fatal(err)
 	}
-	if v := envfile.Read(dev)["ALLOW_LOOPBACK_URIS"]; v != "true" {
-		t.Fatalf("ALLOW_LOOPBACK_URIS = %q", v)
+	for _, repo := range []string{"developers-api", "apps-api", "ai-api"} {
+		if v := envfile.Read(filepath.Join(w.Repo(repo), ".env"))["ALLOW_LOOPBACK_URIS"]; v != "true" {
+			t.Fatalf("%s ALLOW_LOOPBACK_URIS = %q", repo, v)
+		}
 	}
 }
 
