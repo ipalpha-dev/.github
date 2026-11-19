@@ -114,14 +114,14 @@ func applySeed(w *workspace.Workspace, r catalog.Repo, f *envfile.File) []string
 	}
 	if r.Name == "services-kids-sync-api" {
 		// The sync prepares itself for every developer: its secret and signing key are generated once (the key's public half
-		// is registered as a sync credential by the sync's own dev seed through core), and WhatsApp is on so the admin page
-		// can show the linking QR. WA_LINK_QR_TERMINAL stays false: the QR never goes to a terminal.
+		// is registered as a sync credential by the sync's own dev seed through core), and WhatsApp stays off so a local copy never shares production's link; a developer turns it on by hand
+		// and links their own device. WA_LINK_QR_TERMINAL stays false: the QR never goes to a terminal.
 		for _, kv := range [][2]string{{"SYNC_SECRET", secrets["SYNC_SECRET"]}, {"SYNC_PRIVATE_KEY", secrets["SYNC_PRIVATE_KEY"]}} {
 			if f.SetIfEmpty(kv[0], kv[1]) {
 				changed = append(changed, kv[0])
 			}
 		}
-		own("WHATSAPP_ENABLED", "true")
+		own("WHATSAPP_ENABLED", "false")
 	}
 	return changed
 }

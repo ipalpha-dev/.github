@@ -72,8 +72,8 @@ func TestSeedChoiceOwnsSeedKeys(t *testing.T) {
 	if k := envfile.Read(filepath.Join(w.Repo("services-kids-sync-api"), ".env")); k["SEED_DATA"] != "true" || k["IPALPHA_ENV"] != "dev" || k["SEED_KEY"] != a["SEED_KEY"] {
 		t.Fatalf("services-kids-sync-api seed keys missing: %v", k)
 	}
-	if k := envfile.Read(filepath.Join(w.Repo("services-kids-sync-api"), ".env")); len(k["SYNC_SECRET"]) < 32 || k["WHATSAPP_ENABLED"] != "true" || k["WA_LINK_QR_TERMINAL"] == "true" {
-		t.Fatalf("services-kids-sync-api must get SYNC_SECRET and WhatsApp on, no terminal QR: %v", k)
+	if k := envfile.Read(filepath.Join(w.Repo("services-kids-sync-api"), ".env")); len(k["SYNC_SECRET"]) < 32 || k["WHATSAPP_ENABLED"] != "false" || k["WA_LINK_QR_TERMINAL"] == "true" {
+		t.Fatalf("services-kids-sync-api must get SYNC_SECRET and WhatsApp off, no terminal QR: %v", k)
 	} else if raw, err := base64.StdEncoding.DecodeString(k["SYNC_PRIVATE_KEY"]); err != nil || !strings.Contains(string(raw), "BEGIN PRIVATE KEY") {
 		t.Fatalf("services-kids-sync-api SYNC_PRIVATE_KEY is not a base64 PEM key")
 	}
