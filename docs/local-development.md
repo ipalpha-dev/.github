@@ -558,7 +558,7 @@ Every core service that keeps person ids (and drive-api and virtual-assistant) g
 
 ## Eklesia Sync API (core)
 
-`core/eklesia-sync-api` (port **3025**, MongoDB `eklesia_sync`, audience `ipalpha:eklesia-sync`) keeps the baked Eklesia member export and answers `GET /members/search?q=` for **sync tokens only**. auth-api registers the audience; Services Kids seed requests it on its external entry point. System client scopes: `revocations:read` only.
+`core/eklesia-sync-api` (port **3025**, MongoDB `eklesia_sync`, audience `ipalpha:eklesia-sync`) keeps the baked Eklesia member export and answers `GET /members/search?q=` for **sync tokens only**. auth-api registers the audience; Services Kids seed requests it on its external entry point. System client scopes: `revocations:read`, `persons:read`, `persons:write` and `persons:family-write`. It also consumes persons-api `person.changed` / `person.deleted` (`EXCHANGE_PERSON_CHANGED`, `EXCHANGE_PERSON_DELETED`, added by `./pull`) to open parent suggestions for stewards (Oikos home, mounted at `/api/eklesia-sync`).
 
 ## Costs API (billing service, core)
 
