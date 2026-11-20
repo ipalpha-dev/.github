@@ -1,5 +1,11 @@
 # IPAlpha local development (reference)
 
+## Responsibility invitations
+
+The environment fallbacks provide `APPS_API_URL` to persons-api and `EXCHANGE_RESPONSIBILITY_INVITED=persons-api.responsibility.invited` to persons-api and notifications-api. `./pull`/setup add missing keys without replacing local values. For existing local environments, rerun setup before starting these services. Register `links.responsibilityConfirmationUrl` for the app; the Services Kids registration payload uses its configured web origin plus `/responsibility`. Explicit local `ALLOW_LOOPBACK_URIS=true` accepts this loopback callback; production requires HTTPS on the app's registered public origin. No new system-token permission is required.
+
+A local check signs a minor into a Kids invitation, supplies their responsible adult's name and phone, and shares the returned link or reads the invitation SMS through the configured local SMS provider. Sign in as the adult using that phone, confirm responsibility, and sign the minor's term. The minor remains unable to serve until both conditions hold. Delivery and role assignment cross RabbitMQ, so run persons-api, apps-api, notifications-api, projects-api and documents-api along with the Kids pair.
+
 New machine:
 
 ```sh
