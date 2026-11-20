@@ -3,11 +3,11 @@
   "clients": {
     "projects-api": ["revocations:read", "apps:read", "organizations:snapshot", "persons:links"],
     "auth-api": ["app-features:read"],
-    "persons-api": ["revocations:read", "projects:read", "ai:invoke", "ai:vision", "projects:import-memberships", "documents:read", "security:report", "drive:buckets"],
+    "persons-api": ["revocations:read", "projects:read", "ai:invoke", "ai:vision", "projects:import-memberships", "documents:read", "security:report", "drive:buckets", "church:roles"],
     "organizations-api": ["revocations:read"],
     "notifications-api": ["revocations:read", "projects:read", "persons:contact", "persons:birthdays", "organizations:snapshot"],
     "forms-api": ["persons:read"],
-    "dispatch-api": ["revocations:read", "apps:read", "apps:webhook-secret", "persons:import-results", "projects:read", "organizations:snapshot"],
+    "dispatch-api": ["revocations:read", "apps:read", "apps:webhook-secret", "persons:import-results", "projects:read", "organizations:snapshot", "app-features:read"],
     "ai-api": ["revocations:read", "projects:read", "skills:mint", "grants:read", "app-features:read"],
     "developers-api": ["revocations:read", "apps:provision", "apps:read", "projects:provision", "persons:eligibility", "app-features:provision", "ai:invoke", "apps:suspend", "notifications:send-template"],
     "developers-link-check": ["developers:link-check"],

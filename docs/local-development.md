@@ -552,6 +552,10 @@ block (or use `ipalpha config` > Ports inside the workspace), then `./stop` and 
 | costs-api | 3021 | services-kids-sync-api (private) | 3024 |
 | eklesia-sync-api | 3025 |  |  |
 
+## Person merge (Kevyn, 2026-11-19)
+
+Every core service that keeps person ids (and drive-api and virtual-assistant) gets `EXCHANGE_PERSON_MERGED=persons-api.person.merged`. dispatch-api now keeps its own database: `MONGO_URI` on the local Mongo, database `dispatch` (it already has `APPS_API_URL`), and its system client gains `app-features:read`. services-kids-api reads an optional `WEBHOOK_SECRET` (the signing secret of its app webhook in auth-api; blank leaves `POST /api/webhooks/person-merged` answering 404). Added keys only: existing values are never overwritten.
+
 ## Eklesia Sync API (core)
 
 `core/eklesia-sync-api` (port **3025**, MongoDB `eklesia_sync`, audience `ipalpha:eklesia-sync`) keeps the baked Eklesia member export and answers `GET /members/search?q=` for **sync tokens only**. auth-api registers the audience; Services Kids seed requests it on its external entry point. System client scopes: `revocations:read` only.
