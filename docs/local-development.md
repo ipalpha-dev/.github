@@ -677,6 +677,12 @@ a client bound to an unknown app): register Acampa in the Developers portal / Oi
 `IPALPHA_CLIENT_SECRET`, `IPALPHA_SYSTEM_CLIENT_ID`, `IPALPHA_SYSTEM_CLIENT_SECRET`, `IPALPHA_PROJECT_ID` and `IPALPHA_APP_ID`.
 Until then the API boots and "Entrar com IPAlpha" answers unavailable (`GET /api/auth/ipalpha/config` is not enabled).
 
+## AI model availability
+
+`ai-api` and `dispatch-api` require `EXCHANGE_AI_MODELS_CHANGED=ai-api.models.changed`.
+Setup, `./pull`, `./run` and feature preparation add it from each API's environment template or embedded fallback without overwriting local values.
+A configured model's explicit unavailable-model error refreshes the gateway catalog and opens a live Oikos home notice. A full-access steward or superuser selects the replacement; quota failures and temporary outages do not switch models.
+
 ## Core and apps
 
 `core/` holds the shared capabilities, the core UIs and the core tools Forms (`core/forms-api`,
