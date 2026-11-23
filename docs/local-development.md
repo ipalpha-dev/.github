@@ -635,6 +635,8 @@ from the fallback; `AUTH_CLIENT_SECRET` is the entry point's secret too unless `
 is therefore no longer in auth-api's `SEED_CLIENTS_JSON` (an unbound client would block the bound one): an auth database from
 before this change needs one wipe (`./stop --volumes`), and the app seed says so. With seeding off, register it in the
 Developers portal / Oikos and paste those keys; until then the API boots and the SMS sign-in answers 503 `relayUnavailable`.
+With seeding off it also needs `SERVICES_KIDS_PROJECT_ID` (the core project "Services Kids"): while it is blank `./run` does
+not start the API and its row says which key is missing (fill it, or `ipalpha config set seed on`).
 Approve the `ipalpha:drive` scope for the app in Oikos for the printer-release Drive folder (not requestable in the portal).
 
 ### Services Kids sync (private, temporary)

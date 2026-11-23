@@ -513,6 +513,11 @@ func buildSpecs(w *workspace.Workspace, eng *infra.Engine, plan ports.Plan, rw p
 		case r.Runtime == "bun" && !deps.BunInstalled():
 			sp.Missing = i18n.T("run_missing_bun", r.Label())
 			sp.Autostart = false
+		case !r.IsWeb():
+			if key := unconfiguredKey(r, sp.Env); key != "" {
+				sp.Missing = i18n.T("run_missing_config", key, r.Rel())
+				sp.Autostart = false
+			}
 		}
 		specs = append(specs, sp)
 	}
@@ -520,6 +525,35 @@ func buildSpecs(w *workspace.Workspace, eng *infra.Engine, plan ports.Plan, rw p
 }
 
 func exists(p string) bool { _, err := os.Stat(p); return err == nil }
+
+// needsWithoutSeed are the keys an app outside core cannot boot without when its own dev seed is off (the seed
+// creates them in the local core otherwise). With sample data off they come from registering the app by hand.
+var needsWithoutSeed = map[string][]string{
+	"services-kids-api": {"SERVICES_KIDS_PROJECT_ID"},
+}
+
+// unconfiguredKey returns the first key the service still needs before it can boot, or "". A service that would
+// only crash-loop on "X is required" is shown as not configured instead of being started.
+func unconfiguredKey(r catalog.Repo, envs []string) string {
+	keys := needsWithoutSeed[r.Name]
+	if len(keys) == 0 {
+		return ""
+	}
+	vals := map[string]string{}
+	for _, e := range envs {
+		k, v, _ := strings.Cut(e, "=")
+		vals[k] = strings.TrimSpace(v)
+	}
+	if strings.EqualFold(vals["SEED_DATA"], "true") {
+		return ""
+	}
+	for _, k := range keys {
+		if vals[k] == "" {
+			return k
+		}
+	}
+	return ""
+}
 
 // bootstrapKeys creates auth-api's signing keys (insert-if-absent in the DATABASE, so a fresh
 // Mongo volume also works). Compiles only when the sources are newer than the build.
